@@ -1,19 +1,22 @@
 import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  AlertTriangle,
   BookOpen,
   CheckCircle2,
   Code2,
   Dumbbell,
+  Flame,
   Gamepad2,
+  ListPlus,
   ListTodo,
   NotebookPen,
   PenTool,
+  Plus,
   Send,
   Trash2,
   TrendingUp,
   UtensilsCrossed,
+  Zap,
   type LucideIcon,
 } from 'lucide-react';
 import {
@@ -38,9 +41,36 @@ import { useWritingStore } from '../store/writingStore';
 import { useFitnessStore } from '../store/fitnessStore';
 import { useDietStore } from '../store/dietStore';
 import { useGameStore } from '../store/gameStore';
-import { formatLongDate, formatNumber, todayKey } from '../utils/date';
-import { changeRate, seriesByDay, splitWindow, sumOf, sumSeries } from '../utils/stats';
-import type { Priority } from '../types';
+import { daysBetween, formatLongDate, formatNumber, greeting, todayKey } from '../utils/date';
+import {
+  changeRate,
+  currentStreak,
+  seriesByDay,
+  splitWindow,
+  sumOf,
+  sumSeries,
+} from '../utils/stats';
+import { parseQuickTask } from '../utils/quickParse';
+import type { Priority, Task } from '../types';
+
+const PRIORITY_ORDER: Record<Priority, number> = { high: 0, medium: 1, low: 2 };
+
+/** 今日聚焦：逾期最久 > 今天到期 > 优先级最高 > 截止最早 */
+const focusPick = (pendingTasks: Task[], today: string): Task | null => {
+  if (pendingTasks.length === 0) return null;
+  const rank = (task: Task): number => {
+    if (task.dueDate && task.dueDate < today) return 0;
+    if (task.dueDate === today) return 1;
+    return 2;
+  };
+  return [...pendingTasks].sort((a, b) => {
+    const byRank = rank(a) - rank(b);
+    if (byRank !== 0) return byRank;
+    const byPriority = PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority];
+    if (byPriority !== 0) return byPriority;
+    return a.dueDate.localeCompare(b.dueDate);
+  })[0]!;
+};
 
 /** 首页热力图与环比都按「近 30 天窗口、近 7 天环比」这两个口径 */
 const ACTIVITY_DAYS = 30;
@@ -73,7 +103,8 @@ interface ModuleCard {
 
 export const HomePage: React.FC = () => {
   const navigate = useNavigate();
-  const { tasks, memos, addMemo, deleteMemo, toggleTaskStatus, replaceMemos } = useTaskStore();
+  const { tasks, memos, addMemo, deleteMemo, toggleTaskStatus, replaceMemos, addTask, replaceTasks } =
+    useTaskStore();
   const undoableRemove = useUndoableRemove();
   const books = useBookStore((state) => state.books);
   const devProjects = useDevStore((state) => state.projects);
@@ -84,6 +115,7 @@ export const HomePage: React.FC = () => {
 
   const [memoInput, setMemoInput] = useState('');
   const [memoError, setMemoError] = useState<string | undefined>();
+  const [quickInput, setQuickInput] = useState('');
   const today = todayKey();
 
   /** 完成任务 / 训练 / 饮食任意一条都算一次活动，用来喂热力图与环比 */
@@ -123,7 +155,23 @@ export const HomePage: React.FC = () => {
   const completedCount = tasks.length - pendingTasks.length;
   const urgentTasks = pendingTasks.filter((task) => task.priority === 'high');
   const todayTasks = pendingTasks.slice(0, 5);
-  const completionRate = tasks.length === 0 ? 0 : Math.round((completedCount / tasks.length) * 100);
+
+  const focusTask = focusPick(pendingTasks, today);
+
+  const dueTodayTasks = tasks.filter((task) => task.dueDate === today);
+  const dueTodayDone = dueTodayTasks.filter((task) => task.status === 'completed').length;
+  const completedToday = tasks.filter(
+    (task) => task.status === 'completed' && task.completedAt?.slice(0, 10) === today,
+  ).length;
+
+  const streak = currentStreak(activitySeries, today);
+
+  const handleAddQuickTask = (): void => {
+    const parsed = parseQuickTask(quickInput, today);
+    if (!parsed.title) return;
+    addTask(parsed.title, '', parsed.priority, parsed.dueDate);
+    setQuickInput('');
+  };
 
   const moduleCards = useMemo<ModuleCard[]>(() => {
     const today = todayKey();
@@ -204,8 +252,14 @@ export const HomePage: React.FC = () => {
   return (
     <div className="space-y-section">
       <PageHeader
-        title="你好 👋"
-        description={`今天是 ${formatLongDate()}`}
+        title={`${greeting()} 👋`}
+        description={`今天是 ${formatLongDate()} · ${
+          pendingTasks.length > 0
+            ? `今天有 ${pendingTasks.length} 件事待办${
+                urgentTasks.length > 0 ? `，其中 ${urgentTasks.length} 件紧急` : ''
+              }`
+            : '今天暂无待办，可以安排点想做的事'
+        }`}
         actions={
           <Button variant="secondary" onClick={() => navigate('/tasks')}>
             管理今日计划
@@ -221,12 +275,32 @@ export const HomePage: React.FC = () => {
           icon={<ListTodo size={16} aria-hidden />}
           footer={`已完成 ${completedCount} 项`}
         />
+        {dueTodayTasks.length > 0 ? (
+          <StatCard
+            label="今日完成率"
+            value={Math.round((dueTodayDone / dueTodayTasks.length) * 100)}
+            unit="%"
+            tone="success"
+            icon={<CheckCircle2 size={16} aria-hidden />}
+            footer={`今日到期 ${dueTodayDone}/${dueTodayTasks.length}`}
+          />
+        ) : (
+          <StatCard
+            label="今日完成率"
+            value={completedToday}
+            unit="项"
+            tone="success"
+            icon={<CheckCircle2 size={16} aria-hidden />}
+            footer="今天没有到期任务"
+          />
+        )}
         <StatCard
-          label="完成率"
-          value={completionRate}
-          unit="%"
-          tone="success"
-          icon={<CheckCircle2 size={16} aria-hidden />}
+          label="连续打卡"
+          value={streak}
+          unit="天"
+          tone={streak > 0 ? 'warning' : 'default'}
+          icon={<Flame size={16} aria-hidden />}
+          footer="完成任务/训练/饮食都算"
         />
         <StatCard
           label="近 7 天完成"
@@ -244,13 +318,82 @@ export const HomePage: React.FC = () => {
             />
           }
         />
-        <StatCard
-          label="紧急任务"
-          value={urgentTasks.length}
-          tone={urgentTasks.length > 0 ? 'danger' : 'default'}
-          icon={<AlertTriangle size={16} aria-hidden />}
-        />
       </div>
+
+      <Card>
+        <CardHeader title="快速添加任务" subtitle="支持语法：写周报 !高 @今天" />
+        <CardBody>
+          <div className="flex items-start gap-2">
+            <div className="min-w-0 flex-1">
+              <Input
+                aria-label="快速添加任务"
+                value={quickInput}
+                onChange={(event) => setQuickInput(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' && !event.shiftKey) {
+                    event.preventDefault();
+                    handleAddQuickTask();
+                  }
+                }}
+                placeholder="写周报 !高 @今天（!高/!中/!低 设优先级，@今天/@明天/@日期 设截止）"
+              />
+            </div>
+            <IconButton
+              label="添加任务"
+              variant="primary"
+              icon={<Plus size={16} />}
+              onClick={handleAddQuickTask}
+            />
+          </div>
+        </CardBody>
+      </Card>
+
+      {focusTask && (
+        <Card>
+          <CardHeader
+            title="今日聚焦"
+            subtitle="按逾期、今天到期与优先级自动挑出的最该先做的一件"
+            action={<Badge tone="accent">先做这件</Badge>}
+          />
+          <CardBody>
+            <div className="flex flex-wrap items-center gap-3">
+              <Zap size={18} className="shrink-0 text-accent" aria-hidden />
+              <span className="min-w-0 flex-1 truncate text-sm font-medium text-content">
+                {focusTask.title}
+              </span>
+              <Badge tone={PRIORITY_BADGE[focusTask.priority].tone} dot>
+                {PRIORITY_BADGE[focusTask.priority].label}
+              </Badge>
+              {focusTask.dueDate && (
+                <span className="text-xs text-content-tertiary tabular">
+                  {focusTask.dueDate === today
+                    ? '今天到期'
+                    : focusTask.dueDate < today
+                      ? `已逾期 ${daysBetween(focusTask.dueDate, today) ?? 1} 天`
+                      : focusTask.dueDate}
+                </span>
+              )}
+              <Button
+                size="sm"
+                variant="secondary"
+                icon={<CheckCircle2 size={14} aria-hidden />}
+                onClick={() => {
+                  const snapshot = tasks;
+                  toggleTaskStatus(focusTask.id);
+                  undoableRemove({
+                    message: `已完成「${focusTask.title}」`,
+                    description: '点「撤销」可以还原。',
+                    snapshot,
+                    restore: replaceTasks,
+                  });
+                }}
+              >
+                一键完成
+              </Button>
+            </div>
+          </CardBody>
+        </Card>
+      )}
 
       {activityTotal > 0 && (
         <Card>
@@ -354,6 +497,13 @@ export const HomePage: React.FC = () => {
                     className="group flex items-start gap-2 rounded bg-inset px-3 py-2"
                   >
                     <p className="min-w-0 flex-1 text-sm text-content-secondary">{memo.content}</p>
+                    <IconButton
+                      label={`把备忘「${memo.content}」转为任务`}
+                      size="sm"
+                      icon={<ListPlus size={14} />}
+                      onClick={() => addTask(memo.content, '', 'medium', '')}
+                      className="opacity-0 transition-opacity duration-fast group-hover:opacity-100 focus-visible:opacity-100"
+                    />
                     <IconButton
                       label="删除备忘"
                       size="sm"

@@ -7,6 +7,7 @@ import {
   formatMonthLabel,
   formatNumber,
   formatShortDate,
+  greeting,
   todayKey,
 } from './date';
 
@@ -69,5 +70,15 @@ describe('daysBetween', () => {
   it('非法输入返回 null，由调用方决定怎么展示', () => {
     expect(daysBetween('bad', '2026-09-28')).toBeNull();
     expect(daysBetween('2026-09-28', '')).toBeNull();
+  });
+});
+
+describe('greeting', () => {
+  it('按小时段返回问候语', () => {
+    expect(greeting(3)).toBe('夜深了');
+    expect(greeting(8)).toBe('早上好');
+    expect(greeting(13)).toBe('中午好');
+    expect(greeting(16)).toBe('下午好');
+    expect(greeting(21)).toBe('晚上好');
   });
 });

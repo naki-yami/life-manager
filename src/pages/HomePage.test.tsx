@@ -50,12 +50,87 @@ describe('HomePage', () => {
 
   it('完成率按已完成比例计算', () => {
     const store = useTaskStore.getState();
-    store.addTask('A', '', 'low', '');
-    store.addTask('B', '', 'low', '');
+    store.addTask('A', '', 'low', todayKey());
     useTaskStore.getState().toggleTaskStatus(useTaskStore.getState().tasks[0]!.id);
 
     renderHome();
-    expect(screen.getByText('50')).toBeInTheDocument();
+    // 今日到期 1 件已完成 1 件 → 100%
+    expect(screen.getByText('100')).toBeInTheDocument();
+    expect(screen.getByText('今日到期 1/1')).toBeInTheDocument();
+  });
+
+  it('没有到期任务时，今日完成率显示今天完成的数量', () => {
+    const store = useTaskStore.getState();
+    store.addTask('A', '', 'low', '');
+    useTaskStore.getState().toggleTaskStatus(useTaskStore.getState().tasks[0]!.id);
+
+    renderHome();
+    expect(screen.getByText('今日完成率').closest('div')!.parentElement!).toHaveTextContent('1');
+    expect(screen.getByText('今天没有到期任务')).toBeInTheDocument();
+  });
+
+  it('问候语按时段变化，摘要里带待办数与紧急数', () => {
+    useTaskStore.getState().addTask('写周报', '', 'high', '');
+    useTaskStore.getState().addTask('买牛奶', '', 'low', '');
+
+    renderHome();
+
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(
+      /(早上好|中午好|下午好|晚上好|夜深了)/,
+    );
+    expect(screen.getByText(/今天有 2 件事待办，其中 1 件紧急/)).toBeInTheDocument();
+  });
+
+  it('今日聚焦自动挑出最该先做的一件，并可一键完成', async () => {
+    const store = useTaskStore.getState();
+    store.addTask('今天的事', '', 'low', todayKey());
+    store.addTask('逾期的高优', '', 'high', '2026-09-01');
+    renderHome();
+
+    const focusCard = screen.getByText('今日聚焦').closest('div')!.parentElement!.parentElement!;
+    expect(within(focusCard).getByText('逾期的高优')).toBeInTheDocument();
+
+    await userEvent.click(within(focusCard).getByRole('button', { name: '一键完成' }));
+    expect(
+      useTaskStore
+        .getState()
+        .tasks.find((task) => task.title === '逾期的高优')!.status,
+    ).toBe('completed');
+  });
+
+  it('快速添加任务支持 !优先级 与 @日期 语法', async () => {
+    renderHome();
+
+    await userEvent.type(
+      screen.getByRole('textbox', { name: '快速添加任务' }),
+      '写周报 !高 @今天{Enter}',
+    );
+
+    const task = useTaskStore.getState().tasks[0]!;
+    expect(task.title).toBe('写周报');
+    expect(task.priority).toBe('high');
+    expect(task.dueDate).toBe(todayKey());
+  });
+
+  it('连续打卡按当天有活动统计', () => {
+    const store = useTaskStore.getState();
+    store.addTask('写周报', '', 'high', '');
+    useTaskStore.getState().toggleTaskStatus(useTaskStore.getState().tasks[0]!.id);
+
+    renderHome();
+
+    const streakCard = screen.getByText('连续打卡').closest('div')!.parentElement!;
+    expect(within(streakCard).getByText('1')).toBeInTheDocument();
+  });
+
+  it('备忘可以一键转为任务', async () => {
+    useTaskStore.getState().addMemo('临时想法');
+    renderHome();
+
+    await userEvent.click(screen.getByRole('button', { name: '把备忘「临时想法」转为任务' }));
+
+    expect(useTaskStore.getState().tasks[0]!.title).toBe('临时想法');
+    expect(useTaskStore.getState().memos).toHaveLength(1);
   });
 
   it('列表里的勾选会把任务标记为已完成', async () => {

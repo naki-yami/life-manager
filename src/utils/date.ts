@@ -3,6 +3,15 @@ export function todayKey(date: Date = new Date()): string {
   return date.toISOString().split('T')[0];
 }
 
+/** 按小时段返回问候语；hour 由调用方传入方便测试 */
+export function greeting(hour: number = new Date().getHours()): string {
+  if (hour < 6) return '夜深了';
+  if (hour < 12) return '早上好';
+  if (hour < 14) return '中午好';
+  if (hour < 18) return '下午好';
+  return '晚上好';
+}
+
 /** 首页顶部的长日期，例如「2026年9月28日 星期一」 */
 export function formatLongDate(date: Date = new Date()): string {
   return date.toLocaleDateString('zh-CN', {
