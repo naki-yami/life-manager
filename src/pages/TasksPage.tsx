@@ -4,26 +4,46 @@ import {
   Badge,
   Button,
   Card,
+  CardBody,
+  CardHeader,
   ConfirmDialog,
   EmptyState,
   IconButton,
   Input,
+  KanbanBoard,
   Modal,
+  ProgressRing,
   SegmentedControl,
   Select,
+  type KanbanColumnData,
+  type KanbanMoveResult,
 } from '../components/ui';
 import { PageHeader, Toolbar } from '../components/layout';
+import { BarChart } from '../components/charts';
 import { useTaskStore } from '../store/taskStore';
 import { useUndoableRemove } from '../hooks/useUndoableRemove';
-import { todayKey } from '../utils/date';
+import { daysBetween, formatShortDate, todayKey } from '../utils/date';
+import { seriesByWeek } from '../utils/stats';
 import { Priority, Task, TaskStatus } from '../types';
 
 type Filter = 'all' | TaskStatus;
+type ViewMode = 'list' | 'kanban' | 'quadrant';
+
+const VIEW_OPTIONS: Array<{ value: ViewMode; label: string }> = [
+  { value: 'list', label: '列表' },
+  { value: 'kanban', label: '看板' },
+  { value: 'quadrant', label: '四象限' },
+];
 
 const PRIORITY_OPTIONS = [
   { value: 'high', label: '紧急' },
   { value: 'medium', label: '中等' },
   { value: 'low', label: '较低' },
+];
+
+const PRIORITY_FILTER_OPTIONS = [
+  { value: 'all', label: '全部优先级' },
+  ...PRIORITY_OPTIONS,
 ];
 
 const PRIORITY_BADGE: Record<Priority, { tone: 'danger' | 'warning' | 'default'; label: string }> =
@@ -35,6 +55,23 @@ const PRIORITY_BADGE: Record<Priority, { tone: 'danger' | 'warning' | 'default';
 
 const PRIORITY_ORDER: Record<Priority, number> = { high: 0, medium: 1, low: 2 };
 
+/** 四象限的两根轴：重要 = 紧急优先级；紧急 = 有截止且不晚于今天 */
+const QUADRANTS: Array<{
+  id: string;
+  title: string;
+  hint: string;
+  important: boolean;
+  urgent: boolean;
+}> = [
+  { id: 'do', title: '重要且紧急', hint: '立刻做', important: true, urgent: true },
+  { id: 'plan', title: '重要不紧急', hint: '排进日程', important: true, urgent: false },
+  { id: 'delegate', title: '紧急但不重要', hint: '抽空处理', important: false, urgent: true },
+  { id: 'drop', title: '不重要不紧急', hint: '有空再说', important: false, urgent: false },
+];
+
+const isUrgent = (task: Task, today: string): boolean =>
+  task.dueDate !== '' && task.dueDate <= today;
+
 interface TaskForm {
   title: string;
   description: string;
@@ -44,15 +81,18 @@ interface TaskForm {
 
 const EMPTY_FORM: TaskForm = { title: '', description: '', priority: 'medium', dueDate: '' };
 
-/** 截止日期的角标：逾期 / 今天 / 具体日期 */
+/** 截止日期的角标：逾期（含逾期天数）/ 今天 / 具体日期 */
 const DueBadge: React.FC<{ task: Task }> = ({ task }) => {
   if (!task.dueDate) return null;
 
   const today = todayKey();
-  const overdue = task.status === 'pending' && task.dueDate < today;
+  const overdueDays =
+    task.status === 'pending' && task.dueDate < today ? daysBetween(task.dueDate, today) : null;
   const isToday = task.dueDate === today;
 
-  if (overdue) return <Badge tone="danger">已逾期 {task.dueDate}</Badge>;
+  if (overdueDays !== null && overdueDays > 0) {
+    return <Badge tone="danger">已逾期 {overdueDays} 天</Badge>;
+  }
   if (isToday) return <Badge tone="accent">今天截止</Badge>;
   return (
     <span className="inline-flex items-center gap-1 text-xs text-content-tertiary">
@@ -97,6 +137,41 @@ const TaskFormFields: React.FC<{ form: TaskForm; onChange: (form: TaskForm) => v
   </div>
 );
 
+/** 看板与四象限里的小卡片正文 */
+const TaskMiniCard: React.FC<{ task: Task; onToggle: (task: Task) => void }> = ({
+  task,
+  onToggle,
+}) => {
+  const done = task.status === 'completed';
+  return (
+    <div className="flex items-start gap-2">
+      <input
+        type="checkbox"
+        checked={done}
+        aria-label={done ? `标记「${task.title}」为待办` : `完成「${task.title}」`}
+        onChange={() => onToggle(task)}
+        style={{ accentColor: 'var(--lm-accent)' }}
+        className="mt-1 h-4 w-4 shrink-0 cursor-pointer rounded-sm border-line transition-transform duration-fast active:scale-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-line-focus"
+      />
+      <div className="min-w-0 flex-1">
+        <p
+          className={`text-sm font-medium ${
+            done ? 'text-content-tertiary line-through' : 'text-content'
+          }`}
+        >
+          {task.title}
+        </p>
+        <div className="mt-1 flex flex-wrap items-center gap-1.5">
+          <Badge tone={PRIORITY_BADGE[task.priority].tone} dot>
+            {PRIORITY_BADGE[task.priority].label}
+          </Badge>
+          <DueBadge task={task} />
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export const TasksPage: React.FC = () => {
   const { tasks, addTask, deleteTask, toggleTaskStatus, updateTask, replaceTasks } = useTaskStore();
   const undoableRemove = useUndoableRemove();
@@ -105,17 +180,36 @@ export const TasksPage: React.FC = () => {
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [filter, setFilter] = useState<Filter>('all');
+  const [priorityFilter, setPriorityFilter] = useState<'all' | Priority>('all');
+  const [view, setView] = useState<ViewMode>('list');
   const [keyword, setKeyword] = useState('');
   const [form, setForm] = useState<TaskForm>(EMPTY_FORM);
 
+  const today = todayKey();
   const pendingCount = tasks.filter((task) => task.status === 'pending').length;
   const completedCount = tasks.length - pendingCount;
+
+  const todayTasks = tasks.filter((task) => task.dueDate === today);
+  const todayDone = todayTasks.filter((task) => task.status === 'completed').length;
+
+  const weeklyDone = useMemo(
+    () =>
+      seriesByWeek(
+        tasks.filter((task) => task.status === 'completed'),
+        8,
+        today,
+        (task) => task.completedAt?.slice(0, 10),
+        () => 1,
+      ),
+    [tasks, today],
+  );
 
   const visibleTasks = useMemo(() => {
     const query = keyword.trim().toLowerCase();
 
     return tasks
       .filter((task) => filter === 'all' || task.status === filter)
+      .filter((task) => priorityFilter === 'all' || task.priority === priorityFilter)
       .filter(
         (task) =>
           query === '' ||
@@ -128,10 +222,60 @@ export const TasksPage: React.FC = () => {
         if (byPriority !== 0) return byPriority;
         return a.dueDate.localeCompare(b.dueDate);
       });
-  }, [tasks, filter, keyword]);
+  }, [tasks, filter, priorityFilter, keyword]);
 
   const editingTask = tasks.find((task) => task.id === editingTaskId) ?? null;
   const deletingTask = tasks.find((task) => task.id === pendingDeleteId) ?? null;
+
+  /** 勾选/取消完成立即生效，并用快照撤销还原状态 */
+  const toggleWithUndo = (task: Task): void => {
+    const snapshot = tasks;
+    toggleTaskStatus(task.id);
+    undoableRemove({
+      message:
+        task.status === 'pending'
+          ? `已完成「${task.title}」`
+          : `已把「${task.title}」恢复为待办`,
+      description: '点「撤销」可以还原。',
+      snapshot,
+      restore: replaceTasks,
+    });
+  };
+
+  const kanbanColumns: KanbanColumnData[] = useMemo(
+    () => [
+      {
+        id: 'pending',
+        title: '待办',
+        items: visibleTasks
+          .filter((task) => task.status === 'pending')
+          .map((task) => ({
+            id: task.id,
+            label: task.title,
+            node: <TaskMiniCard task={task} onToggle={toggleWithUndo} />,
+          })),
+      },
+      {
+        id: 'completed',
+        title: '已完成',
+        items: visibleTasks
+          .filter((task) => task.status === 'completed')
+          .map((task) => ({
+            id: task.id,
+            label: task.title,
+            node: <TaskMiniCard task={task} onToggle={toggleWithUndo} />,
+          })),
+      },
+    ],
+    // toggleWithUndo 每次渲染都是新函数，但它只依赖 store 的当前快照，行为一致
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [visibleTasks],
+  );
+
+  const handleKanbanMove = (move: KanbanMoveResult): void => {
+    // 看板只做「待办 ↔ 已完成」的流转，列内顺序仍按优先级排序展示
+    if (move.fromColumnId !== move.toColumnId) toggleTaskStatus(move.itemId);
+  };
 
   const handleAdd = (): void => {
     if (!form.title.trim()) return;
@@ -195,19 +339,71 @@ export const TasksPage: React.FC = () => {
         }
       />
 
+      {tasks.length > 0 && (
+        <Card>
+          <CardHeader title="今日进度" subtitle="按截止日期是今天的任务统计" />
+          <CardBody className="flex flex-col gap-4 lg:flex-row lg:items-center">
+            <div className="flex items-center gap-4">
+              <ProgressRing
+                value={todayDone}
+                max={Math.max(todayTasks.length, 1)}
+                label={`今日到期任务完成 ${todayDone}/${todayTasks.length}`}
+              >
+                {todayTasks.length > 0 ? `${todayDone}/${todayTasks.length}` : '—'}
+              </ProgressRing>
+              <div>
+                <p className="text-sm font-medium text-content">
+                  {todayTasks.length > 0
+                    ? `今日到期 ${todayTasks.length} 件，已完成 ${todayDone} 件`
+                    : '今天没有到期任务'}
+                </p>
+                <p className="text-xs text-content-tertiary">
+                  本周已完成 {weeklyDone[weeklyDone.length - 1]?.value ?? 0} 件
+                </p>
+              </div>
+            </div>
+            <div className="min-w-0 flex-1">
+              <BarChart
+                data={weeklyDone}
+                label="近 8 周每周完成任务数"
+                formatValue={(value) => `${value} 件`}
+                formatDate={formatShortDate}
+              />
+            </div>
+          </CardBody>
+        </Card>
+      )}
+
       <Toolbar
         search={{ value: keyword, onChange: setKeyword, placeholder: '搜索标题或描述…' }}
         actions={
-          <SegmentedControl
-            label="任务筛选"
-            value={filter}
-            onChange={setFilter}
-            options={[
-              { value: 'all', label: '全部', count: tasks.length },
-              { value: 'pending', label: '待办', count: pendingCount },
-              { value: 'completed', label: '已完成', count: completedCount },
-            ]}
-          />
+          <div className="flex flex-wrap items-center gap-2">
+            <Select
+              aria-label="按优先级筛选"
+              className="w-32"
+              value={priorityFilter}
+              onChange={(value) => setPriorityFilter(value as 'all' | Priority)}
+              options={PRIORITY_FILTER_OPTIONS}
+            />
+            <SegmentedControl
+              label="任务视图"
+              size="sm"
+              value={view}
+              onChange={setView}
+              options={VIEW_OPTIONS}
+            />
+            <SegmentedControl
+              label="任务筛选"
+              size="sm"
+              value={filter}
+              onChange={setFilter}
+              options={[
+                { value: 'all', label: '全部', count: tasks.length },
+                { value: 'pending', label: '待办', count: pendingCount },
+                { value: 'completed', label: '已完成', count: completedCount },
+              ]}
+            />
+          </div>
         }
       />
 
@@ -238,6 +434,7 @@ export const TasksPage: React.FC = () => {
                   onClick={() => {
                     setKeyword('');
                     setFilter('all');
+                    setPriorityFilter('all');
                   }}
                 >
                   清除筛选
@@ -246,6 +443,46 @@ export const TasksPage: React.FC = () => {
             }
           />
         </Card>
+      ) : view === 'kanban' ? (
+        <KanbanBoard
+          label="任务看板"
+          columns={kanbanColumns}
+          onMove={handleKanbanMove}
+        />
+      ) : view === 'quadrant' ? (
+        <div className="grid gap-4 md:grid-cols-2">
+          {QUADRANTS.map((quadrant) => {
+            const items = visibleTasks.filter(
+              (task) =>
+                task.status === 'pending' &&
+                (task.priority === 'high') === quadrant.important &&
+                isUrgent(task, today) === quadrant.urgent,
+            );
+            return (
+              <Card key={quadrant.id}>
+                <CardHeader
+                  title={quadrant.title}
+                  subtitle={`${quadrant.hint} · ${items.length} 件`}
+                />
+                <CardBody>
+                  {items.length === 0 ? (
+                    <p className="py-3 text-center text-xs text-content-tertiary">
+                      这一格没有任务
+                    </p>
+                  ) : (
+                    <ul className="space-y-2">
+                      {items.map((task) => (
+                        <li key={task.id} className="rounded bg-inset px-3 py-2">
+                          <TaskMiniCard task={task} onToggle={toggleWithUndo} />
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </CardBody>
+              </Card>
+            );
+          })}
+        </div>
       ) : (
         <ul className="space-y-2">
           {visibleTasks.map((task) => {
@@ -260,14 +497,14 @@ export const TasksPage: React.FC = () => {
                       type="checkbox"
                       checked={done}
                       aria-label={done ? `标记「${task.title}」为待办` : `完成「${task.title}」`}
-                      onChange={() => toggleTaskStatus(task.id)}
+                      onChange={() => toggleWithUndo(task)}
                       style={{ accentColor: 'var(--lm-accent)' }}
-                      className="mt-1 h-4 w-4 shrink-0 cursor-pointer rounded-sm border-line focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-line-focus"
+                      className="mt-1 h-4 w-4 shrink-0 cursor-pointer rounded-sm border-line transition-transform duration-fast active:scale-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-line-focus"
                     />
 
                     <div className="min-w-0 flex-1">
                       <p
-                        className={`font-medium ${
+                        className={`font-medium transition-colors duration-fast ${
                           done ? 'text-content-tertiary line-through' : 'text-content'
                         }`}
                       >
@@ -351,7 +588,7 @@ export const TasksPage: React.FC = () => {
         onClose={() => setPendingDeleteId(null)}
         onConfirm={confirmDelete}
         title="删除任务"
-        description={deletingTask ? `确定要删除「${deletingTask.title}」吗？此操作不可撤销。` : ''}
+        description={deletingTask ? `确定要删除「${deletingTask.title}」吗？` : ''}
         confirmText="删除"
         tone="danger"
       />

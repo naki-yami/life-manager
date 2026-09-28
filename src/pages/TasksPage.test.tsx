@@ -76,13 +76,14 @@ describe('TasksPage', () => {
     expect(screen.getAllByRole('checkbox')).toHaveLength(3);
   });
 
-  it('今天截止与逾期分别用不同角标', () => {
+  it('今天截止与逾期分别用不同角标，逾期显示天数', () => {
     useTaskStore.getState().addTask('今天做', '', 'medium', todayKey());
     useTaskStore.getState().addTask('早就该做', '', 'medium', '2020-01-01');
     render(<TasksPage />);
 
     expect(screen.getByText('今天截止')).toBeInTheDocument();
-    expect(screen.getByText(/已逾期 2020-01-01/)).toBeInTheDocument();
+    expect(screen.getByText(/已逾期 \d+ 天/)).toBeInTheDocument();
+    expect(screen.queryByText(/已逾期 2020-01-01/)).not.toBeInTheDocument();
   });
 
   it('可以新增任务，标题为空时禁用提交', async () => {
@@ -171,5 +172,77 @@ describe('TasksPage', () => {
     const titles = useTaskStore.getState().tasks.map((task) => task.title);
     expect(titles).toEqual(['低优先级', '紧急任务', '中等任务']);
     expect(screen.getByText('中等任务')).toBeInTheDocument();
+  });
+
+  it('勾选完成后出现撤销提示，撤销会恢复待办', async () => {
+    seed();
+    render(
+      <ToastProvider>
+        <TasksPage />
+      </ToastProvider>,
+    );
+
+    await userEvent.click(screen.getByRole('checkbox', { name: '完成「紧急任务」' }));
+    expect(useTaskStore.getState().tasks[1]!.status).toBe('completed');
+    expect(screen.getByText('已完成「紧急任务」')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: '撤销' }));
+    expect(useTaskStore.getState().tasks[1]!.status).toBe('pending');
+  });
+
+  it('优先级筛选只保留对应任务', async () => {
+    seed();
+    render(<TasksPage />);
+
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: '按优先级筛选' }), 'low');
+
+    expect(screen.getAllByRole('checkbox')).toHaveLength(1);
+    expect(screen.getByText('低优先级')).toBeInTheDocument();
+    expect(screen.queryByText('紧急任务')).not.toBeInTheDocument();
+  });
+
+  it('看板视图把任务分到待办与已完成两列', async () => {
+    seed();
+    useTaskStore.getState().toggleTaskStatus(useTaskStore.getState().tasks[0]!.id);
+    render(<TasksPage />);
+
+    await userEvent.click(screen.getByRole('button', { name: '看板' }));
+
+    const board = screen.getByRole('group', { name: '任务看板' });
+    expect(board).toBeInTheDocument();
+    const todoColumn = within(board).getByRole('heading', { name: '待办' }).closest('div')!
+      .parentElement!;
+    expect(within(todoColumn).getByText('紧急任务')).toBeInTheDocument();
+
+    const doneColumn = within(board).getByRole('heading', { name: '已完成' }).closest('div')!
+      .parentElement!;
+    expect(within(doneColumn).getByText('低优先级')).toBeInTheDocument();
+  });
+
+  it('四象限视图把任务分进对应格子', async () => {
+    seed();
+    render(<TasksPage />);
+
+    await userEvent.click(screen.getByRole('button', { name: '四象限' }));
+
+    // Card 根节点 = h2 的两层外层（标题容器 → 卡片头 → 卡片根）
+    const cardOf = (heading: string) =>
+      screen.getByRole('heading', { name: heading }).closest('div')!.parentElement!.parentElement!;
+
+    const doCell = cardOf('重要且紧急');
+    expect(within(doCell).getByText('紧急任务')).toBeInTheDocument();
+
+    const dropCell = cardOf('不重要不紧急');
+    expect(within(dropCell).getByText('低优先级')).toBeInTheDocument();
+    expect(within(dropCell).getByText('中等任务')).toBeInTheDocument();
+  });
+
+  it('今日进度卡展示到期完成度与每周完成柱状图', () => {
+    seed();
+    render(<TasksPage />);
+
+    expect(screen.getByText('今日到期 1 件，已完成 0 件')).toBeInTheDocument();
+    expect(screen.getByRole('progressbar', { name: '今日到期任务完成 0/1' })).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: /近 8 周每周完成任务数/ })).toBeInTheDocument();
   });
 });
