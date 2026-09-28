@@ -10,6 +10,7 @@ import { FitnessPage } from './pages/FitnessPage';
 import { DietPage } from './pages/DietPage';
 import { GamesPage } from './pages/GamesPage';
 import { SettingsPage } from './pages/SettingsPage';
+import { UiPage } from './pages/UiPage';
 
 const App: React.FC = () => {
   return (
@@ -25,6 +26,7 @@ const App: React.FC = () => {
           <Route path="/diet" element={<DietPage />} />
           <Route path="/games" element={<GamesPage />} />
           <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/ui" element={<UiPage />} />
         </Routes>
       </Layout>
     </BrowserRouter>

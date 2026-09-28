@@ -1,4 +1,5 @@
 import React, { useCallback, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Download,
   Upload,
@@ -10,6 +11,7 @@ import {
   RotateCcw,
   CheckCircle2,
   Database,
+  LayoutGrid,
 } from 'lucide-react';
 import { Card, CardHeader, CardBody, Button, Modal } from '../components/ui';
 import { useTheme } from '../hooks/useTheme';
@@ -94,6 +96,7 @@ const MODE_OPTIONS: { value: ImportMode; label: string; hint: string }[] = [
 
 export const SettingsPage: React.FC = () => {
   const { theme, toggleTheme } = useTheme();
+  const navigate = useNavigate();
   const [showClearModal, setShowClearModal] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [importMode, setImportMode] = useState<ImportMode>('merge');
@@ -346,6 +349,16 @@ export const SettingsPage: React.FC = () => {
               ))}
             </ul>
           )}
+        </CardBody>
+      </Card>
+
+      {/* Component gallery */}
+      <Card>
+        <CardHeader title="组件预览" subtitle="开发用：查看设计系统里全部组件与状态" />
+        <CardBody>
+          <Button variant="secondary" onClick={() => navigate('/ui')}>
+            <LayoutGrid size={16} className="mr-2" /> 打开组件预览
+          </Button>
         </CardBody>
       </Card>
 

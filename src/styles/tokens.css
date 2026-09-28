@@ -1,0 +1,123 @@
+/*
+ * Life Manager 设计令牌（Design Tokens）
+ * ==========================================================================
+ * 所有语义色都以 CSS 变量定义，在 :root（亮色）与 .dark（暗色）中各一份。
+ * 组件只使用语义类名（bg-surface / text-content-secondary / border-line），
+ * 不再直接写 gray-100、bg-white 这类具体色值 —— 这样换主题只需要改这里。
+ *
+ * 命名约定：
+ *   bg-*       背景        canvas 页面底 / surface 卡片 / elevated 浮层 / inset 内嵌
+ *   text-*     文字        content / content-secondary / content-tertiary
+ *   border-*   描边        line / line-subtle / line-strong / line-focus
+ *   accent     主色        DEFAULT / soft / strong
+ *   语义状态    success / warning / danger / info（各带 soft 变体）
+ *
+ * 强调色：靛蓝 #4C6EF5（与旧 primary 色阶同源）
+ * 对比度：正文与次要文字在各自背景上均 >= 4.5:1
+ */
+
+:root {
+  color-scheme: light;
+
+  /* 背景层级 */
+  --lm-bg-canvas: #f6f7f9;
+  --lm-bg-surface: #ffffff;
+  --lm-bg-elevated: #ffffff;
+  --lm-bg-inset: #f1f3f5;
+  --lm-bg-hover: rgba(17, 24, 39, 0.04);
+  --lm-bg-active: rgba(17, 24, 39, 0.08);
+  --lm-bg-selected: rgba(76, 110, 245, 0.1);
+
+  /* 描边 */
+  --lm-line-subtle: rgba(17, 24, 39, 0.06);
+  --lm-line: rgba(17, 24, 39, 0.12);
+  --lm-line-strong: rgba(17, 24, 39, 0.22);
+  --lm-line-focus: #4c6ef5;
+
+  /* 文字 */
+  --lm-content: #111827;
+  --lm-content-secondary: #4b5563;
+  --lm-content-tertiary: #6b7280;
+  --lm-content-disabled: #9ca3af;
+
+  /* 主色 */
+  --lm-accent: #4c6ef5;
+  --lm-accent-strong: #4263eb;
+  --lm-accent-soft: rgba(76, 110, 245, 0.1);
+  --lm-accent-contrast: #ffffff;
+  --lm-accent-ring: rgba(76, 110, 245, 0.28);
+
+  /* 语义状态 */
+  --lm-success: #15803d;
+  --lm-success-soft: rgba(21, 128, 61, 0.1);
+  --lm-warning: #b45309;
+  --lm-warning-soft: rgba(180, 83, 9, 0.12);
+  --lm-danger: #dc2626;
+  --lm-danger-soft: rgba(220, 38, 38, 0.1);
+  --lm-danger-contrast: #ffffff;
+  --lm-info: #2563eb;
+  --lm-info-soft: rgba(37, 99, 235, 0.1);
+
+  /* 阴影：亮色用真实投影 */
+  --lm-shadow-xs: 0 1px 2px rgba(17, 24, 39, 0.06);
+  --lm-shadow-sm: 0 1px 3px rgba(17, 24, 39, 0.08), 0 1px 2px rgba(17, 24, 39, 0.04);
+  --lm-shadow-md: 0 4px 12px rgba(17, 24, 39, 0.1), 0 2px 4px rgba(17, 24, 39, 0.06);
+  --lm-shadow-lg: 0 12px 32px rgba(17, 24, 39, 0.14), 0 4px 8px rgba(17, 24, 39, 0.06);
+  --lm-shadow-overlay: 0 24px 64px rgba(17, 24, 39, 0.24);
+}
+
+.dark {
+  color-scheme: dark;
+
+  --lm-bg-canvas: #0b0d12;
+  --lm-bg-surface: #14161c;
+  --lm-bg-elevated: #1a1d24;
+  --lm-bg-inset: #0f1116;
+  --lm-bg-hover: rgba(255, 255, 255, 0.06);
+  --lm-bg-active: rgba(255, 255, 255, 0.1);
+  --lm-bg-selected: rgba(139, 157, 255, 0.16);
+
+  --lm-line-subtle: rgba(255, 255, 255, 0.06);
+  --lm-line: rgba(255, 255, 255, 0.12);
+  --lm-line-strong: rgba(255, 255, 255, 0.24);
+  --lm-line-focus: #8b9dff;
+
+  --lm-content: #f3f4f6;
+  --lm-content-secondary: #c3c8d2;
+  --lm-content-tertiary: #99a1af;
+  --lm-content-disabled: #6b7280;
+
+  --lm-accent: #8b9dff;
+  --lm-accent-strong: #a5b4ff;
+  --lm-accent-soft: rgba(139, 157, 255, 0.16);
+  --lm-accent-contrast: #10121a;
+  --lm-accent-ring: rgba(139, 157, 255, 0.32);
+
+  --lm-success: #4ade80;
+  --lm-success-soft: rgba(74, 222, 128, 0.14);
+  --lm-warning: #fbbf24;
+  --lm-warning-soft: rgba(251, 191, 36, 0.14);
+  --lm-danger: #f87171;
+  --lm-danger-soft: rgba(248, 113, 113, 0.14);
+  --lm-danger-contrast: #1a0d0d;
+  --lm-info: #60a5fa;
+  --lm-info-soft: rgba(96, 165, 250, 0.14);
+
+  /* 暗色下投影几乎不可见，改用极淡的描边制造层级 */
+  --lm-shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --lm-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.5);
+  --lm-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.5);
+  --lm-shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.55);
+  --lm-shadow-overlay: 0 24px 64px rgba(0, 0, 0, 0.6);
+}
+
+::selection {
+  background: var(--lm-accent-soft);
+  color: var(--lm-content);
+}
+
+/* 键盘聚焦时才显示焦点环，鼠标点击不显示 */
+:focus-visible {
+  outline: 2px solid var(--lm-line-focus);
+  outline-offset: 2px;
+}
