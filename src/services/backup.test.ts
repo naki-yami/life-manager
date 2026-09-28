@@ -57,6 +57,10 @@ function sampleData(): BackupData {
           },
         ],
         hoursSpent: 12,
+        techStack: ['React', 'TypeScript'],
+        repoUrl: 'https://github.com/example/life-manager',
+        startDate: '2026-09-01',
+        archived: false,
         createdAt: '2026-09-01T00:00:00.000Z',
       },
     ],
@@ -201,7 +205,7 @@ describe('导出 / 导入 往返', () => {
   it('信封结构包含 schemaVersion 与 exportedAt', () => {
     const envelope = buildBackupEnvelope(emptyData(), new Date('2026-09-28T00:00:00.000Z'));
     expect(envelope.app).toBe('life-manager');
-    expect(envelope.schemaVersion).toBe(4);
+    expect(envelope.schemaVersion).toBe(5);
     expect(envelope.exportedAt).toBe('2026-09-28T00:00:00.000Z');
   });
 });
@@ -368,6 +372,10 @@ describe('工时记录的导入兼容', () => {
     const legacy = sampleData() as Record<string, unknown>;
     const projects = legacy.devProjects as Array<Record<string, unknown>>;
     delete projects[0]!.hoursSpent;
+    // v5 新增的字段也从旧备份里删掉，验证导入时补默认值
+    delete projects[0]!.techStack;
+    delete projects[0]!.repoUrl;
+    delete projects[0]!.archived;
     delete legacy.workSessions;
 
     const parsed = parseBackup(JSON.stringify(legacy));
@@ -377,6 +385,10 @@ describe('工时记录的导入兼容', () => {
     const plan = planImport(emptyData(), parsed.backup.modules, 'overwrite');
     expect(plan.data.devProjects?.[0]?.name).toBe('Life Manager');
     expect(plan.data.devProjects?.[0]?.hoursSpent).toBe(0);
+    // v5 新增的字段在旧备份里缺失时补默认值
+    expect(plan.data.devProjects?.[0]?.techStack).toEqual([]);
+    expect(plan.data.devProjects?.[0]?.repoUrl).toBe('');
+    expect(plan.data.devProjects?.[0]?.archived).toBe(false);
   });
 
   it('同一份备份重复导入不会产生重复工时', () => {

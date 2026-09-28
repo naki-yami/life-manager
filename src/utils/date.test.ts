@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   addDays,
+  daysBetween,
   formatDayLabel,
   formatDuration,
   formatMonthLabel,
@@ -54,5 +55,19 @@ describe('formatShortDate', () => {
     expect(formatShortDate('2026-09-28')).toBe('9/28');
     expect(formatShortDate('2026-12-05')).toBe('12/5');
     expect(formatShortDate('bad')).toBe('bad');
+  });
+});
+
+describe('daysBetween', () => {
+  it('计算 to - from 的天数，跨月与跨年为负也正确', () => {
+    expect(daysBetween('2026-09-01', '2026-09-28')).toBe(27);
+    expect(daysBetween('2026-09-28', '2026-09-28')).toBe(0);
+    expect(daysBetween('2026-09-28', '2026-09-01')).toBe(-27);
+    expect(daysBetween('2025-12-31', '2026-01-01')).toBe(1);
+  });
+
+  it('非法输入返回 null，由调用方决定怎么展示', () => {
+    expect(daysBetween('bad', '2026-09-28')).toBeNull();
+    expect(daysBetween('2026-09-28', '')).toBeNull();
   });
 });

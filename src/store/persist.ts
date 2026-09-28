@@ -7,11 +7,12 @@
  * - 3：主题由二态 theme 改为三态 themeMode；新增 lm:ui（密度 / 侧栏折叠）
  * - 4：games 增加 sessions（游玩流水）
  * - 5：devProjects 增加 hoursSpent；新增 dev 的 sessions（工时流水）
+ * - 6：devProjects 增加技术栈 / 仓库地址 / 起止日期 / 归档标记
  *
  * 注意：zustand persist 只在「存储里的 version 与当前 version 不一致」时
  * 才调用 migrate。所以结构变更必须靠 bump 版本号触发，不能只改 migrate 函数。
  */
-export const STORE_VERSION = 5;
+export const STORE_VERSION = 6;
 
 /**
  * 统一的状态迁移入口。

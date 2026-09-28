@@ -55,6 +55,14 @@ export interface DevProject {
   tasks: DevTask[];
   /** 累计投入工时，由工时流水累加而来 */
   hoursSpent: number;
+  /** 技术栈标签；旧数据可能没有 */
+  techStack: string[];
+  /** 仓库地址，空字符串表示未填写 */
+  repoUrl: string;
+  startDate?: string;
+  endDate?: string;
+  /** 归档的项目从默认列表隐藏，不再参与统计 */
+  archived: boolean;
   createdAt: string;
 }
 

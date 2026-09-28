@@ -1,11 +1,15 @@
 import React, { useMemo, useState } from 'react';
 import {
+  Archive,
+  ArchiveRestore,
   ChevronDown,
   ChevronRight,
   Clock,
   Code2,
+  ExternalLink,
   FolderKanban,
   ListChecks,
+  Pencil,
   Plus,
   Trash2,
   Zap,
@@ -33,11 +37,14 @@ import { BarChart } from '../components/charts';
 import { useDevStore } from '../store/devStore';
 import { useUndoableRemove } from '../hooks/useUndoableRemove';
 import { filterByKeyword } from '../utils/search';
-import { formatNumber, formatShortDate, todayKey } from '../utils/date';
+import { formatNumber, formatShortDate, daysBetween, todayKey } from '../utils/date';
 import { seriesByWeek } from '../utils/stats';
 import { DevProject, DevProjectStatus, DevTaskStatus, Priority, WorkSession } from '../types';
 
-type ProjectFilter = 'all' | DevProjectStatus;
+type ProjectFilter = 'all' | DevProjectStatus | 'archived';
+
+/** 连续停滞这么多天及以上时提醒 */
+const STALLED_AFTER_DAYS = 14;
 
 const PROJECT_STATUS_LABEL: Record<DevProjectStatus, string> = {
   planning: '规划中',
@@ -80,6 +87,7 @@ const FILTER_OPTIONS: Array<{ value: ProjectFilter; label: string }> = [
   { value: 'planning', label: '规划中' },
   { value: 'paused', label: '已暂停' },
   { value: 'completed', label: '已完成' },
+  { value: 'archived', label: '已归档' },
 ];
 
 /** 「近期投入」最多列几条工时流水 */
@@ -98,6 +106,7 @@ export const DevPage: React.FC = () => {
   const {
     projects,
     addProject,
+    updateProject,
     deleteProject,
     updateProjectStatus,
     addTask,
@@ -121,6 +130,15 @@ export const DevPage: React.FC = () => {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [showSessionModal, setShowSessionModal] = useState(false);
   const [pendingSessionId, setPendingSessionId] = useState<string | null>(null);
+  const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState({
+    name: '',
+    description: '',
+    techStack: '',
+    repoUrl: '',
+    startDate: '',
+    endDate: '',
+  });
   const [sessionForm, setSessionForm] = useState<{
     projectId: string;
     date: string;
@@ -129,22 +147,29 @@ export const DevPage: React.FC = () => {
   }>({ projectId: '', date: todayKey(), hours: 1, note: '' });
 
   const stats = useMemo(() => {
-    const allTasks = projects.flatMap((project) => project.tasks);
+    // 归档的项目不算进统计，和默认列表保持一致
+    const active = projects.filter((project) => !project.archived);
+    const allTasks = active.flatMap((project) => project.tasks);
     const doneTasks = allTasks.filter((task) => task.status === 'done').length;
     return {
-      total: projects.length,
-      active: projects.filter((project) => project.status === 'in-progress').length,
+      total: active.length,
+      active: active.filter((project) => project.status === 'in-progress').length,
       tasks: allTasks.length,
       doneTasks,
     };
   }, [projects]);
 
   const visibleProjects = useMemo(() => {
-    const byStatus =
-      filter === 'all' ? projects : projects.filter((project) => project.status === filter);
-    return filterByKeyword(byStatus, keyword, (project) => [
+    const byFilter =
+      filter === 'all'
+        ? projects.filter((project) => !project.archived)
+        : filter === 'archived'
+          ? projects.filter((project) => project.archived)
+          : projects.filter((project) => !project.archived && project.status === filter);
+    return filterByKeyword(byFilter, keyword, (project) => [
       project.name,
       project.description,
+      ...project.techStack,
       ...project.tasks.map((task) => task.title),
     ]);
   }, [projects, filter, keyword]);
@@ -152,6 +177,7 @@ export const DevPage: React.FC = () => {
   const taskProject = projects.find((project) => project.id === taskProjectId) ?? null;
   const deletingProject = projects.find((project) => project.id === pendingDeleteProjectId) ?? null;
   const pendingSession = sessions.find((session) => session.id === pendingSessionId) ?? null;
+  const editingProject = projects.find((project) => project.id === editingProjectId) ?? null;
 
   const today = todayKey();
   const totalHours = projects.reduce((sum, project) => sum + project.hoursSpent, 0);
@@ -172,6 +198,22 @@ export const DevPage: React.FC = () => {
   /** 流水里只存 projectId，展示时换成项目名 */
   const projectNameOf = (id: string): string =>
     projects.find((project) => project.id === id)?.name ?? '已删除的项目';
+
+  /** 项目最近一次有动静的日期：最近的工时流水，一条都没有就用创建日期 */
+  const lastActivityOf = (project: DevProject): string => {
+    let last = project.createdAt.slice(0, 10);
+    for (const session of sessions) {
+      if (session.projectId === project.id && session.date > last) last = session.date;
+    }
+    return last;
+  };
+
+  /** 停滞天数：未完成且未归档的项目，超过阈值才返回天数，否则 null */
+  const stalledDaysOf = (project: DevProject): number | null => {
+    if (project.archived || project.status === 'completed') return null;
+    const days = daysBetween(lastActivityOf(project), today);
+    return days !== null && days >= STALLED_AFTER_DAYS ? days : null;
+  };
 
   const sessionHours = typeof sessionForm.hours === 'number' ? sessionForm.hours : 0;
   const canSaveSession = Boolean(sessionForm.projectId) && sessionHours > 0;
@@ -218,6 +260,38 @@ export const DevPage: React.FC = () => {
     if (!canSaveSession) return;
     addSession(sessionForm.projectId, sessionForm.date || today, sessionHours, sessionForm.note.trim());
     setShowSessionModal(false);
+  };
+
+  const openEditModal = (project: DevProject): void => {
+    setEditForm({
+      name: project.name,
+      description: project.description,
+      techStack: project.techStack.join(', '),
+      repoUrl: project.repoUrl,
+      startDate: project.startDate ?? '',
+      endDate: project.endDate ?? '',
+    });
+    setEditingProjectId(project.id);
+  };
+
+  const handleSaveEdit = (): void => {
+    if (!editingProjectId || !editForm.name.trim()) return;
+    updateProject(editingProjectId, {
+      name: editForm.name.trim(),
+      description: editForm.description.trim(),
+      techStack: editForm.techStack
+        .split(/[,，、]/)
+        .map((item) => item.trim())
+        .filter(Boolean),
+      repoUrl: editForm.repoUrl.trim(),
+      startDate: editForm.startDate || undefined,
+      endDate: editForm.endDate || undefined,
+    });
+    setEditingProjectId(null);
+  };
+
+  const toggleArchived = (project: DevProject): void => {
+    updateProject(project.id, { archived: !project.archived });
   };
 
   const emptyState =
@@ -372,8 +446,12 @@ export const DevPage: React.FC = () => {
               ...option,
               count:
                 option.value === 'all'
-                  ? projects.length
-                  : projects.filter((project) => project.status === option.value).length,
+                  ? projects.filter((project) => !project.archived).length
+                  : option.value === 'archived'
+                    ? projects.filter((project) => project.archived).length
+                    : projects.filter(
+                        (project) => !project.archived && project.status === option.value,
+                      ).length,
             }))}
           />
         }
@@ -388,6 +466,7 @@ export const DevPage: React.FC = () => {
             const done = project.tasks.filter((task) => task.status === 'done').length;
             const percent =
               project.tasks.length === 0 ? 0 : Math.round((done / project.tasks.length) * 100);
+            const stalledDays = stalledDaysOf(project);
 
             return (
               <li key={project.id}>
@@ -407,11 +486,36 @@ export const DevPage: React.FC = () => {
                         <Badge tone={PROJECT_STATUS_TONE[project.status]} dot>
                           {PROJECT_STATUS_LABEL[project.status]}
                         </Badge>
+                        {stalledDays !== null && (
+                          <Badge tone="warning">停滞 {stalledDays} 天</Badge>
+                        )}
                       </div>
                       {project.description && (
                         <p className="mt-0.5 text-sm text-content-tertiary">
                           {project.description}
                         </p>
+                      )}
+
+                      {(project.techStack.length > 0 || project.repoUrl) && (
+                        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                          {project.techStack.map((tech) => (
+                            <Badge key={tech} tone="default">
+                              {tech}
+                            </Badge>
+                          ))}
+                          {project.repoUrl && (
+                            <a
+                              href={project.repoUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              aria-label={`打开「${project.name}」的仓库地址`}
+                              className="inline-flex items-center gap-1 text-xs text-accent hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-line-focus"
+                            >
+                              <ExternalLink size={12} aria-hidden />
+                              仓库
+                            </a>
+                          )}
+                        </div>
                       )}
 
                       <div className="mt-3 flex flex-wrap items-center gap-3">
@@ -452,6 +556,24 @@ export const DevPage: React.FC = () => {
                         size="sm"
                         icon={<Clock size={15} />}
                         onClick={() => openSessionModal(project.id)}
+                      />
+                      <IconButton
+                        label={`编辑「${project.name}」`}
+                        size="sm"
+                        icon={<Pencil size={14} />}
+                        onClick={() => openEditModal(project)}
+                      />
+                      <IconButton
+                        label={
+                          project.archived
+                            ? `取消归档「${project.name}」`
+                            : `归档「${project.name}」`
+                        }
+                        size="sm"
+                        icon={
+                          project.archived ? <ArchiveRestore size={14} /> : <Archive size={14} />
+                        }
+                        onClick={() => toggleArchived(project)}
                       />
                       <IconButton
                         label={`删除项目「${project.name}」`}
@@ -558,6 +680,65 @@ export const DevPage: React.FC = () => {
             multiline
             rows={3}
           />
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={editingProject !== null}
+        onClose={() => setEditingProjectId(null)}
+        title={editingProject ? `编辑「${editingProject.name}」` : '编辑项目'}
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setEditingProjectId(null)}>
+              取消
+            </Button>
+            <Button onClick={handleSaveEdit} disabled={!editForm.name.trim()}>
+              保存
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <Input
+            label="项目名称"
+            value={editForm.name}
+            onChange={(event) => setEditForm({ ...editForm, name: event.target.value })}
+            required
+          />
+          <Input
+            label="描述"
+            value={editForm.description}
+            onChange={(event) => setEditForm({ ...editForm, description: event.target.value })}
+            placeholder="项目描述（可选）"
+            multiline
+            rows={3}
+          />
+          <Input
+            label="技术栈"
+            value={editForm.techStack}
+            onChange={(event) => setEditForm({ ...editForm, techStack: event.target.value })}
+            placeholder="用逗号分隔，如：React, TypeScript"
+          />
+          <Input
+            label="仓库地址"
+            value={editForm.repoUrl}
+            onChange={(event) => setEditForm({ ...editForm, repoUrl: event.target.value })}
+            placeholder="https://github.com/…（可选）"
+          />
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Input
+              label="开始日期"
+              type="date"
+              value={editForm.startDate}
+              onChange={(event) => setEditForm({ ...editForm, startDate: event.target.value })}
+            />
+            <Input
+              label="结束日期"
+              type="date"
+              value={editForm.endDate}
+              onChange={(event) => setEditForm({ ...editForm, endDate: event.target.value })}
+            />
+          </div>
         </div>
       </Modal>
 

@@ -199,4 +199,59 @@ describe('DevPage', () => {
     expect(useDevStore.getState().projects[0]!.hoursSpent).toBe(2);
     expect(screen.getByText(/累计 2 小时 · 1 条记录/)).toBeInTheDocument();
   });
+
+  it('编辑项目可以保存技术栈与仓库地址', async () => {
+    useDevStore.getState().addProject('写作助手', '');
+    render(<DevPage />);
+
+    await userEvent.click(screen.getByRole('button', { name: '编辑「写作助手」' }));
+    const dialog = screen.getByRole('dialog', { name: '编辑「写作助手」' });
+
+    await userEvent.type(within(dialog).getByLabelText('技术栈'), 'React, TypeScript');
+    await userEvent.type(
+      within(dialog).getByLabelText('仓库地址'),
+      'https://github.com/example/writing',
+    );
+    await userEvent.click(within(dialog).getByRole('button', { name: '保存' }));
+
+    const project = useDevStore.getState().projects[0]!;
+    expect(project.techStack).toEqual(['React', 'TypeScript']);
+    expect(project.repoUrl).toBe('https://github.com/example/writing');
+    expect(screen.getByText('React')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '打开「写作助手」的仓库地址' })).toBeInTheDocument();
+  });
+
+  it('归档的项目从默认列表隐藏，可以在「已归档」里找回', async () => {
+    useDevStore.getState().addProject('写作助手', '');
+    render(<DevPage />);
+
+    await userEvent.click(screen.getByRole('button', { name: '归档「写作助手」' }));
+    expect(useDevStore.getState().projects[0]!.archived).toBe(true);
+    expect(screen.queryByText('写作助手')).not.toBeInTheDocument();
+
+    await userEvent.click(
+      within(screen.getByRole('group', { name: '按项目状态筛选' })).getByRole('button', {
+        name: /已归档/,
+      }),
+    );
+    expect(screen.getByText('写作助手')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: '取消归档「写作助手」' }));
+    expect(useDevStore.getState().projects[0]!.archived).toBe(false);
+  });
+
+  it('超过 14 天没有动静的未完成项目显示停滞提醒', () => {
+    const store = useDevStore.getState();
+    store.addProject('写作助手', '');
+    store.addProject('记账工具', '');
+    // 把「记账工具」的创建时间回拨 20 天，模拟一直没人动它
+    store.updateProject(projectId('记账工具'), {
+      createdAt: new Date(Date.now() - 20 * 86_400_000).toISOString(),
+    });
+
+    render(<DevPage />);
+
+    expect(screen.getByText(/停滞 20 天/)).toBeInTheDocument();
+    expect(screen.getAllByText(/停滞 \d+ 天/)).toHaveLength(1);
+  });
 });

@@ -41,6 +41,9 @@ export const useDevStore = create<DevState>()(
           status: 'planning',
           tasks: [],
           hoursSpent: 0,
+          techStack: [],
+          repoUrl: '',
+          archived: false,
           createdAt: new Date().toISOString(),
         };
         set((state) => ({ projects: [...state.projects, project] }));
@@ -130,7 +133,8 @@ export const useDevStore = create<DevState>()(
       name: STORAGE_KEYS.dev,
       version: STORE_VERSION,
       partialize: (state) => ({ projects: state.projects, sessions: state.sessions }),
-      // 旧数据里的项目没有 hoursSpent，补齐成 0，免得界面上出现 NaN
+      // 旧数据里的项目没有 hoursSpent，补齐成 0，免得界面上出现 NaN；
+      // v6 补齐技术栈 / 仓库地址 / 归档字段
       migrate: (persisted) => {
         const state = migrateState(persisted, defaultState);
         return {
@@ -138,6 +142,9 @@ export const useDevStore = create<DevState>()(
           projects: state.projects.map((project) => ({
             ...project,
             hoursSpent: project.hoursSpent ?? 0,
+            techStack: project.techStack ?? [],
+            repoUrl: project.repoUrl ?? '',
+            archived: project.archived ?? false,
           })),
         };
       },

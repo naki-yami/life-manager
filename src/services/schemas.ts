@@ -7,7 +7,7 @@ import { z } from 'zod';
  */
 
 export const APP_ID = 'life-manager';
-export const BACKUP_SCHEMA_VERSION = 4;
+export const BACKUP_SCHEMA_VERSION = 5;
 
 const isoDateString = z.string();
 const percent = z.number().min(0).max(100).catch(0);
@@ -66,6 +66,12 @@ export const devProjectSchema = z.object({
   tasks: z.array(devTaskSchema).default([]),
   /** 累计工时；旧备份里没有这个字段，导入时补 0 */
   hoursSpent: z.number().min(0).catch(0),
+  /** v5：技术栈标签、仓库地址、起止日期与归档标记；旧备份缺省时按注释补齐 */
+  techStack: z.array(z.string()).default([]),
+  repoUrl: z.string().default(''),
+  startDate: isoDateString.optional(),
+  endDate: isoDateString.optional(),
+  archived: z.boolean().default(false),
   createdAt: isoDateString.default(() => new Date().toISOString()),
 });
 

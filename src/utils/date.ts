@@ -66,3 +66,17 @@ export function formatShortDate(key: string): string {
   if (!month || !day) return key;
   return `${month}/${day}`;
 }
+
+/** 两个日期键之间相差的天数（to - from）；无效键返回 null，由调用方决定怎么展示 */
+export function daysBetween(from: string, to: string): number | null {
+  const parse = (key: string): number | null => {
+    const parts = key.split('-').map((part) => Number(part));
+    const [year, month, day] = parts;
+    if (!year || !month || !day) return null;
+    return Date.UTC(year, month - 1, day);
+  };
+  const fromMs = parse(from);
+  const toMs = parse(to);
+  if (fromMs === null || toMs === null) return null;
+  return Math.round((toMs - fromMs) / 86_400_000);
+}

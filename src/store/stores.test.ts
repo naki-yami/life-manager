@@ -147,8 +147,8 @@ describe('版本迁移', () => {
     expect(result).toEqual({ tasks: [], futureField: 'keep' });
   });
 
-  it('当前版本号是 5', () => {
-    expect(STORE_VERSION).toBe(5);
+  it('当前版本号是 6', () => {
+    expect(STORE_VERSION).toBe(6);
   });
 
   it('旧项目数据没有 hoursSpent，重新水合时补 0', async () => {
