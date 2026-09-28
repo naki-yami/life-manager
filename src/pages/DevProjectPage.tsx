@@ -11,12 +11,15 @@ import {
   EmptyState,
   IconButton,
   Input,
+  KanbanBoard,
   Modal,
   NumberInput,
   ProgressBar,
   Select,
   StatCard,
   Textarea,
+  type KanbanColumnData,
+  type KanbanMoveResult,
 } from '../components/ui';
 import { PageHeader } from '../components/layout';
 import { BarChart } from '../components/charts';
@@ -24,9 +27,11 @@ import { useDevStore } from '../store/devStore';
 import { useUndoableRemove } from '../hooks/useUndoableRemove';
 import { formatNumber, formatShortDate, todayKey } from '../utils/date';
 import { seriesByDay } from '../utils/stats';
+import { moveTaskInArray } from '../utils/kanbanMove';
 import {
   DevProject,
   DevProjectStatus,
+  DevTask,
   DevTaskStatus,
   Priority,
   WorkSession,
@@ -82,8 +87,7 @@ export const DevProjectPage: React.FC = () => {
     projects,
     updateProjectStatus,
     addTask,
-    updateTaskStatus,
-    deleteTask,
+    reorderTasks,
     replaceProjects,
     sessions,
     addSession,
@@ -139,6 +143,31 @@ export const DevProjectPage: React.FC = () => {
     addTask(project.id, taskForm.title.trim(), taskForm.priority);
     setTaskForm({ title: '', priority: 'medium' });
   };
+
+  const handleKanbanMove = (move: KanbanMoveResult): void => {
+    if (!project) return;
+    const next = moveTaskInArray(
+      project.tasks,
+      move.itemId,
+      move.toColumnId as DevTaskStatus,
+      move.overItemId,
+    );
+    reorderTasks(project.id, next);
+  };
+
+  const kanbanColumns: KanbanColumnData[] = project
+    ? KANBAN_COLUMNS.map((column) => ({
+        id: column,
+        title: TASK_STATUS_LABEL[column],
+        items: project.tasks
+          .filter((task) => task.status === column)
+          .map((task) => ({
+            id: task.id,
+            label: task.title,
+            node: <KanbanCard task={task} projectId={project.id} />,
+          })),
+      }))
+    : [];
 
   const handleAddSession = (): void => {
     if (!project || !canSaveSession) return;
@@ -309,78 +338,11 @@ export const DevProjectPage: React.FC = () => {
             </Button>
           </form>
 
-          <div className="grid gap-4 md:grid-cols-3">
-            {KANBAN_COLUMNS.map((column) => {
-              const columnTasks = project.tasks.filter((task) => task.status === column);
-              return (
-                <div key={column} className="rounded border border-line-subtle bg-inset p-3">
-                  <div className="mb-2 flex items-center justify-between">
-                    <h3 className="text-sm font-semibold text-content-secondary">
-                      {TASK_STATUS_LABEL[column]}
-                    </h3>
-                    <Badge tone="default">{columnTasks.length}</Badge>
-                  </div>
-                  {columnTasks.length === 0 ? (
-                    <p className="py-4 text-center text-xs text-content-tertiary">
-                      这一列还没有任务
-                    </p>
-                  ) : (
-                    <ul className="space-y-2">
-                      {columnTasks.map((task) => (
-                        <li
-                          key={task.id}
-                          className="rounded bg-surface p-2.5 shadow-xs"
-                        >
-                          <div className="flex items-start gap-2">
-                            <span
-                              className={`min-w-0 flex-1 text-sm ${
-                                task.status === 'done'
-                                  ? 'text-content-tertiary line-through'
-                                  : 'text-content'
-                              }`}
-                            >
-                              {task.title}
-                            </span>
-                            <Badge tone={PRIORITY_TONE[task.priority]}>
-                              {PRIORITY_OPTIONS.find((option) => option.value === task.priority)
-                                ?.label ?? '中等'}
-                            </Badge>
-                          </div>
-                          <div className="mt-2 flex items-center gap-1.5">
-                            <Select
-                              aria-label={`调整任务「${task.title}」的状态`}
-                              className="flex-1"
-                              value={task.status}
-                              onChange={(value) =>
-                                updateTaskStatus(project.id, task.id, value as DevTaskStatus)
-                              }
-                              options={TASK_STATUS_OPTIONS}
-                            />
-                            <IconButton
-                              label={`删除任务「${task.title}」`}
-                              size="sm"
-                              icon={<Trash2 size={13} />}
-                              onClick={() => {
-                                const snapshot = projects;
-                                deleteTask(project.id, task.id);
-                                undoableRemove({
-                                  message: `已删除任务「${task.title}」`,
-                                  description: '点「撤销」可以恢复。',
-                                  snapshot,
-                                  restore: replaceProjects,
-                                });
-                              }}
-                              className="hover:text-danger"
-                            />
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+          <KanbanBoard
+            label={`「${project.name}」的任务看板`}
+            columns={kanbanColumns}
+            onMove={handleKanbanMove}
+          />
         </CardBody>
       </Card>
 
@@ -517,6 +479,54 @@ export const DevProjectPage: React.FC = () => {
         confirmText="删除"
         tone="danger"
       />
+    </div>
+  );
+};
+
+/** 看板卡片正文：标题、优先级、状态流转与删除 */
+const KanbanCard: React.FC<{ task: DevTask; projectId: string }> = ({ task, projectId }) => {
+  const { projects, updateTaskStatus, deleteTask, replaceProjects } = useDevStore();
+  const undoableRemove = useUndoableRemove();
+
+  return (
+    <div>
+      <div className="flex items-start gap-2">
+        <span
+          className={`min-w-0 flex-1 text-sm ${
+            task.status === 'done' ? 'text-content-tertiary line-through' : 'text-content'
+          }`}
+        >
+          {task.title}
+        </span>
+        <Badge tone={PRIORITY_TONE[task.priority]}>
+          {PRIORITY_OPTIONS.find((option) => option.value === task.priority)?.label ?? '中等'}
+        </Badge>
+      </div>
+      <div className="mt-2 flex items-center gap-1.5">
+        <Select
+          aria-label={`调整任务「${task.title}」的状态`}
+          className="flex-1"
+          value={task.status}
+          onChange={(value) => updateTaskStatus(projectId, task.id, value as DevTaskStatus)}
+          options={TASK_STATUS_OPTIONS}
+        />
+        <IconButton
+          label={`删除任务「${task.title}」`}
+          size="sm"
+          icon={<Trash2 size={13} />}
+          onClick={() => {
+            const snapshot = projects;
+            deleteTask(projectId, task.id);
+            undoableRemove({
+              message: `已删除任务「${task.title}」`,
+              description: '点「撤销」可以恢复。',
+              snapshot,
+              restore: replaceProjects,
+            });
+          }}
+          className="hover:text-danger"
+        />
+      </div>
     </div>
   );
 };

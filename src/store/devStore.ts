@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { DevProject, DevProjectStatus, DevTaskStatus, Priority, WorkSession } from '../types';
+import { DevProject, DevProjectStatus, DevTask, DevTaskStatus, Priority, WorkSession } from '../types';
 import { createId } from '../utils/id';
 import { STORAGE_KEYS } from '../utils/storageKeys';
 import { STORE_VERSION, migrateState } from './persist';
@@ -17,6 +17,8 @@ interface DevState {
   addTask: (projectId: string, title: string, priority: Priority) => void;
   updateTaskStatus: (projectId: string, taskId: string, status: DevTaskStatus) => void;
   deleteTask: (projectId: string, taskId: string) => void;
+  /** 看板拖拽后整表写回某个项目的任务（顺序与状态一起定） */
+  reorderTasks: (projectId: string, tasks: DevTask[]) => void;
   /** 记一次工时：写流水的同时把工时累加到项目上 */
   addSession: (projectId: string, date: string, hours: number, note: string) => void;
   deleteSession: (id: string) => void;
@@ -92,6 +94,10 @@ export const useDevStore = create<DevState>()(
           projects: state.projects.map((p) =>
             p.id === projectId ? { ...p, tasks: p.tasks.filter((t) => t.id !== taskId) } : p,
           ),
+        })),
+      reorderTasks: (projectId, tasks) =>
+        set((state) => ({
+          projects: state.projects.map((p) => (p.id === projectId ? { ...p, tasks } : p)),
         })),
       addSession: (projectId, date, hours, note) =>
         set((state) => ({

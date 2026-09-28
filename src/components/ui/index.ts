@@ -37,6 +37,13 @@ export { Slider } from './Slider';
 export type { SliderProps } from './Slider';
 export { SegmentedControl } from './SegmentedControl';
 export type { SegmentedControlProps, SegmentedOption } from './SegmentedControl';
+export { KanbanBoard } from './KanbanBoard';
+export type {
+  KanbanBoardProps,
+  KanbanColumnData,
+  KanbanItemData,
+  KanbanMoveResult,
+} from './KanbanBoard';
 export { Tooltip } from './Tooltip';
 export type { TooltipProps } from './Tooltip';
 export { ToastProvider } from './Toast';
