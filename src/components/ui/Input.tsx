@@ -179,6 +179,8 @@ export interface NumberInputProps {
   placeholder?: string;
   suffix?: string;
   disabled?: boolean;
+  /** 无障碍名称；传了就不再渲染可见 label（列表内的行内输入用） */
+  ariaLabel?: string;
   className?: string;
 }
 
@@ -194,6 +196,7 @@ export const NumberInput: React.FC<NumberInputProps> = ({
   step = 1,
   placeholder = '',
   suffix,
+  ariaLabel,
   disabled = false,
   className = '',
 }) => {
@@ -214,12 +217,13 @@ export const NumberInput: React.FC<NumberInputProps> = ({
   };
 
   return (
-    <FieldShell id={autoId} label={label} hint={hint} error={error}>
+    <FieldShell id={autoId} label={ariaLabel ? undefined : label} hint={hint} error={error}>
       <div className="relative flex items-center">
         <input
           id={autoId}
           type="number"
           inputMode="decimal"
+          aria-label={ariaLabel}
           value={value}
           min={min}
           max={max}

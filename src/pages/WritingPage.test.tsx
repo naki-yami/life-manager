@@ -1,0 +1,181 @@
+import React from 'react';
+import { render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { beforeEach, describe, expect, it } from 'vitest';
+import { WritingPage } from './WritingPage';
+import { useWritingStore } from '../store/writingStore';
+import { WritingStatus } from '../types';
+
+beforeEach(() => {
+  useWritingStore.setState({ projects: [] });
+});
+
+const projectOf = (title: string) =>
+  useWritingStore.getState().projects.find((project) => project.title === title)!;
+
+/** 统计卡片的整块文本，避免多个卡片出现相同数字时选择器歧义 */
+const statText = (label: string): string =>
+  screen.getByText(label).closest('div.rounded-lg')?.textContent ?? '';
+
+const setStatus = (title: string, status: WritingStatus): void => {
+  useWritingStore.getState().updateStatus(projectOf(title).id, status);
+};
+
+describe('WritingPage', () => {
+  it('空态引导新建第一个项目', async () => {
+    render(<WritingPage />);
+    expect(screen.getByText('还没有写作项目')).toBeInTheDocument();
+
+    await userEvent.click(screen.getAllByRole('button', { name: '新建项目' })[0]!);
+    const dialog = screen.getByRole('dialog', { name: '新建写作项目' });
+
+    await userEvent.type(within(dialog).getByLabelText(/^标题/), '我的第一本书');
+    await userEvent.click(within(dialog).getByRole('button', { name: '创建' }));
+
+    expect(useWritingStore.getState().projects).toHaveLength(1);
+    expect(useWritingStore.getState().projects[0]!.title).toBe('我的第一本书');
+    expect(useWritingStore.getState().projects[0]!.status).toBe('draft');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('新建项目时标题为空则不能提交', () => {
+    render(<WritingPage />);
+
+    return userEvent.click(screen.getAllByRole('button', { name: '新建项目' })[0]!).then(() => {
+      const dialog = screen.getByRole('dialog', { name: '新建写作项目' });
+      expect(within(dialog).getByRole('button', { name: '创建' })).toBeDisabled();
+      expect(useWritingStore.getState().projects).toHaveLength(0);
+    });
+  });
+
+  it('统计卡片汇总项目状态与累计字数', () => {
+    const store = useWritingStore.getState();
+    store.addProject('长文', 'article');
+    useWritingStore.getState().addProject('文案', 'copy');
+    useWritingStore.getState().addProject('书稿', 'book');
+
+    setStatus('长文', 'in-progress');
+    setStatus('文案', 'completed');
+    useWritingStore.getState().updateWordCount(projectOf('长文').id, 1200);
+    useWritingStore.getState().updateWordCount(projectOf('文案').id, 800);
+
+    render(<WritingPage />);
+
+    expect(statText('项目总数')).toContain('3');
+    expect(statText('进行中项目')).toContain('1');
+    expect(statText('已完成项目')).toContain('1');
+    expect(statText('累计字数')).toContain('2,000');
+  });
+
+  it('可以按标题和创作笔记搜索', async () => {
+    const store = useWritingStore.getState();
+    store.addProject('人类简史读书笔记', 'article');
+    useWritingStore.getState().addProject('新品发布文案', 'copy');
+    useWritingStore.getState().updateNotes(projectOf('新品发布文案').id, '主打轻量化的卖点');
+
+    render(<WritingPage />);
+
+    await userEvent.type(screen.getByRole('textbox', { name: '搜索' }), '简史');
+    expect(screen.getByText('人类简史读书笔记')).toBeInTheDocument();
+    expect(screen.queryByText('新品发布文案')).not.toBeInTheDocument();
+
+    await userEvent.clear(screen.getByRole('textbox', { name: '搜索' }));
+    await userEvent.type(screen.getByRole('textbox', { name: '搜索' }), '轻量化');
+    expect(screen.getByText('新品发布文案')).toBeInTheDocument();
+    expect(screen.queryByText('人类简史读书笔记')).not.toBeInTheDocument();
+  });
+
+  it('按状态筛选并显示数量', async () => {
+    const store = useWritingStore.getState();
+    store.addProject('A', 'article');
+    useWritingStore.getState().addProject('B', 'article');
+    useWritingStore.getState().addProject('C', 'article');
+    setStatus('A', 'completed');
+
+    render(<WritingPage />);
+
+    expect(screen.getByRole('button', { name: /全部/ })).toHaveTextContent('3');
+    expect(screen.getByRole('button', { name: /^已完成/ })).toHaveTextContent('1');
+
+    await userEvent.click(screen.getByRole('button', { name: /^已完成/ }));
+    expect(screen.getByText('A')).toBeInTheDocument();
+    expect(screen.queryByText('B')).not.toBeInTheDocument();
+    expect(screen.queryByText('C')).not.toBeInTheDocument();
+  });
+
+  it('可以改字数、改状态与一键标记完成', async () => {
+    useWritingStore.getState().addProject('长文', 'article');
+    render(<WritingPage />);
+
+    const wordCount = screen.getByRole('spinbutton', { name: '「长文」的字数' });
+    await userEvent.clear(wordCount);
+    await userEvent.type(wordCount, '1500');
+    expect(projectOf('长文').wordCount).toBe(1500);
+
+    await userEvent.selectOptions(
+      screen.getByRole('combobox', { name: '调整「长文」的状态' }),
+      'in-progress',
+    );
+    expect(projectOf('长文').status).toBe('in-progress');
+
+    await userEvent.click(screen.getByRole('button', { name: '标记完成' }));
+    expect(projectOf('长文').status).toBe('completed');
+    expect(screen.queryByRole('button', { name: '标记完成' })).not.toBeInTheDocument();
+  });
+
+  it('创作笔记可以保存与清空', async () => {
+    useWritingStore.getState().addProject('长文', 'article');
+    render(<WritingPage />);
+
+    await userEvent.click(screen.getByRole('button', { name: '创作笔记' }));
+    const dialog = screen.getByRole('dialog', { name: /长文/ });
+    await userEvent.type(within(dialog).getByLabelText('创作笔记'), '第二章要加一个反转');
+    await userEvent.click(within(dialog).getByRole('button', { name: '保存' }));
+
+    expect(projectOf('长文').notes).toBe('第二章要加一个反转');
+    expect(screen.getByText('第二章要加一个反转')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: '创作笔记' }));
+    const reopened = screen.getByRole('dialog', { name: /长文/ });
+    expect(within(reopened).getByLabelText('创作笔记')).toHaveValue('第二章要加一个反转');
+
+    await userEvent.clear(within(reopened).getByLabelText('创作笔记'));
+    await userEvent.click(within(reopened).getByRole('button', { name: '保存' }));
+
+    expect(projectOf('长文').notes).toBe('');
+    expect(screen.getByText('还没有创作笔记')).toBeInTheDocument();
+  });
+
+  it('删除项目要二次确认，文案里提示笔记会一起删', async () => {
+    useWritingStore.getState().addProject('长文', 'article');
+    useWritingStore.getState().updateNotes(projectOf('长文').id, '一些笔记');
+
+    render(<WritingPage />);
+    await userEvent.click(screen.getByRole('button', { name: '删除《长文》' }));
+
+    const dialog = screen.getByRole('dialog', { name: '删除写作项目' });
+    expect(within(dialog).getByText(/创作笔记也会一起删除/)).toBeInTheDocument();
+
+    await userEvent.click(within(dialog).getByRole('button', { name: '取消' }));
+    expect(useWritingStore.getState().projects).toHaveLength(1);
+
+    await userEvent.click(screen.getByRole('button', { name: '删除《长文》' }));
+    await userEvent.click(
+      within(screen.getByRole('dialog', { name: '删除写作项目' })).getByRole('button', {
+        name: '删除',
+      }),
+    );
+    expect(useWritingStore.getState().projects).toHaveLength(0);
+  });
+
+  it('筛选无结果时提供清除筛选', async () => {
+    useWritingStore.getState().addProject('长文', 'article');
+    render(<WritingPage />);
+
+    await userEvent.type(screen.getByRole('textbox', { name: '搜索' }), 'zzz');
+    expect(screen.getByText('没有符合条件的项目')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: '清除筛选' }));
+    expect(screen.getByText('长文')).toBeInTheDocument();
+  });
+});

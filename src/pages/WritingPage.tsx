@@ -1,169 +1,370 @@
-import React, { useState } from 'react';
-import { Plus, Trash2, FileText } from 'lucide-react';
-import { Card, CardBody, Button, Input, Modal, Select } from '../components/ui';
+import React, { useMemo, useState } from 'react';
+import { CheckCircle2, FileText, Hash, PenLine, Plus, StickyNote, Trash2 } from 'lucide-react';
+import {
+  Badge,
+  Button,
+  Card,
+  ConfirmDialog,
+  EmptyState,
+  IconButton,
+  Input,
+  Modal,
+  NumberInput,
+  SegmentedControl,
+  Select,
+  StatCard,
+  Textarea,
+} from '../components/ui';
+import { PageHeader, Toolbar } from '../components/layout';
 import { useWritingStore } from '../store/writingStore';
-import { WritingType, WritingStatus } from '../types';
+import { filterByKeyword } from '../utils/search';
+import { formatNumber } from '../utils/date';
+import { WritingStatus, WritingType } from '../types';
+
+type Filter = 'all' | WritingStatus;
+
+const STATUS_LABEL: Record<WritingStatus, string> = {
+  draft: '草稿',
+  'in-progress': '进行中',
+  completed: '已完成',
+};
+
+const STATUS_TONE: Record<WritingStatus, 'default' | 'accent' | 'success'> = {
+  draft: 'default',
+  'in-progress': 'accent',
+  completed: 'success',
+};
+
+const TYPE_LABEL: Record<WritingType, string> = {
+  article: '文章',
+  copy: '文案',
+  book: '书籍',
+};
+
+const STATUS_OPTIONS = (Object.keys(STATUS_LABEL) as WritingStatus[]).map((value) => ({
+  value,
+  label: STATUS_LABEL[value],
+}));
+
+const TYPE_OPTIONS = (Object.keys(TYPE_LABEL) as WritingType[]).map((value) => ({
+  value,
+  label: TYPE_LABEL[value],
+}));
+
+const FILTER_OPTIONS: Array<{ value: Filter; label: string }> = [
+  { value: 'all', label: '全部' },
+  { value: 'draft', label: '草稿' },
+  { value: 'in-progress', label: '进行中' },
+  { value: 'completed', label: '已完成' },
+];
 
 export const WritingPage: React.FC = () => {
   const { projects, addProject, deleteProject, updateStatus, updateWordCount, updateNotes } =
     useWritingStore();
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [form, setForm] = useState({ title: '', type: 'article' as WritingType });
-  const [notesForm, setNotesForm] = useState('');
 
-  const handleAdd = () => {
-    if (!form.title.trim()) return;
-    addProject(form.title, form.type);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [noteId, setNoteId] = useState<string | null>(null);
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const [noteInput, setNoteInput] = useState('');
+  const [keyword, setKeyword] = useState('');
+  const [filter, setFilter] = useState<Filter>('all');
+  const [form, setForm] = useState<{ title: string; type: WritingType }>({
+    title: '',
+    type: 'article',
+  });
+
+  const countOf = (status: WritingStatus): number =>
+    projects.filter((project) => project.status === status).length;
+
+  const totalWords = projects.reduce((sum, project) => sum + project.wordCount, 0);
+
+  const visibleProjects = useMemo(() => {
+    const byStatus =
+      filter === 'all' ? projects : projects.filter((project) => project.status === filter);
+    return filterByKeyword(byStatus, keyword, (project) => [
+      project.title,
+      project.notes,
+      TYPE_LABEL[project.type],
+    ]);
+  }, [projects, filter, keyword]);
+
+  const noteProject = projects.find((project) => project.id === noteId) ?? null;
+  const deletingProject = projects.find((project) => project.id === pendingDeleteId) ?? null;
+
+  const openAddModal = (): void => {
     setForm({ title: '', type: 'article' });
+    setShowAddModal(true);
+  };
+
+  const handleAdd = (): void => {
+    const title = form.title.trim();
+    if (!title) return;
+    addProject(title, form.type);
     setShowAddModal(false);
   };
 
-  const statusLabels: Record<WritingStatus, string> = {
-    draft: '草稿',
-    'in-progress': '进行中',
-    completed: '已完成',
-  };
-
-  const typeLabels: Record<WritingType, string> = {
-    article: '文章',
-    copy: '文案',
-    book: '书籍',
-  };
-
-  const statusColors: Record<WritingStatus, string> = {
-    draft: 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400',
-    'in-progress': 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400',
-    completed: 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400',
+  const openNotes = (id: string, notes: string): void => {
+    setNoteInput(notes);
+    setNoteId(id);
   };
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">写作</h1>
-          <p className="text-gray-500 dark:text-gray-400 mt-1">管理你的写作项目</p>
-        </div>
-        <Button onClick={() => setShowAddModal(true)}>
-          <Plus size={16} className="mr-2" /> 新建项目
-        </Button>
+    <div className="space-y-section">
+      <PageHeader
+        title="写作"
+        description="长文、文案与书稿的进度和灵感都在这里"
+        icon={PenLine}
+        actions={
+          <Button icon={<Plus size={16} aria-hidden />} onClick={openAddModal}>
+            新建项目
+          </Button>
+        }
+      />
+
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard
+          label="项目总数"
+          value={projects.length}
+          unit="个"
+          icon={<FileText size={16} aria-hidden />}
+        />
+        <StatCard
+          label="进行中项目"
+          value={countOf('in-progress')}
+          unit="个"
+          tone="accent"
+          icon={<PenLine size={16} aria-hidden />}
+        />
+        <StatCard
+          label="已完成项目"
+          value={countOf('completed')}
+          unit="个"
+          tone="success"
+          icon={<CheckCircle2 size={16} aria-hidden />}
+        />
+        <StatCard
+          label="累计字数"
+          value={formatNumber(totalWords)}
+          unit="字"
+          icon={<Hash size={16} aria-hidden />}
+          footer={
+            projects.length > 0
+              ? `平均每篇 ${formatNumber(Math.round(totalWords / projects.length))} 字`
+              : undefined
+          }
+        />
       </div>
 
-      <div className="grid gap-4">
-        {projects.length === 0 ? (
-          <Card className="p-8 text-center">
-            <p className="text-gray-400">暂无写作项目</p>
-          </Card>
-        ) : (
-          projects.map((project) => (
-            <Card key={project.id} className="p-4">
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-1">
-                    <FileText size={16} className="text-gray-400" />
-                    <h3 className="font-semibold text-gray-900 dark:text-gray-100">
-                      {project.title}
-                    </h3>
-                    <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400">
-                      {typeLabels[project.type]}
-                    </span>
-                    <Select
-                      value={project.status}
-                      onChange={(v) => updateStatus(project.id, v as WritingStatus)}
-                      options={Object.entries(statusLabels).map(([k, l]) => ({
-                        value: k,
-                        label: l,
-                      }))}
-                      className="w-auto"
-                    />
-                  </div>
-                  <div className="flex items-center gap-4 mt-2">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm text-gray-500 dark:text-gray-400">字数:</span>
-                      <input
-                        type="number"
-                        value={project.wordCount}
-                        onChange={(e) => updateWordCount(project.id, parseInt(e.target.value) || 0)}
-                        className="w-20 px-2 py-1 text-sm border border-gray-200 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
-                      />
+      <Toolbar
+        search={{ value: keyword, onChange: setKeyword, placeholder: '搜索标题、笔记或类型…' }}
+        actions={
+          <SegmentedControl
+            label="按写作状态筛选"
+            value={filter}
+            onChange={setFilter}
+            options={FILTER_OPTIONS.map((option) => ({
+              ...option,
+              count: option.value === 'all' ? projects.length : countOf(option.value),
+            }))}
+          />
+        }
+      />
+
+      {visibleProjects.length === 0 ? (
+        <Card>
+          <EmptyState
+            icon={<PenLine size={22} aria-hidden />}
+            title={projects.length === 0 ? '还没有写作项目' : '没有符合条件的项目'}
+            description={
+              projects.length === 0
+                ? '新建一个项目，把想写的东西先记下来，再慢慢推进。'
+                : '换个关键词，或者切换上面的状态筛选。'
+            }
+            action={
+              projects.length === 0 ? (
+                <Button icon={<Plus size={16} aria-hidden />} onClick={openAddModal}>
+                  新建项目
+                </Button>
+              ) : (
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    setKeyword('');
+                    setFilter('all');
+                  }}
+                >
+                  清除筛选
+                </Button>
+              )
+            }
+          />
+        </Card>
+      ) : (
+        <ul className="grid gap-4">
+          {visibleProjects.map((project) => (
+            <li key={project.id}>
+              <Card className="p-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="font-semibold text-content">{project.title}</h3>
+                      <Badge tone="info">{TYPE_LABEL[project.type]}</Badge>
+                      <Badge tone={STATUS_TONE[project.status]}>
+                        {STATUS_LABEL[project.status]}
+                      </Badge>
                     </div>
-                    <span className="text-xs text-gray-400">
-                      更新于 {new Date(project.updatedAt).toLocaleDateString('zh-CN')}
-                    </span>
-                  </div>
-                </div>
-                <div className="flex gap-1">
-                  <button
-                    onClick={() => {
-                      setEditingId(project.id);
-                      setNotesForm(project.notes);
-                    }}
-                    className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-400 hover:text-blue-500 transition-colors"
-                  >
-                    <FileText size={16} />
-                  </button>
-                  <button
-                    onClick={() => deleteProject(project.id)}
-                    className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-400 hover:text-red-500 transition-colors"
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                </div>
-              </div>
-            </Card>
-          ))
-        )}
-      </div>
 
-      {/* Add Modal */}
-      <Modal isOpen={showAddModal} onClose={() => setShowAddModal(false)} title="新建写作项目">
+                    <p
+                      className={`mt-1.5 text-sm ${
+                        project.notes.trim()
+                          ? 'line-clamp-2 text-content-secondary'
+                          : 'text-content-tertiary'
+                      }`}
+                    >
+                      {project.notes.trim() || '还没有创作笔记'}
+                    </p>
+
+                    <div className="mt-3 flex flex-wrap items-end gap-3">
+                      <div className="w-36">
+                        <NumberInput
+                          ariaLabel={`「${project.title}」的字数`}
+                          value={project.wordCount}
+                          onChange={(value) =>
+                            updateWordCount(project.id, value === '' ? 0 : value)
+                          }
+                          min={0}
+                          step={100}
+                          suffix="字"
+                        />
+                      </div>
+                      <div className="w-36">
+                        <Select
+                          aria-label={`调整「${project.title}」的状态`}
+                          value={project.status}
+                          onChange={(value) => updateStatus(project.id, value as WritingStatus)}
+                          options={STATUS_OPTIONS}
+                        />
+                      </div>
+                      <span className="text-2xs text-content-tertiary">
+                        更新于 {new Date(project.updatedAt).toLocaleDateString('zh-CN')}
+                      </span>
+                    </div>
+
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      {project.status !== 'completed' && (
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          icon={<CheckCircle2 size={13} aria-hidden />}
+                          onClick={() => updateStatus(project.id, 'completed')}
+                        >
+                          标记完成
+                        </Button>
+                      )}
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        icon={<StickyNote size={13} aria-hidden />}
+                        onClick={() => openNotes(project.id, project.notes)}
+                      >
+                        创作笔记
+                      </Button>
+                    </div>
+                  </div>
+
+                  <IconButton
+                    label={`删除《${project.title}》`}
+                    size="sm"
+                    icon={<Trash2 size={15} />}
+                    onClick={() => setPendingDeleteId(project.id)}
+                    className="hover:text-danger"
+                  />
+                </div>
+              </Card>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <Modal
+        isOpen={showAddModal}
+        onClose={() => setShowAddModal(false)}
+        title="新建写作项目"
+        description="先取个名字，字数与状态之后随时可以改"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setShowAddModal(false)}>
+              取消
+            </Button>
+            <Button onClick={handleAdd} disabled={!form.title.trim()}>
+              创建
+            </Button>
+          </>
+        }
+      >
         <div className="space-y-4">
           <Input
             label="标题"
             value={form.title}
-            onChange={(e) => setForm({ ...form, title: e.target.value })}
+            onChange={(event) => setForm({ ...form, title: event.target.value })}
             placeholder="输入标题"
+            required
           />
           <Select
             label="类型"
             value={form.type}
-            onChange={(v) => setForm({ ...form, type: v as WritingType })}
-            options={Object.entries(typeLabels).map(([k, l]) => ({ value: k, label: l }))}
+            onChange={(value) => setForm({ ...form, type: value as WritingType })}
+            options={TYPE_OPTIONS}
           />
-          <div className="flex justify-end gap-2 pt-2">
-            <Button variant="secondary" onClick={() => setShowAddModal(false)}>
-              取消
-            </Button>
-            <Button onClick={handleAdd}>创建</Button>
-          </div>
         </div>
       </Modal>
 
-      {/* Notes Modal */}
-      <Modal isOpen={!!editingId} onClose={() => setEditingId(null)} title="创作笔记">
-        <div className="space-y-4">
-          <textarea
-            value={notesForm}
-            onChange={(e) => setNotesForm(e.target.value)}
-            rows={8}
-            placeholder="记录你的创作想法..."
-            className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none"
-          />
-          <div className="flex justify-end gap-2">
-            <Button variant="secondary" onClick={() => setEditingId(null)}>
+      <Modal
+        isOpen={noteProject !== null}
+        onClose={() => setNoteId(null)}
+        title={noteProject ? `《${noteProject.title}》的创作笔记` : '创作笔记'}
+        description="留空并保存即可清空笔记"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setNoteId(null)}>
               取消
             </Button>
             <Button
               onClick={() => {
-                if (editingId) updateNotes(editingId, notesForm);
-                setEditingId(null);
+                if (noteId) updateNotes(noteId, noteInput);
+                setNoteId(null);
               }}
             >
               保存
             </Button>
-          </div>
-        </div>
+          </>
+        }
+      >
+        <Textarea
+          label="创作笔记"
+          value={noteInput}
+          onChange={(event) => setNoteInput(event.target.value)}
+          rows={8}
+          placeholder="记录你的创作想法、待补的段落、参考素材…"
+        />
       </Modal>
+
+      <ConfirmDialog
+        isOpen={deletingProject !== null}
+        onClose={() => setPendingDeleteId(null)}
+        onConfirm={() => {
+          if (pendingDeleteId) deleteProject(pendingDeleteId);
+          setPendingDeleteId(null);
+        }}
+        title="删除写作项目"
+        description={
+          deletingProject
+            ? `确定要删除《${deletingProject.title}》吗？项目里的创作笔记也会一起删除，且无法恢复。`
+            : ''
+        }
+        confirmText="删除"
+        tone="danger"
+      />
     </div>
   );
 };
