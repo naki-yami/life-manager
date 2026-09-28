@@ -51,6 +51,7 @@ const emptyBackup: BackupData = {
   memos: [],
   books: [],
   devProjects: [],
+  workSessions: [],
   writingProjects: [],
   fitnessPlans: [],
   fitnessRecords: [],

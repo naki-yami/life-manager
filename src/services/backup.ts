@@ -21,6 +21,7 @@ import {
   settingsSchema,
   taskSchema,
   workoutRecordSchema,
+  workSessionSchema,
   writingProjectSchema,
 } from './schemas';
 import type { BackupData, BackupModule } from './schemas';
@@ -138,6 +139,7 @@ export function parseBackup(
   modules.memos = pick(memoSchema, 'memos');
   modules.books = pick(bookSchema, 'books');
   modules.devProjects = pick(devProjectSchema, 'devProjects');
+  modules.workSessions = pick(workSessionSchema, 'workSessions');
   modules.writingProjects = pick(writingProjectSchema, 'writingProjects');
   modules.fitnessPlans = pick(fitnessPlanSchema, 'fitnessPlans');
   modules.fitnessRecords = pick(workoutRecordSchema, 'fitnessRecords');
@@ -240,6 +242,7 @@ export function planImport(
   const memos = merge('memos', current.memos ?? []);
   const books = merge('books', current.books ?? []);
   const devProjects = merge('devProjects', current.devProjects ?? []);
+  const workSessions = merge('workSessions', current.workSessions ?? []);
   const writingProjects = merge('writingProjects', current.writingProjects ?? []);
   const fitnessPlans = merge('fitnessPlans', current.fitnessPlans ?? []);
   const fitnessRecords = merge('fitnessRecords', current.fitnessRecords ?? []);
@@ -255,6 +258,7 @@ export function planImport(
       memos: memos.items,
       books: books.items,
       devProjects: devProjects.items,
+      workSessions: workSessions.items,
       writingProjects: writingProjects.items,
       fitnessPlans: fitnessPlans.items,
       fitnessRecords: fitnessRecords.items,
@@ -271,6 +275,11 @@ export function planImport(
         incoming: count(backup.devProjects),
         added: devProjects.added,
         skipped: devProjects.skipped,
+      },
+      workSessions: {
+        incoming: count(backup.workSessions),
+        added: workSessions.added,
+        skipped: workSessions.skipped,
       },
       writingProjects: {
         incoming: count(backup.writingProjects),

@@ -4,6 +4,7 @@ import { useBookStore } from './bookStore';
 import { useGameStore } from './gameStore';
 import { useDietStore } from './dietStore';
 import { useFitnessStore } from './fitnessStore';
+import { useDevStore } from './devStore';
 import { useThemeStore } from './themeStore';
 import { STORAGE_KEYS } from '../utils/storageKeys';
 import { migrateState, STORE_VERSION } from './persist';
@@ -15,6 +16,7 @@ beforeEach(async () => {
   useGameStore.setState({ games: [], sessions: [] });
   useDietStore.setState({ records: [] });
   useFitnessStore.setState({ plans: [], records: [] });
+  useDevStore.setState({ projects: [], sessions: [] });
   useThemeStore.setState({ themeMode: 'light' });
 });
 
@@ -145,8 +147,35 @@ describe('版本迁移', () => {
     expect(result).toEqual({ tasks: [], futureField: 'keep' });
   });
 
-  it('当前版本号是 4', () => {
-    expect(STORE_VERSION).toBe(4);
+  it('当前版本号是 5', () => {
+    expect(STORE_VERSION).toBe(5);
+  });
+
+  it('旧项目数据没有 hoursSpent，重新水合时补 0', async () => {
+    localStorage.setItem(
+      STORAGE_KEYS.dev,
+      JSON.stringify({
+        state: {
+          projects: [
+            {
+              id: 'old-dev',
+              name: '旧项目',
+              description: '',
+              status: 'in-progress',
+              tasks: [],
+              createdAt: '2026-01-01T00:00:00.000Z',
+            },
+          ],
+        },
+        version: 4,
+      }),
+    );
+
+    await useDevStore.persist.rehydrate();
+
+    expect(useDevStore.getState().projects[0]!.name).toBe('旧项目');
+    expect(useDevStore.getState().projects[0]!.hoursSpent).toBe(0);
+    expect(useDevStore.getState().sessions).toEqual([]);
   });
 });
 
@@ -342,5 +371,68 @@ describe('gameStore 游玩流水', () => {
     expect(useGameStore.getState().sessions).toHaveLength(1);
     useGameStore.getState().replaceSessions([]);
     expect(useGameStore.getState().sessions).toHaveLength(0);
+  });
+});
+
+describe('devStore 工时流水', () => {
+  const addProject = (name = 'Life Manager'): string => {
+    useDevStore.getState().addProject(name, '个人应用');
+    return useDevStore.getState().projects.find((project) => project.name === name)!.id;
+  };
+
+  it('记一次工时同时写流水并累加到项目', () => {
+    const id = addProject();
+
+    useDevStore.getState().addSession(id, '2026-09-28', 2.5, '重构存储层');
+
+    const session = useDevStore.getState().sessions[0]!;
+    expect(session.projectId).toBe(id);
+    expect(session.date).toBe('2026-09-28');
+    expect(session.hours).toBe(2.5);
+    expect(session.note).toBe('重构存储层');
+    expect(useDevStore.getState().projects[0]!.hoursSpent).toBe(2.5);
+
+    useDevStore.getState().addSession(id, '2026-09-29', 1.5, '');
+    expect(useDevStore.getState().projects[0]!.hoursSpent).toBe(4);
+    expect(useDevStore.getState().sessions).toHaveLength(2);
+  });
+
+  it('删流水会把工时减回去，且不会变成负数', () => {
+    const id = addProject();
+    useDevStore.getState().addSession(id, '2026-09-28', 2, '');
+    const sessionId = useDevStore.getState().sessions[0]!.id;
+
+    useDevStore.getState().deleteSession(sessionId);
+
+    expect(useDevStore.getState().sessions).toHaveLength(0);
+    expect(useDevStore.getState().projects[0]!.hoursSpent).toBe(0);
+
+    // 手动把累计工时改小后再删，不能出现负数
+    useDevStore.getState().addSession(id, '2026-09-28', 3, '');
+    useDevStore.getState().updateProject(id, { hoursSpent: 1 });
+    useDevStore.getState().deleteSession(useDevStore.getState().sessions[0]!.id);
+    expect(useDevStore.getState().projects[0]!.hoursSpent).toBe(0);
+  });
+
+  it('删掉不存在的流水时原样返回，不会误改项目工时', () => {
+    const id = addProject();
+    useDevStore.getState().addSession(id, '2026-09-28', 2, '');
+
+    useDevStore.getState().deleteSession('not-exist');
+
+    expect(useDevStore.getState().sessions).toHaveLength(1);
+    expect(useDevStore.getState().projects[0]!.hoursSpent).toBe(2);
+  });
+
+  it('replaceSessions 用于导入与撤销', () => {
+    useDevStore
+      .getState()
+      .replaceSessions([
+        { id: 'w1', projectId: 'p1', date: '2026-09-01', hours: 3, note: '', createdAt: 'x' },
+      ]);
+    expect(useDevStore.getState().sessions).toHaveLength(1);
+
+    useDevStore.getState().replaceSessions([]);
+    expect(useDevStore.getState().sessions).toHaveLength(0);
   });
 });

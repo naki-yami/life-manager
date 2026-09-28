@@ -53,6 +53,20 @@ export interface DevProject {
   description: string;
   status: DevProjectStatus;
   tasks: DevTask[];
+  /** 累计投入工时，由工时流水累加而来 */
+  hoursSpent: number;
+  createdAt: string;
+}
+
+/** 一次投入的工时记录；项目上的 hoursSpent 与这些流水共同维护 */
+export interface WorkSession {
+  id: string;
+  /** 关联的 DevProject.id */
+  projectId: string;
+  /** 工作日期 YYYY-MM-DD */
+  date: string;
+  hours: number;
+  note: string;
   createdAt: string;
 }
 

@@ -7,7 +7,7 @@ import { z } from 'zod';
  */
 
 export const APP_ID = 'life-manager';
-export const BACKUP_SCHEMA_VERSION = 3;
+export const BACKUP_SCHEMA_VERSION = 4;
 
 const isoDateString = z.string();
 const percent = z.number().min(0).max(100).catch(0);
@@ -64,6 +64,18 @@ export const devProjectSchema = z.object({
   description: z.string().default(''),
   status: z.enum(['planning', 'in-progress', 'completed', 'paused']).default('planning'),
   tasks: z.array(devTaskSchema).default([]),
+  /** 累计工时；旧备份里没有这个字段，导入时补 0 */
+  hoursSpent: z.number().min(0).catch(0),
+  createdAt: isoDateString.default(() => new Date().toISOString()),
+});
+
+/** 工时流水；旧的备份文件里没有这个模块，导入时不会清空现有记录 */
+export const workSessionSchema = z.object({
+  id: z.string().min(1),
+  projectId: z.string().default(''),
+  date: z.string().default(''),
+  hours: z.number().min(0).catch(0),
+  note: z.string().default(''),
   createdAt: isoDateString.default(() => new Date().toISOString()),
 });
 
@@ -166,6 +178,7 @@ export const backupDataSchema = z.object({
   memos: z.array(memoSchema).default([]),
   books: z.array(bookSchema).default([]),
   devProjects: z.array(devProjectSchema).default([]),
+  workSessions: z.array(workSessionSchema).default([]),
   writingProjects: z.array(writingProjectSchema).default([]),
   fitnessPlans: z.array(fitnessPlanSchema).default([]),
   fitnessRecords: z.array(workoutRecordSchema).default([]),
@@ -182,6 +195,7 @@ export const BACKUP_MODULES = [
   'memos',
   'books',
   'devProjects',
+  'workSessions',
   'writingProjects',
   'fitnessPlans',
   'fitnessRecords',
@@ -197,6 +211,7 @@ export const MODULE_LABELS: Record<BackupModule, string> = {
   memos: '备忘',
   books: '书籍',
   devProjects: '开发项目',
+  workSessions: '工时记录',
   writingProjects: '写作项目',
   fitnessPlans: '训练计划',
   fitnessRecords: '训练记录',

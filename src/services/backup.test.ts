@@ -56,7 +56,18 @@ function sampleData(): BackupData {
             createdAt: '2026-09-27T04:00:00.000Z',
           },
         ],
+        hoursSpent: 12,
         createdAt: '2026-09-01T00:00:00.000Z',
+      },
+    ],
+    workSessions: [
+      {
+        id: 'work-1',
+        projectId: 'dev-1',
+        date: '2026-09-27',
+        hours: 2.5,
+        note: '重构存储层',
+        createdAt: '2026-09-27T12:00:00.000Z',
       },
     ],
     writingProjects: [
@@ -130,6 +141,7 @@ const emptyData = (): BackupData => ({
   memos: [],
   books: [],
   devProjects: [],
+  workSessions: [],
   writingProjects: [],
   fitnessPlans: [],
   fitnessRecords: [],
@@ -155,6 +167,7 @@ describe('导出 / 导入 往返', () => {
     expect(plan.data.memos).toEqual(original.memos);
     expect(plan.data.books).toEqual(original.books);
     expect(plan.data.devProjects).toEqual(original.devProjects);
+    expect(plan.data.workSessions).toEqual(original.workSessions);
     expect(plan.data.writingProjects).toEqual(original.writingProjects);
     expect(plan.data.fitnessPlans).toEqual(original.fitnessPlans);
     expect(plan.data.fitnessRecords).toEqual(original.fitnessRecords);
@@ -176,6 +189,8 @@ describe('导出 / 导入 往返', () => {
     expect(plan.data.books?.[0]?.progress).toBe(42);
     expect(plan.data.books?.[0]?.notes).toHaveLength(1);
     expect(plan.data.devProjects?.[0]?.tasks).toHaveLength(1);
+    expect(plan.data.devProjects?.[0]?.hoursSpent).toBe(12);
+    expect(plan.data.workSessions?.[0]?.hours).toBe(2.5);
     expect(plan.data.writingProjects?.[0]?.wordCount).toBe(3200);
     expect(plan.data.fitnessRecords).toHaveLength(1);
     expect(plan.data.dietRecords).toHaveLength(1);
@@ -186,7 +201,7 @@ describe('导出 / 导入 往返', () => {
   it('信封结构包含 schemaVersion 与 exportedAt', () => {
     const envelope = buildBackupEnvelope(emptyData(), new Date('2026-09-28T00:00:00.000Z'));
     expect(envelope.app).toBe('life-manager');
-    expect(envelope.schemaVersion).toBe(3);
+    expect(envelope.schemaVersion).toBe(4);
     expect(envelope.exportedAt).toBe('2026-09-28T00:00:00.000Z');
   });
 });
@@ -325,6 +340,60 @@ describe('游玩记录的导入兼容', () => {
     expect(plan.stats.gameSessions).toEqual({ incoming: 1, added: 0, skipped: 1 });
   });
 });
+describe('工时记录的导入兼容', () => {
+  it('旧备份没有 workSessions 时该模块视为缺失，覆盖模式也不会清空现有记录', () => {
+    const legacy = sampleData() as Record<string, unknown>;
+    delete legacy.workSessions;
+    const parsed = parseBackup(JSON.stringify(legacy));
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+
+    expect(parsed.backup.modules.workSessions).toBeUndefined();
+
+    const plan = planImport(
+      {
+        workSessions: [
+          { id: 'keep', projectId: 'p', date: '2026-01-01', hours: 1, note: '', createdAt: 'x' },
+        ],
+      },
+      parsed.backup.modules,
+      'overwrite',
+    );
+    expect(plan.data.workSessions).toEqual([
+      { id: 'keep', projectId: 'p', date: '2026-01-01', hours: 1, note: '', createdAt: 'x' },
+    ]);
+  });
+
+  it('旧备份里的项目没有 hoursSpent，导入时补 0', () => {
+    const legacy = sampleData() as Record<string, unknown>;
+    const projects = legacy.devProjects as Array<Record<string, unknown>>;
+    delete projects[0]!.hoursSpent;
+    delete legacy.workSessions;
+
+    const parsed = parseBackup(JSON.stringify(legacy));
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+
+    const plan = planImport(emptyData(), parsed.backup.modules, 'overwrite');
+    expect(plan.data.devProjects?.[0]?.name).toBe('Life Manager');
+    expect(plan.data.devProjects?.[0]?.hoursSpent).toBe(0);
+  });
+
+  it('同一份备份重复导入不会产生重复工时', () => {
+    const session = {
+      id: 'w1',
+      projectId: 'p1',
+      date: '2026-09-20',
+      hours: 2,
+      note: '',
+      createdAt: '2026-09-20T22:00:00.000Z',
+    };
+    const plan = planImport({ workSessions: [session] }, { workSessions: [session] }, 'merge');
+    expect(plan.data.workSessions).toHaveLength(1);
+    expect(plan.stats.workSessions).toEqual({ incoming: 1, added: 0, skipped: 1 });
+  });
+});
+
 describe('导入模式', () => {
   const existing = [{ id: 'a', title: '现有' }];
 
@@ -383,6 +452,7 @@ describe('导入模式', () => {
       plan.data.memos,
       plan.data.books,
       plan.data.devProjects,
+      plan.data.workSessions,
       plan.data.writingProjects,
       plan.data.fitnessPlans,
       plan.data.fitnessRecords,

@@ -63,6 +63,7 @@ function readAllData(): BackupData {
     memos: taskState.memos,
     books: useBookStore.getState().books,
     devProjects: useDevStore.getState().projects,
+    workSessions: useDevStore.getState().sessions,
     writingProjects: useWritingStore.getState().projects,
     fitnessPlans: useFitnessStore.getState().plans,
     fitnessRecords: useFitnessStore.getState().records,
@@ -83,6 +84,7 @@ function applyPlan(data: Partial<BackupData>): void {
   if (data.memos) useTaskStore.getState().replaceMemos(data.memos);
   if (data.books) useBookStore.getState().replaceBooks(data.books);
   if (data.devProjects) useDevStore.getState().replaceProjects(data.devProjects);
+  if (data.workSessions) useDevStore.getState().replaceSessions(data.workSessions);
   if (data.writingProjects) useWritingStore.getState().replaceProjects(data.writingProjects);
   if (data.fitnessPlans) useFitnessStore.getState().replacePlans(data.fitnessPlans);
   if (data.fitnessRecords) useFitnessStore.getState().replaceRecords(data.fitnessRecords);
@@ -107,6 +109,7 @@ function resetStores(): void {
   useTaskStore.getState().replaceMemos([]);
   useBookStore.getState().replaceBooks([]);
   useDevStore.getState().replaceProjects([]);
+  useDevStore.getState().replaceSessions([]);
   useWritingStore.getState().replaceProjects([]);
   useFitnessStore.getState().replacePlans([]);
   useFitnessStore.getState().replaceRecords([]);
@@ -155,6 +158,7 @@ export const SettingsPage: React.FC = () => {
   const memoCount = useTaskStore((state) => state.memos.length);
   const bookCount = useBookStore((state) => state.books.length);
   const devCount = useDevStore((state) => state.projects.length);
+  const workSessionCount = useDevStore((state) => state.sessions.length);
   const writingCount = useWritingStore((state) => state.projects.length);
   const planCount = useFitnessStore((state) => state.plans.length);
   const recordCount = useFitnessStore((state) => state.records.length);
@@ -167,6 +171,7 @@ export const SettingsPage: React.FC = () => {
     { module: 'memos', label: MODULE_LABELS.memos, count: memoCount },
     { module: 'books', label: MODULE_LABELS.books, count: bookCount },
     { module: 'devProjects', label: MODULE_LABELS.devProjects, count: devCount },
+    { module: 'workSessions', label: MODULE_LABELS.workSessions, count: workSessionCount },
     { module: 'writingProjects', label: MODULE_LABELS.writingProjects, count: writingCount },
     { module: 'fitnessPlans', label: MODULE_LABELS.fitnessPlans, count: planCount },
     { module: 'fitnessRecords', label: MODULE_LABELS.fitnessRecords, count: recordCount },

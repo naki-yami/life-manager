@@ -1,12 +1,14 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { DevProject, DevProjectStatus, DevTaskStatus, Priority } from '../types';
+import { DevProject, DevProjectStatus, DevTaskStatus, Priority, WorkSession } from '../types';
 import { createId } from '../utils/id';
 import { STORAGE_KEYS } from '../utils/storageKeys';
 import { STORE_VERSION, migrateState } from './persist';
 
 interface DevState {
   projects: DevProject[];
+  /** 工时流水，用来做「最近 30 天投入」这类按时间的统计 */
+  sessions: WorkSession[];
   /** 返回新项目的 id，方便调用方立刻展开它 */
   addProject: (name: string, description: string) => string;
   updateProject: (id: string, updates: Partial<DevProject>) => void;
@@ -15,10 +17,17 @@ interface DevState {
   addTask: (projectId: string, title: string, priority: Priority) => void;
   updateTaskStatus: (projectId: string, taskId: string, status: DevTaskStatus) => void;
   deleteTask: (projectId: string, taskId: string) => void;
+  /** 记一次工时：写流水的同时把工时累加到项目上 */
+  addSession: (projectId: string, date: string, hours: number, note: string) => void;
+  deleteSession: (id: string) => void;
   replaceProjects: (projects: DevProject[]) => void;
+  replaceSessions: (sessions: WorkSession[]) => void;
 }
 
-const defaultState = { projects: [] as DevProject[] };
+const defaultState = { projects: [] as DevProject[], sessions: [] as WorkSession[] };
+
+/** 累计工时不允许为负，删流水时用得上 */
+const clampHours = (hours: number): number => Math.max(0, Math.round(hours * 100) / 100);
 
 export const useDevStore = create<DevState>()(
   persist(
@@ -31,6 +40,7 @@ export const useDevStore = create<DevState>()(
           description,
           status: 'planning',
           tasks: [],
+          hoursSpent: 0,
           createdAt: new Date().toISOString(),
         };
         set((state) => ({ projects: [...state.projects, project] }));
@@ -80,13 +90,57 @@ export const useDevStore = create<DevState>()(
             p.id === projectId ? { ...p, tasks: p.tasks.filter((t) => t.id !== taskId) } : p,
           ),
         })),
+      addSession: (projectId, date, hours, note) =>
+        set((state) => ({
+          sessions: [
+            {
+              id: createId(),
+              projectId,
+              date,
+              hours: clampHours(hours),
+              note,
+              createdAt: new Date().toISOString(),
+            },
+            ...state.sessions,
+          ],
+          // 流水与项目工时是一份数据，记一次就同步累加，避免两个数字互相打架
+          projects: state.projects.map((project) =>
+            project.id === projectId
+              ? { ...project, hoursSpent: clampHours(project.hoursSpent + hours) }
+              : project,
+          ),
+        })),
+      deleteSession: (id) =>
+        set((state) => {
+          const target = state.sessions.find((session) => session.id === id);
+          if (!target) return state;
+          return {
+            sessions: state.sessions.filter((session) => session.id !== id),
+            projects: state.projects.map((project) =>
+              project.id === target.projectId
+                ? { ...project, hoursSpent: clampHours(project.hoursSpent - target.hours) }
+                : project,
+            ),
+          };
+        }),
       replaceProjects: (projects) => set({ projects }),
+      replaceSessions: (sessions) => set({ sessions }),
     }),
     {
       name: STORAGE_KEYS.dev,
       version: STORE_VERSION,
-      partialize: (state) => ({ projects: state.projects }),
-      migrate: (persisted) => migrateState(persisted, defaultState),
+      partialize: (state) => ({ projects: state.projects, sessions: state.sessions }),
+      // 旧数据里的项目没有 hoursSpent，补齐成 0，免得界面上出现 NaN
+      migrate: (persisted) => {
+        const state = migrateState(persisted, defaultState);
+        return {
+          ...state,
+          projects: state.projects.map((project) => ({
+            ...project,
+            hoursSpent: project.hoursSpent ?? 0,
+          })),
+        };
+      },
     },
   ),
 );

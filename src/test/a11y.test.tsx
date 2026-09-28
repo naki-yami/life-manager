@@ -87,8 +87,9 @@ beforeEach(() => {
   useBookStore.setState({ books: [] });
   useBookStore.getState().addBook('人类简史', '尤瓦尔·赫拉利', '历史');
 
-  useDevStore.setState({ projects: [] });
+  useDevStore.setState({ projects: [], sessions: [] });
   useDevStore.getState().addProject('Life Manager', '个人应用');
+  useDevStore.getState().addSession(useDevStore.getState().projects[0]!.id, today, 2, '重构存储层');
 
   useWritingStore.setState({ projects: [] });
   useWritingStore.getState().addProject('随笔集', 'article');

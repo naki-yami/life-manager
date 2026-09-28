@@ -60,6 +60,7 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
         memos: safeRead(() => useTaskStore.getState().memos, [], '备忘录'),
         books: safeRead(() => useBookStore.getState().books, [], '读书'),
         devProjects: safeRead(() => useDevStore.getState().projects, [], '开发'),
+        workSessions: safeRead(() => useDevStore.getState().sessions, [], '工时记录'),
         writingProjects: safeRead(() => useWritingStore.getState().projects, [], '写作'),
         fitnessPlans: safeRead(() => useFitnessStore.getState().plans, [], '健身计划'),
         fitnessRecords: safeRead(() => useFitnessStore.getState().records, [], '健身记录'),
