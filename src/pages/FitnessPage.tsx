@@ -20,6 +20,7 @@ import {
 import { PageHeader, Toolbar } from '../components/layout';
 import { BarChart, Heatmap } from '../components/charts';
 import { useFitnessStore } from '../store/fitnessStore';
+import { useUndoableRemove } from '../hooks/useUndoableRemove';
 import { filterByKeyword } from '../utils/search';
 import { formatNumber, todayKey } from '../utils/date';
 import { activeDays, seriesByDay, seriesByWeek } from '../utils/stats';
@@ -64,7 +65,17 @@ const TREND_DAYS = 14;
 const WEEK_BUCKETS = 8;
 
 export const FitnessPage: React.FC = () => {
-  const { plans, records, addPlan, deletePlan, addRecord, deleteRecord } = useFitnessStore();
+  const {
+    plans,
+    records,
+    addPlan,
+    deletePlan,
+    addRecord,
+    deleteRecord,
+    replacePlans,
+    replaceRecords,
+  } = useFitnessStore();
+  const undoableRemove = useUndoableRemove();
 
   const [view, setView] = useState<View>('plans');
   const [keyword, setKeyword] = useState('');
@@ -561,8 +572,18 @@ export const FitnessPage: React.FC = () => {
         isOpen={pendingPlan !== null}
         onClose={() => setPendingPlanId(null)}
         onConfirm={() => {
+          const target = pendingPlan;
+          const snapshot = plans;
           if (pendingPlanId) deletePlan(pendingPlanId);
           setPendingPlanId(null);
+          if (target) {
+            undoableRemove({
+              message: `已删除计划「${target.name}」`,
+              description: '已记录的训练数据不受影响，点「撤销」可以恢复计划。',
+              snapshot,
+              restore: replacePlans,
+            });
+          }
         }}
         title="删除训练计划"
         description={
@@ -576,8 +597,18 @@ export const FitnessPage: React.FC = () => {
         isOpen={pendingRecord !== null}
         onClose={() => setPendingRecordId(null)}
         onConfirm={() => {
+          const target = pendingRecord;
+          const snapshot = records;
           if (pendingRecordId) deleteRecord(pendingRecordId);
           setPendingRecordId(null);
+          if (target) {
+            undoableRemove({
+              message: `已删除 ${target.date} 的训练记录`,
+              description: '点「撤销」可以恢复。',
+              snapshot,
+              restore: replaceRecords,
+            });
+          }
         }}
         title="删除训练记录"
         description={

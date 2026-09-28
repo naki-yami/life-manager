@@ -17,6 +17,7 @@ import {
 } from '../components/ui';
 import { PageHeader, Toolbar } from '../components/layout';
 import { useWritingStore } from '../store/writingStore';
+import { useUndoableRemove } from '../hooks/useUndoableRemove';
 import { filterByKeyword } from '../utils/search';
 import { formatNumber } from '../utils/date';
 import { WritingStatus, WritingType } from '../types';
@@ -59,8 +60,16 @@ const FILTER_OPTIONS: Array<{ value: Filter; label: string }> = [
 ];
 
 export const WritingPage: React.FC = () => {
-  const { projects, addProject, deleteProject, updateStatus, updateWordCount, updateNotes } =
-    useWritingStore();
+  const {
+    projects,
+    addProject,
+    deleteProject,
+    updateStatus,
+    updateWordCount,
+    updateNotes,
+    replaceProjects,
+  } = useWritingStore();
+  const undoableRemove = useUndoableRemove();
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [noteId, setNoteId] = useState<string | null>(null);
@@ -353,8 +362,18 @@ export const WritingPage: React.FC = () => {
         isOpen={deletingProject !== null}
         onClose={() => setPendingDeleteId(null)}
         onConfirm={() => {
+          const target = deletingProject;
+          const snapshot = projects;
           if (pendingDeleteId) deleteProject(pendingDeleteId);
           setPendingDeleteId(null);
+          if (target) {
+            undoableRemove({
+              message: `已删除《${target.title}》`,
+              description: '连同创作笔记一起删除，点「撤销」可以恢复。',
+              snapshot,
+              restore: replaceProjects,
+            });
+          }
         }}
         title="删除写作项目"
         description={

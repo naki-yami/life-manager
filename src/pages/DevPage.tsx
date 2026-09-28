@@ -25,6 +25,7 @@ import {
 } from '../components/ui';
 import { PageHeader, Toolbar } from '../components/layout';
 import { useDevStore } from '../store/devStore';
+import { useUndoableRemove } from '../hooks/useUndoableRemove';
 import { filterByKeyword } from '../utils/search';
 import { DevProjectStatus, DevTaskStatus, Priority } from '../types';
 
@@ -82,7 +83,9 @@ export const DevPage: React.FC = () => {
     addTask,
     updateTaskStatus,
     deleteTask,
+    replaceProjects,
   } = useDevStore();
+  const undoableRemove = useUndoableRemove();
 
   const [showAddProject, setShowAddProject] = useState(false);
   const [taskProjectId, setTaskProjectId] = useState<string | null>(null);
@@ -352,7 +355,16 @@ export const DevPage: React.FC = () => {
                                 label={`删除任务「${task.title}」`}
                                 size="sm"
                                 icon={<Trash2 size={14} />}
-                                onClick={() => deleteTask(project.id, task.id)}
+                                onClick={() => {
+                                  const snapshot = projects;
+                                  deleteTask(project.id, task.id);
+                                  undoableRemove({
+                                    message: `已删除任务「${task.title}」`,
+                                    description: '点「撤销」可以恢复。',
+                                    snapshot,
+                                    restore: replaceProjects,
+                                  });
+                                }}
                                 className="hover:text-danger"
                               />
                             </li>
@@ -440,8 +452,18 @@ export const DevPage: React.FC = () => {
         isOpen={deletingProject !== null}
         onClose={() => setPendingDeleteProjectId(null)}
         onConfirm={() => {
+          const target = deletingProject;
+          const snapshot = projects;
           if (pendingDeleteProjectId) deleteProject(pendingDeleteProjectId);
           setPendingDeleteProjectId(null);
+          if (target) {
+            undoableRemove({
+              message: `已删除项目「${target.name}」`,
+              description: `连同 ${target.tasks.length} 个任务一起删除，点「撤销」可以恢复。`,
+              snapshot,
+              restore: replaceProjects,
+            });
+          }
         }}
         title="删除项目"
         description={

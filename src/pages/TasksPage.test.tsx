@@ -3,6 +3,7 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { TasksPage } from './TasksPage';
+import { ToastProvider } from '../components/ui';
 import { useTaskStore } from '../store/taskStore';
 import { todayKey } from '../utils/date';
 
@@ -146,5 +147,29 @@ describe('TasksPage', () => {
     const task = useTaskStore.getState().tasks.find((item) => item.title === '紧急任务')!;
     expect(task.status).toBe('completed');
     expect(task.completedAt).toBeTruthy();
+  });
+  it('删除后可以点「撤销」把任务放回去', async () => {
+    seed();
+    render(
+      <ToastProvider>
+        <TasksPage />
+      </ToastProvider>,
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: '删除「中等任务」' }));
+    await userEvent.click(
+      within(screen.getByRole('dialog', { name: '删除任务' })).getByRole('button', {
+        name: '删除',
+      }),
+    );
+
+    expect(useTaskStore.getState().tasks).toHaveLength(2);
+    expect(screen.getByText('已删除任务「中等任务」')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: '撤销' }));
+
+    const titles = useTaskStore.getState().tasks.map((task) => task.title);
+    expect(titles).toEqual(['低优先级', '紧急任务', '中等任务']);
+    expect(screen.getByText('中等任务')).toBeInTheDocument();
   });
 });

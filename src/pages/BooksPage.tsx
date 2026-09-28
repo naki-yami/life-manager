@@ -17,6 +17,7 @@ import {
 } from '../components/ui';
 import { PageHeader, Toolbar } from '../components/layout';
 import { useBookStore } from '../store/bookStore';
+import { useUndoableRemove } from '../hooks/useUndoableRemove';
 import { filterByKeyword } from '../utils/search';
 import { percentOf } from '../utils/stats';
 import { Book, BookStatus } from '../types';
@@ -46,8 +47,17 @@ const FILTER_OPTIONS: Array<{ value: Filter; label: string }> = [
 ];
 
 export const BooksPage: React.FC = () => {
-  const { books, addBook, deleteBook, updateBookStatus, updateProgress, addNote, deleteNote } =
-    useBookStore();
+  const {
+    books,
+    addBook,
+    deleteBook,
+    updateBookStatus,
+    updateProgress,
+    addNote,
+    deleteNote,
+    replaceBooks,
+  } = useBookStore();
+  const undoableRemove = useUndoableRemove();
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [noteBookId, setNoteBookId] = useState<string | null>(null);
@@ -373,7 +383,17 @@ export const BooksPage: React.FC = () => {
                       label="删除这条笔记"
                       size="sm"
                       icon={<Trash2 size={13} />}
-                      onClick={() => noteBook && deleteNote(noteBook.id, note.id)}
+                      onClick={() => {
+                        if (!noteBook) return;
+                        const snapshot = books;
+                        deleteNote(noteBook.id, note.id);
+                        undoableRemove({
+                          message: '已删除这条笔记',
+                          description: '点「撤销」可以恢复。',
+                          snapshot,
+                          restore: replaceBooks,
+                        });
+                      }}
                       className="hover:text-danger"
                     />
                   </div>
@@ -388,8 +408,18 @@ export const BooksPage: React.FC = () => {
         isOpen={deletingBook !== null}
         onClose={() => setPendingDeleteId(null)}
         onConfirm={() => {
+          const target = deletingBook;
+          const snapshot = books;
           if (pendingDeleteId) deleteBook(pendingDeleteId);
           setPendingDeleteId(null);
+          if (target) {
+            undoableRemove({
+              message: `已删除《${target.title}》`,
+              description: `连同 ${target.notes.length} 条笔记一起删除，点「撤销」可以恢复。`,
+              snapshot,
+              restore: replaceBooks,
+            });
+          }
         }}
         title="删除书籍"
         description={

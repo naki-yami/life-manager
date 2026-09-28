@@ -29,6 +29,7 @@ import {
   StatCard,
 } from '../components/ui';
 import { PageHeader } from '../components/layout';
+import { useUndoableRemove } from '../hooks/useUndoableRemove';
 import { Heatmap, Sparkline } from '../components/charts';
 import { useTaskStore } from '../store/taskStore';
 import { useBookStore } from '../store/bookStore';
@@ -72,7 +73,8 @@ interface ModuleCard {
 
 export const HomePage: React.FC = () => {
   const navigate = useNavigate();
-  const { tasks, memos, addMemo, deleteMemo, toggleTaskStatus } = useTaskStore();
+  const { tasks, memos, addMemo, deleteMemo, toggleTaskStatus, replaceMemos } = useTaskStore();
+  const undoableRemove = useUndoableRemove();
   const books = useBookStore((state) => state.books);
   const devProjects = useDevStore((state) => state.projects);
   const writingProjects = useWritingStore((state) => state.projects);
@@ -356,7 +358,16 @@ export const HomePage: React.FC = () => {
                       label="删除备忘"
                       size="sm"
                       icon={<Trash2 size={14} />}
-                      onClick={() => deleteMemo(memo.id)}
+                      onClick={() => {
+                        const snapshot = memos;
+                        deleteMemo(memo.id);
+                        undoableRemove({
+                          message: '已删除备忘',
+                          description: '点「撤销」可以恢复这条备忘。',
+                          snapshot,
+                          restore: replaceMemos,
+                        });
+                      }}
                       className="opacity-0 transition-opacity duration-fast group-hover:opacity-100 focus-visible:opacity-100"
                     />
                   </li>

@@ -14,6 +14,7 @@ import {
 } from '../components/ui';
 import { PageHeader, Toolbar } from '../components/layout';
 import { useTaskStore } from '../store/taskStore';
+import { useUndoableRemove } from '../hooks/useUndoableRemove';
 import { todayKey } from '../utils/date';
 import { Priority, Task, TaskStatus } from '../types';
 
@@ -97,7 +98,8 @@ const TaskFormFields: React.FC<{ form: TaskForm; onChange: (form: TaskForm) => v
 );
 
 export const TasksPage: React.FC = () => {
-  const { tasks, addTask, deleteTask, toggleTaskStatus, updateTask } = useTaskStore();
+  const { tasks, addTask, deleteTask, toggleTaskStatus, updateTask, replaceTasks } = useTaskStore();
+  const undoableRemove = useUndoableRemove();
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
@@ -160,8 +162,18 @@ export const TasksPage: React.FC = () => {
   };
 
   const confirmDelete = (): void => {
+    const target = tasks.find((task) => task.id === pendingDeleteId) ?? null;
+    const snapshot = tasks;
     if (pendingDeleteId) deleteTask(pendingDeleteId);
     setPendingDeleteId(null);
+    if (target) {
+      undoableRemove({
+        message: `已删除任务「${target.title}」`,
+        description: '点「撤销」可以放回原来的位置。',
+        snapshot,
+        restore: replaceTasks,
+      });
+    }
   };
 
   return (

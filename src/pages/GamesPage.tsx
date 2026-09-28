@@ -19,6 +19,7 @@ import {
 } from '../components/ui';
 import { PageHeader, Toolbar } from '../components/layout';
 import { useGameStore } from '../store/gameStore';
+import { useUndoableRemove } from '../hooks/useUndoableRemove';
 import { filterByKeyword } from '../utils/search';
 import { formatDuration, formatNumber } from '../utils/date';
 import { Game, GamePlatform, GameStatus } from '../types';
@@ -58,7 +59,9 @@ export const GamesPage: React.FC = () => {
     addAchievement,
     toggleAchievement,
     deleteAchievement,
+    replaceGames,
   } = useGameStore();
+  const undoableRemove = useUndoableRemove();
 
   const [keyword, setKeyword] = useState('');
   const [filter, setFilter] = useState<Filter>('all');
@@ -443,9 +446,17 @@ export const GamesPage: React.FC = () => {
                     label={`删除成就「${achievement.name}」`}
                     size="sm"
                     icon={<Trash2 size={13} />}
-                    onClick={() =>
-                      achievementGame && deleteAchievement(achievementGame.id, achievement.id)
-                    }
+                    onClick={() => {
+                      if (!achievementGame) return;
+                      const snapshot = games;
+                      deleteAchievement(achievementGame.id, achievement.id);
+                      undoableRemove({
+                        message: `已删除成就「${achievement.name}」`,
+                        description: '点「撤销」可以恢复。',
+                        snapshot,
+                        restore: replaceGames,
+                      });
+                    }}
                     className="hover:text-danger"
                   />
                 </li>
@@ -489,8 +500,18 @@ export const GamesPage: React.FC = () => {
         isOpen={pendingGame !== null}
         onClose={() => setPendingDeleteId(null)}
         onConfirm={() => {
+          const target = pendingGame;
+          const snapshot = games;
           if (pendingDeleteId) deleteGame(pendingDeleteId);
           setPendingDeleteId(null);
+          if (target) {
+            undoableRemove({
+              message: `已删除《${target.name}》`,
+              description: `连同 ${target.achievements.length} 个成就记录一起删除，点「撤销」可以恢复。`,
+              snapshot,
+              restore: replaceGames,
+            });
+          }
         }}
         title="删除游戏"
         description={

@@ -35,6 +35,7 @@ import {
 import { PageHeader, Toolbar } from '../components/layout';
 import { BarChart, Sparkline } from '../components/charts';
 import { useDietStore } from '../store/dietStore';
+import { useUndoableRemove } from '../hooks/useUndoableRemove';
 import { filterByKeyword, matchesKeyword } from '../utils/search';
 import {
   addDays,
@@ -90,7 +91,8 @@ const MEAL_OPTIONS = MEAL_ORDER.map((type) => ({ value: type, label: MEAL_LABEL[
 const emptyItem = (): FoodDraft => ({ name: '', category: '主食', calories: 0 });
 
 export const DietPage: React.FC = () => {
-  const { records, addRecord, deleteRecord } = useDietStore();
+  const { records, addRecord, deleteRecord, replaceRecords } = useDietStore();
+  const undoableRemove = useUndoableRemove();
 
   const [view, setView] = useState<View>('day');
   const [trendRange, setTrendRange] = useState<TrendRange>('day');
@@ -574,8 +576,18 @@ export const DietPage: React.FC = () => {
         isOpen={pendingRecord !== null}
         onClose={() => setPendingDeleteId(null)}
         onConfirm={() => {
+          const target = pendingRecord;
+          const snapshot = records;
           if (pendingDeleteId) deleteRecord(pendingDeleteId);
           setPendingDeleteId(null);
+          if (target) {
+            undoableRemove({
+              message: '已删除这条饮食记录',
+              description: '点「撤销」可以恢复。',
+              snapshot,
+              restore: replaceRecords,
+            });
+          }
         }}
         title="删除饮食记录"
         description={
