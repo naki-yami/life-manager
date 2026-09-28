@@ -60,7 +60,7 @@ export const Button: React.FC<ButtonProps> = ({
   </button>
 );
 
-export type IconButtonVariant = 'ghost' | 'secondary' | 'outline' | 'danger';
+export type IconButtonVariant = 'primary' | 'ghost' | 'secondary' | 'outline' | 'danger';
 
 export interface IconButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   /** 必填：图标按钮没有可见文字，必须有可读标签 */

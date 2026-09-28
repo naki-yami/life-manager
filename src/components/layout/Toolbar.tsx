@@ -12,6 +12,7 @@ export interface ToolbarProps {
     value: string;
     onChange: (value: string) => void;
     placeholder?: string;
+    /** 无障碍名称，默认「搜索」；不会渲染成可见标签 */
     label?: string;
   };
   className?: string;
@@ -29,8 +30,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({ children, actions, search, cla
             className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-content-tertiary"
           />
           <Input
-            label={search.label}
-            aria-label={search.label ?? search.placeholder ?? '搜索'}
+            aria-label={search.label ?? '搜索'}
             value={search.value}
             onChange={(event) => search.onChange(event.target.value)}
             placeholder={search.placeholder ?? '搜索…'}
