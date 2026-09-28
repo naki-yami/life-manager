@@ -1,11 +1,11 @@
 import React from 'react';
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { TasksPage } from './TasksPage';
 import { ToastProvider } from '../components/ui';
 import { useTaskStore } from '../store/taskStore';
-import { todayKey } from '../utils/date';
+import { addDays, todayKey } from '../utils/date';
 
 beforeEach(() => {
   useTaskStore.setState({ tasks: [], memos: [] });
@@ -244,5 +244,69 @@ describe('TasksPage', () => {
     expect(screen.getByText('今日到期 1 件，已完成 0 件')).toBeInTheDocument();
     expect(screen.getByRole('progressbar', { name: '今日到期任务完成 0/1' })).toBeInTheDocument();
     expect(screen.getByRole('img', { name: /近 8 周每周完成任务数/ })).toBeInTheDocument();
+  });
+
+  it('展开后可以添加并勾选子任务，进度实时同步', async () => {
+    seed();
+    render(<TasksPage />);
+
+    // 列表按优先级排序，第一张卡是「紧急任务」
+    await userEvent.click(screen.getAllByRole('button', { name: '添加子任务' })[0]!);
+    const input = screen.getByLabelText('为「紧急任务」添加子任务');
+    await userEvent.type(input, '准备材料{Enter}');
+
+    expect(useTaskStore.getState().tasks[1]!.subtasks).toHaveLength(1);
+    expect(screen.getByText('子任务 0/1')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('checkbox', { name: '完成子任务「准备材料」' }));
+    expect(useTaskStore.getState().tasks[1]!.subtasks[0]!.done).toBe(true);
+    expect(screen.getByText('子任务 1/1')).toBeInTheDocument();
+  });
+
+  it('创建每天重复的任务，完成后自动生成下一次', async () => {
+    render(<TasksPage />);
+
+    await userEvent.click(screen.getAllByRole('button', { name: '添加任务' })[0]!);
+    const dialog = screen.getByRole('dialog', { name: '添加任务' });
+
+    await userEvent.type(within(dialog).getByLabelText(/^标题/), '站会');
+    fireEvent.change(within(dialog).getByLabelText('截止日期'), {
+      target: { value: todayKey() },
+    });
+    await userEvent.selectOptions(within(dialog).getByRole('combobox', { name: '重复' }), 'daily');
+    await userEvent.click(within(dialog).getByRole('button', { name: '添加' }));
+
+    expect(useTaskStore.getState().tasks[0]!.repeat).toEqual({ kind: 'daily' });
+
+    await userEvent.click(screen.getByRole('checkbox', { name: '完成「站会」' }));
+
+    const tasks = useTaskStore.getState().tasks;
+    expect(tasks).toHaveLength(2);
+    expect(tasks[0]!.status).toBe('completed');
+    expect(tasks[1]!.status).toBe('pending');
+    expect(tasks[1]!.dueDate).toBe(addDays(todayKey(), 1));
+    expect(screen.getAllByText('站会')).toHaveLength(2);
+  });
+
+  it('选择每周重复时可以挑选星期', async () => {
+    render(<TasksPage />);
+
+    await userEvent.click(screen.getAllByRole('button', { name: '添加任务' })[0]!);
+    const dialog = screen.getByRole('dialog', { name: '添加任务' });
+
+    await userEvent.type(within(dialog).getByLabelText(/^标题/), '健身打卡');
+    await userEvent.selectOptions(within(dialog).getByRole('combobox', { name: '重复' }), 'weekly');
+
+    const weekdays = within(dialog).getByRole('group', { name: '选择每周重复的星期' });
+    await userEvent.click(within(weekdays).getByRole('button', { name: '周一' }));
+    await userEvent.click(within(weekdays).getByRole('button', { name: '周三' }));
+    await userEvent.click(within(weekdays).getByRole('button', { name: '周五' }));
+
+    await userEvent.click(within(dialog).getByRole('button', { name: '添加' }));
+
+    expect(useTaskStore.getState().tasks[0]!.repeat).toEqual({
+      kind: 'weekly',
+      weekdays: [0, 2, 4],
+    });
   });
 });

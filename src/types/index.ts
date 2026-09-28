@@ -2,6 +2,21 @@
 export type Priority = 'high' | 'medium' | 'low';
 export type TaskStatus = 'pending' | 'completed';
 
+export interface SubTask {
+  id: string;
+  title: string;
+  done: boolean;
+}
+
+/** 重复规则：完成后自动生成下一次 */
+export type RepeatKind = 'daily' | 'weekdays' | 'weekly' | 'monthly';
+
+export interface RepeatRule {
+  kind: RepeatKind;
+  /** kind = 'weekly' 时生效；0 = 周一 … 6 = 周日 */
+  weekdays?: number[];
+}
+
 export interface Task {
   id: string;
   title: string;
@@ -9,6 +24,10 @@ export interface Task {
   priority: Priority;
   status: TaskStatus;
   dueDate: string;
+  /** 子任务清单；旧数据可能没有 */
+  subtasks: SubTask[];
+  /** 重复规则；null 表示不重复。旧数据可能没有 */
+  repeat: RepeatRule | null;
   createdAt: string;
   completedAt?: string;
 }

@@ -1,5 +1,14 @@
 import React, { useMemo, useState } from 'react';
-import { CalendarDays, Edit3, ListTodo, Plus, Trash2 } from 'lucide-react';
+import {
+  CalendarDays,
+  ChevronDown,
+  ChevronRight,
+  Edit3,
+  ListTodo,
+  Plus,
+  Repeat,
+  Trash2,
+} from 'lucide-react';
 import {
   Badge,
   Button,
@@ -24,7 +33,7 @@ import { useTaskStore } from '../store/taskStore';
 import { useUndoableRemove } from '../hooks/useUndoableRemove';
 import { daysBetween, formatShortDate, todayKey } from '../utils/date';
 import { seriesByWeek } from '../utils/stats';
-import { Priority, Task, TaskStatus } from '../types';
+import { Priority, RepeatKind, RepeatRule, Task, TaskStatus } from '../types';
 
 type Filter = 'all' | TaskStatus;
 type ViewMode = 'list' | 'kanban' | 'quadrant';
@@ -69,6 +78,29 @@ const QUADRANTS: Array<{
   { id: 'drop', title: '不重要不紧急', hint: '有空再说', important: false, urgent: false },
 ];
 
+const REPEAT_OPTIONS: Array<{ value: 'none' | RepeatKind; label: string }> = [
+  { value: 'none', label: '不重复' },
+  { value: 'daily', label: '每天' },
+  { value: 'weekdays', label: '工作日' },
+  { value: 'weekly', label: '每周' },
+  { value: 'monthly', label: '每月' },
+];
+
+const WEEKDAY_LABELS = ['一', '二', '三', '四', '五', '六', '日'];
+
+const REPEAT_LABEL: Record<RepeatKind, string> = {
+  daily: '每天',
+  weekdays: '工作日',
+  weekly: '每周',
+  monthly: '每月',
+};
+
+/** 重复规则的简短描述，用在任务角标上 */
+const repeatLabel = (rule: RepeatRule): string => {
+  if (rule.kind !== 'weekly' || !rule.weekdays?.length) return REPEAT_LABEL[rule.kind];
+  return `每周${rule.weekdays.map((index) => WEEKDAY_LABELS[index]).join('、')}`;
+};
+
 const isUrgent = (task: Task, today: string): boolean =>
   task.dueDate !== '' && task.dueDate <= today;
 
@@ -77,9 +109,18 @@ interface TaskForm {
   description: string;
   priority: Priority;
   dueDate: string;
+  repeatKind: 'none' | RepeatKind;
+  repeatWeekdays: number[];
 }
 
-const EMPTY_FORM: TaskForm = { title: '', description: '', priority: 'medium', dueDate: '' };
+const EMPTY_FORM: TaskForm = {
+  title: '',
+  description: '',
+  priority: 'medium',
+  dueDate: '',
+  repeatKind: 'none',
+  repeatWeekdays: [],
+};
 
 /** 截止日期的角标：逾期（含逾期天数）/ 今天 / 具体日期 */
 const DueBadge: React.FC<{ task: Task }> = ({ task }) => {
@@ -102,10 +143,10 @@ const DueBadge: React.FC<{ task: Task }> = ({ task }) => {
   );
 };
 
-const TaskFormFields: React.FC<{ form: TaskForm; onChange: (form: TaskForm) => void }> = ({
-  form,
-  onChange,
-}) => (
+const TaskFormFields: React.FC<{
+  form: TaskForm;
+  onChange: (form: TaskForm) => void;
+}> = ({ form, onChange }) => (
   <div className="space-y-4">
     <Input
       label="标题"
@@ -122,18 +163,64 @@ const TaskFormFields: React.FC<{ form: TaskForm; onChange: (form: TaskForm) => v
       multiline
       rows={3}
     />
-    <Select
-      label="优先级"
-      value={form.priority}
-      onChange={(value) => onChange({ ...form, priority: value as Priority })}
-      options={PRIORITY_OPTIONS}
-    />
-    <Input
-      label="截止日期"
-      type="date"
-      value={form.dueDate}
-      onChange={(event) => onChange({ ...form, dueDate: event.target.value })}
-    />
+    <div className="grid gap-4 sm:grid-cols-2">
+      <Select
+        label="优先级"
+        value={form.priority}
+        onChange={(value) => onChange({ ...form, priority: value as Priority })}
+        options={PRIORITY_OPTIONS}
+      />
+      <Input
+        label="截止日期"
+        type="date"
+        value={form.dueDate}
+        onChange={(event) => onChange({ ...form, dueDate: event.target.value })}
+      />
+    </div>
+    <div>
+      <Select
+        label="重复"
+        value={form.repeatKind}
+        onChange={(value) =>
+          onChange({ ...form, repeatKind: value as 'none' | RepeatKind })
+        }
+        options={REPEAT_OPTIONS}
+      />
+      {form.repeatKind === 'weekly' && (
+        <div className="mt-2 flex flex-wrap gap-1" role="group" aria-label="选择每周重复的星期">
+          {WEEKDAY_LABELS.map((label, index) => {
+            const active = form.repeatWeekdays.includes(index);
+            return (
+              <button
+                key={index}
+                type="button"
+                aria-pressed={active}
+                onClick={() =>
+                  onChange({
+                    ...form,
+                    repeatWeekdays: active
+                      ? form.repeatWeekdays.filter((day) => day !== index)
+                      : [...form.repeatWeekdays, index].sort((a, b) => a - b),
+                  })
+                }
+                className={`h-7 w-8 rounded text-xs font-medium transition-colors duration-fast ease-standard focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-line-focus ${
+                  active
+                    ? 'bg-accent-soft text-accent'
+                    : 'bg-inset text-content-tertiary hover:text-content-secondary'
+                }`}
+              >
+                周{label}
+              </button>
+            );
+          })}
+        </div>
+      )}
+      {form.repeatKind !== 'none' && (
+        <p className="mt-1.5 text-xs text-content-tertiary">
+          完成后会按这个规则自动生成下一次
+        </p>
+      )}
+    </div>
   </div>
 );
 
@@ -173,7 +260,17 @@ const TaskMiniCard: React.FC<{ task: Task; onToggle: (task: Task) => void }> = (
 };
 
 export const TasksPage: React.FC = () => {
-  const { tasks, addTask, deleteTask, toggleTaskStatus, updateTask, replaceTasks } = useTaskStore();
+  const {
+    tasks,
+    addTask,
+    deleteTask,
+    toggleTaskStatus,
+    updateTask,
+    replaceTasks,
+    addSubtask,
+    toggleSubtask,
+    deleteSubtask,
+  } = useTaskStore();
   const undoableRemove = useUndoableRemove();
 
   const [showAddModal, setShowAddModal] = useState(false);
@@ -184,6 +281,8 @@ export const TasksPage: React.FC = () => {
   const [view, setView] = useState<ViewMode>('list');
   const [keyword, setKeyword] = useState('');
   const [form, setForm] = useState<TaskForm>(EMPTY_FORM);
+  const [expandedSubtasks, setExpandedSubtasks] = useState<Set<string>>(new Set());
+  const [subtaskDraft, setSubtaskDraft] = useState<Record<string, string>>({});
 
   const today = todayKey();
   const pendingCount = tasks.filter((task) => task.status === 'pending').length;
@@ -277,9 +376,15 @@ export const TasksPage: React.FC = () => {
     if (move.fromColumnId !== move.toColumnId) toggleTaskStatus(move.itemId);
   };
 
+  const buildRepeat = (): RepeatRule | null => {
+    if (form.repeatKind === 'none') return null;
+    if (form.repeatKind === 'weekly') return { kind: 'weekly', weekdays: form.repeatWeekdays };
+    return { kind: form.repeatKind };
+  };
+
   const handleAdd = (): void => {
     if (!form.title.trim()) return;
-    addTask(form.title.trim(), form.description.trim(), form.priority, form.dueDate);
+    addTask(form.title.trim(), form.description.trim(), form.priority, form.dueDate, buildRepeat());
     setForm(EMPTY_FORM);
     setShowAddModal(false);
   };
@@ -291,6 +396,7 @@ export const TasksPage: React.FC = () => {
       description: form.description.trim(),
       priority: form.priority,
       dueDate: form.dueDate,
+      repeat: buildRepeat(),
     });
     setEditingTaskId(null);
   };
@@ -302,7 +408,25 @@ export const TasksPage: React.FC = () => {
       description: task.description,
       priority: task.priority,
       dueDate: task.dueDate,
+      repeatKind: task.repeat?.kind ?? 'none',
+      repeatWeekdays: task.repeat?.weekdays ?? [],
     });
+  };
+
+  const toggleSubExpand = (taskId: string): void => {
+    setExpandedSubtasks((previous) => {
+      const next = new Set(previous);
+      if (next.has(taskId)) next.delete(taskId);
+      else next.add(taskId);
+      return next;
+    });
+  };
+
+  const handleAddSubtask = (taskId: string): void => {
+    const title = (subtaskDraft[taskId] ?? '').trim();
+    if (!title) return;
+    addSubtask(taskId, title);
+    setSubtaskDraft({ ...subtaskDraft, [taskId]: '' });
   };
 
   const confirmDelete = (): void => {
@@ -520,7 +644,107 @@ export const TasksPage: React.FC = () => {
                           {priority.label}
                         </Badge>
                         <DueBadge task={task} />
+                        {task.repeat && (
+                          <span className="inline-flex items-center gap-1 text-xs text-content-tertiary">
+                            <Repeat size={11} aria-hidden />
+                            {repeatLabel(task.repeat)}
+                          </span>
+                        )}
                       </div>
+
+                      {(() => {
+                        const subOpen = expandedSubtasks.has(task.id);
+                        const subDone = task.subtasks.filter((item) => item.done).length;
+                        return (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => toggleSubExpand(task.id)}
+                              aria-expanded={subOpen}
+                              className="mt-2 inline-flex items-center gap-1 rounded text-xs text-content-tertiary transition-colors duration-fast hover:text-content-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-line-focus"
+                            >
+                              {subOpen ? (
+                                <ChevronDown size={12} aria-hidden />
+                              ) : (
+                                <ChevronRight size={12} aria-hidden />
+                              )}
+                              <ListTodo size={11} aria-hidden />
+                              {task.subtasks.length > 0
+                                ? `子任务 ${subDone}/${task.subtasks.length}`
+                                : '添加子任务'}
+                            </button>
+
+                            {subOpen && (
+                              <div className="mt-2 space-y-2 rounded bg-inset p-2.5">
+                                {task.subtasks.length > 0 && (
+                                  <ul className="space-y-1">
+                                    {task.subtasks.map((subtask) => (
+                                      <li
+                                        key={subtask.id}
+                                        className="flex items-center gap-2"
+                                      >
+                                        <input
+                                          type="checkbox"
+                                          checked={subtask.done}
+                                          onChange={() => toggleSubtask(task.id, subtask.id)}
+                                          aria-label={`完成子任务「${subtask.title}」`}
+                                          style={{ accentColor: 'var(--lm-accent)' }}
+                                          className="h-3.5 w-3.5 shrink-0 cursor-pointer rounded-sm border-line focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-line-focus"
+                                        />
+                                        <span
+                                          className={`min-w-0 flex-1 truncate text-xs ${
+                                            subtask.done
+                                              ? 'text-content-tertiary line-through'
+                                              : 'text-content-secondary'
+                                          }`}
+                                        >
+                                          {subtask.title}
+                                        </span>
+                                        <IconButton
+                                          label={`删除子任务「${subtask.title}」`}
+                                          size="sm"
+                                          icon={<Trash2 size={12} />}
+                                          onClick={() => deleteSubtask(task.id, subtask.id)}
+                                          className="hover:text-danger"
+                                        />
+                                      </li>
+                                    ))}
+                                  </ul>
+                                )}
+                                <div className="flex items-end gap-1.5">
+                                  <div className="min-w-0 flex-1">
+                                    <Input
+                                      aria-label={`为「${task.title}」添加子任务`}
+                                      value={subtaskDraft[task.id] ?? ''}
+                                      onChange={(event) =>
+                                        setSubtaskDraft({
+                                          ...subtaskDraft,
+                                          [task.id]: event.target.value,
+                                        })
+                                      }
+                                      onKeyDown={(event) => {
+                                        if (event.key === 'Enter') {
+                                          event.preventDefault();
+                                          handleAddSubtask(task.id);
+                                        }
+                                      }}
+                                      placeholder="新子任务，回车添加"
+                                    />
+                                  </div>
+                                  <Button
+                                    size="sm"
+                                    variant="secondary"
+                                    onClick={() => handleAddSubtask(task.id)}
+                                    disabled={!(subtaskDraft[task.id] ?? '').trim()}
+                                  >
+                                    添加
+                                  </Button>
+                                </div>
+                              </div>
+                            )}
+                          </>
+                        );
+                      })()}
                     </div>
 
                     <div className="flex shrink-0 gap-0.5">

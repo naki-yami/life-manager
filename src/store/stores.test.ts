@@ -61,6 +61,8 @@ describe('taskStore', () => {
         priority: 'medium',
         status: 'completed',
         dueDate: '2026-09-28',
+        subtasks: [],
+        repeat: null,
         createdAt: '2026-09-01T00:00:00.000Z',
         completedAt: '2026-09-02T00:00:00.000Z',
       },
@@ -70,6 +72,53 @@ describe('taskStore', () => {
     expect(task.id).toBe('fixed-id');
     expect(task.status).toBe('completed');
     expect(task.completedAt).toBe('2026-09-02T00:00:00.000Z');
+  });
+
+  it('子任务可以增删与勾选', () => {
+    useTaskStore.getState().addTask('写周报', '', 'medium', '');
+    const id = useTaskStore.getState().tasks[0]!.id;
+
+    useTaskStore.getState().addSubtask(id, '收集数据');
+    useTaskStore.getState().addSubtask(id, '写结论');
+    expect(useTaskStore.getState().tasks[0]!.subtasks).toHaveLength(2);
+
+    const subId = useTaskStore.getState().tasks[0]!.subtasks[0]!.id;
+    useTaskStore.getState().toggleSubtask(id, subId);
+    expect(useTaskStore.getState().tasks[0]!.subtasks[0]!.done).toBe(true);
+
+    useTaskStore.getState().deleteSubtask(id, subId);
+    expect(useTaskStore.getState().tasks[0]!.subtasks).toHaveLength(1);
+  });
+
+  it('完成重复任务会自动生成下一次，撤销字段不带走', () => {
+    useTaskStore.getState().addTask('站会', '', 'medium', '2026-09-28', { kind: 'daily' });
+    const id = useTaskStore.getState().tasks[0]!.id;
+
+    useTaskStore.getState().toggleTaskStatus(id);
+
+    const tasks = useTaskStore.getState().tasks;
+    expect(tasks).toHaveLength(2);
+    expect(tasks[0]!.id).toBe(id);
+    expect(tasks[0]!.status).toBe('completed');
+
+    const next = tasks[1]!;
+    expect(next.id).not.toBe(id);
+    expect(next.status).toBe('pending');
+    expect(next.dueDate).toBe('2026-09-29');
+    expect(next.completedAt).toBeUndefined();
+
+    // 把已完成的原任务取消完成：取消方向不生成新任务
+    useTaskStore.getState().toggleTaskStatus(id);
+    const after = useTaskStore.getState().tasks;
+    expect(after).toHaveLength(2);
+    expect(after[0]!.status).toBe('pending');
+    expect(after[1]!.status).toBe('pending');
+  });
+
+  it('非重复任务完成时不会生成新任务', () => {
+    useTaskStore.getState().addTask('一次性的事', '', 'low', '');
+    useTaskStore.getState().toggleTaskStatus(useTaskStore.getState().tasks[0]!.id);
+    expect(useTaskStore.getState().tasks).toHaveLength(1);
   });
 });
 
@@ -147,8 +196,8 @@ describe('版本迁移', () => {
     expect(result).toEqual({ tasks: [], futureField: 'keep' });
   });
 
-  it('当前版本号是 6', () => {
-    expect(STORE_VERSION).toBe(6);
+  it('当前版本号是 7', () => {
+    expect(STORE_VERSION).toBe(7);
   });
 
   it('旧项目数据没有 hoursSpent，重新水合时补 0', async () => {

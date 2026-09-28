@@ -7,12 +7,24 @@ import { z } from 'zod';
  */
 
 export const APP_ID = 'life-manager';
-export const BACKUP_SCHEMA_VERSION = 5;
+export const BACKUP_SCHEMA_VERSION = 6;
 
 const isoDateString = z.string();
 const percent = z.number().min(0).max(100).catch(0);
 
 // ---------- 今日计划 ----------
+export const subTaskSchema = z.object({
+  id: z.string().min(1),
+  title: z.string(),
+  done: z.boolean().default(false),
+});
+
+export const repeatRuleSchema = z.object({
+  kind: z.enum(['daily', 'weekdays', 'weekly', 'monthly']),
+  /** kind = 'weekly' 时生效；0 = 周一 … 6 = 周日 */
+  weekdays: z.array(z.number().min(0).max(6)).optional(),
+});
+
 export const taskSchema = z.object({
   id: z.string().min(1),
   title: z.string(),
@@ -20,6 +32,9 @@ export const taskSchema = z.object({
   priority: z.enum(['high', 'medium', 'low']).default('medium'),
   status: z.enum(['pending', 'completed']).default('pending'),
   dueDate: z.string().default(''),
+  /** v7：子任务与重复规则；旧备份缺省时补默认值 */
+  subtasks: z.array(subTaskSchema).default([]),
+  repeat: repeatRuleSchema.nullable().default(null),
   createdAt: isoDateString.default(() => new Date().toISOString()),
   completedAt: z.string().optional(),
 });

@@ -24,6 +24,11 @@ function sampleData(): BackupData {
         priority: 'high',
         status: 'completed',
         dueDate: '2026-09-28',
+        subtasks: [
+          { id: 'sub-1', title: '收集数据', done: true },
+          { id: 'sub-2', title: '写结论', done: false },
+        ],
+        repeat: { kind: 'weekly', weekdays: [0, 2] },
         createdAt: '2026-09-27T01:00:00.000Z',
         completedAt: '2026-09-27T09:00:00.000Z',
       },
@@ -205,7 +210,7 @@ describe('导出 / 导入 往返', () => {
   it('信封结构包含 schemaVersion 与 exportedAt', () => {
     const envelope = buildBackupEnvelope(emptyData(), new Date('2026-09-28T00:00:00.000Z'));
     expect(envelope.app).toBe('life-manager');
-    expect(envelope.schemaVersion).toBe(5);
+    expect(envelope.schemaVersion).toBe(6);
     expect(envelope.exportedAt).toBe('2026-09-28T00:00:00.000Z');
   });
 });
@@ -389,6 +394,21 @@ describe('工时记录的导入兼容', () => {
     expect(plan.data.devProjects?.[0]?.techStack).toEqual([]);
     expect(plan.data.devProjects?.[0]?.repoUrl).toBe('');
     expect(plan.data.devProjects?.[0]?.archived).toBe(false);
+  });
+
+  it('旧备份里的任务没有子任务与重复规则，导入时补默认值', () => {
+    const legacy = sampleData() as Record<string, unknown>;
+    const tasks = legacy.tasks as Array<Record<string, unknown>>;
+    delete tasks[0]!.subtasks;
+    delete tasks[0]!.repeat;
+
+    const parsed = parseBackup(JSON.stringify(legacy));
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+
+    const plan = planImport(emptyData(), parsed.backup.modules, 'overwrite');
+    expect(plan.data.tasks?.[0]?.subtasks).toEqual([]);
+    expect(plan.data.tasks?.[0]?.repeat).toBeNull();
   });
 
   it('同一份备份重复导入不会产生重复工时', () => {
