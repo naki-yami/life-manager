@@ -1,12 +1,14 @@
 import React from 'react';
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { DevPage } from './DevPage';
+import { ToastProvider } from '../components/ui';
 import { useDevStore } from '../store/devStore';
+import { todayKey } from '../utils/date';
 
 beforeEach(() => {
-  useDevStore.setState({ projects: [] });
+  useDevStore.setState({ projects: [], sessions: [] });
 });
 
 const projectId = (name: string) =>
@@ -122,5 +124,79 @@ describe('DevPage', () => {
     expect(statCard('项目总数')).toHaveTextContent('2');
     expect(statCard('进行中项目')).toHaveTextContent('1');
     expect(statCard('任务总数')).toHaveTextContent('2');
+  });
+
+  it('记录工时会写入流水，并把工时累加到项目上', async () => {
+    useDevStore.getState().addProject('写作助手', '');
+    render(<DevPage />);
+
+    await userEvent.click(screen.getByRole('button', { name: '记录工时' }));
+    const dialog = screen.getByRole('dialog', { name: '记录工时' });
+
+    fireEvent.change(within(dialog).getByRole('spinbutton', { name: '工时' }), {
+      target: { value: '2.5' },
+    });
+    await userEvent.type(within(dialog).getByLabelText('备注'), '写完导出模块');
+    await userEvent.click(within(dialog).getByRole('button', { name: '保存' }));
+
+    const { sessions, projects } = useDevStore.getState();
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0]!.projectId).toBe(projectId('写作助手'));
+    expect(sessions[0]!.date).toBe(todayKey());
+    expect(sessions[0]!.hours).toBe(2.5);
+    expect(sessions[0]!.note).toBe('写完导出模块');
+    expect(projects[0]!.hoursSpent).toBe(2.5);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('近期投入卡片汇总每周工时与最近流水', () => {
+    const store = useDevStore.getState();
+    store.addProject('写作助手', '');
+    store.addSession(projectId('写作助手'), todayKey(), 3, '第一章');
+    store.addSession(projectId('写作助手'), todayKey(), 1.5, '');
+
+    render(<DevPage />);
+
+    expect(screen.getByText('近期投入')).toBeInTheDocument();
+    expect(screen.getByText(/累计 4\.5 小时 · 2 条记录/)).toBeInTheDocument();
+    expect(
+      screen.getByRole('img', { name: /近 8 周每周投入工时：合计 4\.5 小时/ }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('第一章')).toBeInTheDocument();
+  });
+
+  it('没有工时流水时不渲染近期投入卡片', () => {
+    useDevStore.getState().addProject('写作助手', '');
+    render(<DevPage />);
+    expect(screen.queryByText('近期投入')).not.toBeInTheDocument();
+  });
+
+  it('删除工时流水会把累计工时减回去，撤销后两边都恢复', async () => {
+    const store = useDevStore.getState();
+    store.addProject('写作助手', '');
+    store.addSession(projectId('写作助手'), todayKey(), 2, '');
+
+    render(
+      <ToastProvider>
+        <DevPage />
+      </ToastProvider>,
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: /在「写作助手」的工时记录/ }));
+    await userEvent.click(
+      within(screen.getByRole('dialog', { name: '删除工时记录' })).getByRole('button', {
+        name: '删除',
+      }),
+    );
+
+    expect(useDevStore.getState().sessions).toHaveLength(0);
+    expect(useDevStore.getState().projects[0]!.hoursSpent).toBe(0);
+    expect(screen.getByText(/已删除 .* 的工时记录/)).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: '撤销' }));
+
+    expect(useDevStore.getState().sessions).toHaveLength(1);
+    expect(useDevStore.getState().projects[0]!.hoursSpent).toBe(2);
+    expect(screen.getByText(/累计 2 小时 · 1 条记录/)).toBeInTheDocument();
   });
 });

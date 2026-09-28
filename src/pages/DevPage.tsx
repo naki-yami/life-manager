@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import {
   ChevronDown,
   ChevronRight,
+  Clock,
   Code2,
   FolderKanban,
   ListChecks,
@@ -13,21 +14,28 @@ import {
   Badge,
   Button,
   Card,
+  CardBody,
+  CardHeader,
   ConfirmDialog,
   EmptyState,
   IconButton,
   Input,
   Modal,
+  NumberInput,
   ProgressBar,
   SegmentedControl,
   Select,
   StatCard,
+  Textarea,
 } from '../components/ui';
 import { PageHeader, Toolbar } from '../components/layout';
+import { BarChart } from '../components/charts';
 import { useDevStore } from '../store/devStore';
 import { useUndoableRemove } from '../hooks/useUndoableRemove';
 import { filterByKeyword } from '../utils/search';
-import { DevProjectStatus, DevTaskStatus, Priority } from '../types';
+import { formatNumber, formatShortDate, todayKey } from '../utils/date';
+import { seriesByWeek } from '../utils/stats';
+import { DevProject, DevProjectStatus, DevTaskStatus, Priority, WorkSession } from '../types';
 
 type ProjectFilter = 'all' | DevProjectStatus;
 
@@ -74,6 +82,18 @@ const FILTER_OPTIONS: Array<{ value: ProjectFilter; label: string }> = [
   { value: 'completed', label: '已完成' },
 ];
 
+/** 「近期投入」最多列几条工时流水 */
+const SESSION_PREVIEW_COUNT = 6;
+
+/** 投入图表画最近几周，最后一格是包含今天的那一周 */
+const WEEK_COUNT = 8;
+
+/** 删一条工时流水会同时改动 sessions 与项目上的累计工时，撤销得把两边一起还原 */
+interface WorkLogSnapshot {
+  sessions: WorkSession[];
+  projects: DevProject[];
+}
+
 export const DevPage: React.FC = () => {
   const {
     projects,
@@ -84,6 +104,10 @@ export const DevPage: React.FC = () => {
     updateTaskStatus,
     deleteTask,
     replaceProjects,
+    sessions,
+    addSession,
+    deleteSession,
+    replaceSessions,
   } = useDevStore();
   const undoableRemove = useUndoableRemove();
 
@@ -95,6 +119,14 @@ export const DevPage: React.FC = () => {
   const [keyword, setKeyword] = useState('');
   const [filter, setFilter] = useState<ProjectFilter>('all');
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [showSessionModal, setShowSessionModal] = useState(false);
+  const [pendingSessionId, setPendingSessionId] = useState<string | null>(null);
+  const [sessionForm, setSessionForm] = useState<{
+    projectId: string;
+    date: string;
+    hours: number | '';
+    note: string;
+  }>({ projectId: '', date: todayKey(), hours: 1, note: '' });
 
   const stats = useMemo(() => {
     const allTasks = projects.flatMap((project) => project.tasks);
@@ -119,6 +151,43 @@ export const DevPage: React.FC = () => {
 
   const taskProject = projects.find((project) => project.id === taskProjectId) ?? null;
   const deletingProject = projects.find((project) => project.id === pendingDeleteProjectId) ?? null;
+  const pendingSession = sessions.find((session) => session.id === pendingSessionId) ?? null;
+
+  const today = todayKey();
+  const totalHours = projects.reduce((sum, project) => sum + project.hoursSpent, 0);
+
+  const weeklyHours = useMemo(
+    () => seriesByWeek(sessions, WEEK_COUNT, today, (session) => session.date, (session) => session.hours),
+    [sessions, today],
+  );
+
+  const recentSessions = useMemo(
+    () =>
+      [...sessions]
+        .sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt))
+        .slice(0, SESSION_PREVIEW_COUNT),
+    [sessions],
+  );
+
+  /** 流水里只存 projectId，展示时换成项目名 */
+  const projectNameOf = (id: string): string =>
+    projects.find((project) => project.id === id)?.name ?? '已删除的项目';
+
+  const sessionHours = typeof sessionForm.hours === 'number' ? sessionForm.hours : 0;
+  const canSaveSession = Boolean(sessionForm.projectId) && sessionHours > 0;
+
+  const openSessionModal = (projectId?: string): void => {
+    const fallback = projects.length > 0 ? projects[0].id : '';
+    setSessionForm({ projectId: projectId ?? fallback, date: today, hours: 1, note: '' });
+    setShowSessionModal(true);
+  };
+
+  const restoreWorkLog = (snapshot: WorkLogSnapshot[]): void => {
+    const entry = snapshot[0];
+    if (!entry) return;
+    replaceSessions(entry.sessions);
+    replaceProjects(entry.projects);
+  };
 
   const toggleExpand = (id: string): void => {
     setExpanded((previous) => {
@@ -143,6 +212,12 @@ export const DevPage: React.FC = () => {
     addTask(taskProjectId, taskForm.title.trim(), taskForm.priority);
     setTaskForm({ title: '', priority: 'medium' });
     setTaskProjectId(null);
+  };
+
+  const handleAddSession = (): void => {
+    if (!canSaveSession) return;
+    addSession(sessionForm.projectId, sessionForm.date || today, sessionHours, sessionForm.note.trim());
+    setShowSessionModal(false);
   };
 
   const emptyState =
@@ -183,15 +258,26 @@ export const DevPage: React.FC = () => {
         description="按项目组织任务，状态一改就能看到进展"
         icon={Code2}
         actions={
-          <Button
-            icon={<Plus size={16} aria-hidden />}
-            onClick={() => {
-              setProjectForm({ name: '', description: '' });
-              setShowAddProject(true);
-            }}
-          >
-            新建项目
-          </Button>
+          <>
+            {projects.length > 0 && (
+              <Button
+                variant="secondary"
+                icon={<Clock size={16} aria-hidden />}
+                onClick={() => openSessionModal()}
+              >
+                记录工时
+              </Button>
+            )}
+            <Button
+              icon={<Plus size={16} aria-hidden />}
+              onClick={() => {
+                setProjectForm({ name: '', description: '' });
+                setShowAddProject(true);
+              }}
+            >
+              新建项目
+            </Button>
+          </>
         }
       />
 
@@ -224,6 +310,56 @@ export const DevPage: React.FC = () => {
           }
         />
       </div>
+
+      {sessions.length > 0 && (
+        <Card>
+          <CardHeader
+            title="近期投入"
+            subtitle={`累计 ${formatNumber(Math.round(totalHours * 10) / 10)} 小时 · ${sessions.length} 条记录`}
+          />
+          <CardBody className="space-y-4">
+            <BarChart
+              data={weeklyHours}
+              label="近 8 周每周投入工时"
+              formatValue={(value) => `${formatNumber(value)} 小时`}
+              formatDate={formatShortDate}
+            />
+
+            <ul className="divide-y divide-line-subtle rounded border border-line-subtle">
+              {recentSessions.map((session) => (
+                <li key={session.id} className="flex items-center gap-3 px-3 py-2">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-x-2">
+                      <span className="truncate text-sm text-content">
+                        {projectNameOf(session.projectId)}
+                      </span>
+                      <span className="text-xs text-content-tertiary tabular">
+                        {formatShortDate(session.date)} · {formatNumber(session.hours)} 小时
+                      </span>
+                    </div>
+                    {session.note && (
+                      <p className="mt-0.5 truncate text-xs text-content-tertiary">{session.note}</p>
+                    )}
+                  </div>
+                  <IconButton
+                    label={`删除 ${formatShortDate(session.date)} 在「${projectNameOf(session.projectId)}」的工时记录`}
+                    size="sm"
+                    icon={<Trash2 size={13} />}
+                    onClick={() => setPendingSessionId(session.id)}
+                    className="hover:text-danger"
+                  />
+                </li>
+              ))}
+            </ul>
+
+            {sessions.length > recentSessions.length && (
+              <p className="text-xs text-content-tertiary">
+                只显示最近 {recentSessions.length} 条，共 {sessions.length} 条记录。
+              </p>
+            )}
+          </CardBody>
+        </Card>
+      )}
 
       <Toolbar
         search={{ value: keyword, onChange: setKeyword, placeholder: '搜索项目或任务…' }}
@@ -286,6 +422,9 @@ export const DevPage: React.FC = () => {
                           label={`任务完成 ${done}/${project.tasks.length}`}
                           tone={percent === 100 ? 'success' : 'accent'}
                         />
+                        <span className="text-xs text-content-tertiary tabular">
+                          累计 {formatNumber(project.hoursSpent)} 小时
+                        </span>
                         <Select
                           aria-label={`调整「${project.name}」的状态`}
                           className="w-32"
@@ -307,6 +446,12 @@ export const DevPage: React.FC = () => {
                           setTaskForm({ title: '', priority: 'medium' });
                           setTaskProjectId(project.id);
                         }}
+                      />
+                      <IconButton
+                        label={`记录「${project.name}」的工时`}
+                        size="sm"
+                        icon={<Clock size={15} />}
+                        onClick={() => openSessionModal(project.id)}
                       />
                       <IconButton
                         label={`删除项目「${project.name}」`}
@@ -448,6 +593,55 @@ export const DevPage: React.FC = () => {
         </div>
       </Modal>
 
+      <Modal
+        isOpen={showSessionModal}
+        onClose={() => setShowSessionModal(false)}
+        title="记录工时"
+        description="记一次会写进流水，同时把工时累加到这个项目上"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setShowSessionModal(false)}>
+              取消
+            </Button>
+            <Button onClick={handleAddSession} disabled={!canSaveSession}>
+              保存
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <Select
+            label="项目"
+            value={sessionForm.projectId}
+            onChange={(value) => setSessionForm({ ...sessionForm, projectId: value })}
+            options={projects.map((project) => ({ value: project.id, label: project.name }))}
+          />
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Input
+              label="日期"
+              type="date"
+              value={sessionForm.date}
+              onChange={(event) => setSessionForm({ ...sessionForm, date: event.target.value })}
+            />
+            <NumberInput
+              label="工时"
+              value={sessionForm.hours}
+              onChange={(value) => setSessionForm({ ...sessionForm, hours: value })}
+              min={0}
+              step={0.5}
+              suffix="小时"
+            />
+          </div>
+          <Textarea
+            label="备注"
+            value={sessionForm.note}
+            onChange={(event) => setSessionForm({ ...sessionForm, note: event.target.value })}
+            rows={3}
+            placeholder="今天推进了什么…（可选）"
+          />
+        </div>
+      </Modal>
+
       <ConfirmDialog
         isOpen={deletingProject !== null}
         onClose={() => setPendingDeleteProjectId(null)}
@@ -469,6 +663,33 @@ export const DevPage: React.FC = () => {
         description={
           deletingProject
             ? `确定要删除「${deletingProject.name}」吗？它下面的 ${deletingProject.tasks.length} 个任务也会一起删除。`
+            : ''
+        }
+        confirmText="删除"
+        tone="danger"
+      />
+
+      <ConfirmDialog
+        isOpen={pendingSession !== null}
+        onClose={() => setPendingSessionId(null)}
+        onConfirm={() => {
+          const target = pendingSession;
+          const workLog: WorkLogSnapshot = { sessions, projects };
+          if (pendingSessionId) deleteSession(pendingSessionId);
+          setPendingSessionId(null);
+          if (target) {
+            undoableRemove({
+              message: `已删除 ${formatShortDate(target.date)} 的工时记录`,
+              description: `${projectNameOf(target.projectId)} 的 ${formatNumber(target.hours)} 小时已从累计工时里减回，点「撤销」可以恢复。`,
+              snapshot: [workLog],
+              restore: restoreWorkLog,
+            });
+          }
+        }}
+        title="删除工时记录"
+        description={
+          pendingSession
+            ? `确定要删除 ${formatShortDate(pendingSession.date)} 在「${projectNameOf(pendingSession.projectId)}」的 ${formatNumber(pendingSession.hours)} 小时工时吗？删掉后这个项目的累计工时会相应减少。`
             : ''
         }
         confirmText="删除"
