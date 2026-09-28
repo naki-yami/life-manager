@@ -1,230 +1,506 @@
-import React, { useState } from 'react';
-import { Plus, Trash2, Trophy, Clock } from 'lucide-react';
-import { Card, CardHeader, CardBody, Button, Input, Modal, Select } from '../components/ui';
+import React, { useMemo, useState } from 'react';
+import { Clock, Gamepad2, Plus, StickyNote, Trash2, Trophy } from 'lucide-react';
+import {
+  Badge,
+  Button,
+  Card,
+  ConfirmDialog,
+  EmptyState,
+  IconButton,
+  Input,
+  Modal,
+  NumberInput,
+  ProgressBar,
+  SegmentedControl,
+  Select,
+  Slider,
+  StatCard,
+  Textarea,
+} from '../components/ui';
+import { PageHeader, Toolbar } from '../components/layout';
 import { useGameStore } from '../store/gameStore';
-import { GamePlatform, GameStatus } from '../types';
+import { filterByKeyword } from '../utils/search';
+import { formatDuration, formatNumber } from '../utils/date';
+import { Game, GamePlatform, GameStatus } from '../types';
+
+type Filter = 'all' | GameStatus;
+
+const STATUS_LABEL: Record<GameStatus, string> = {
+  playing: '在玩',
+  completed: '已通关',
+  backlog: '搁置',
+};
+
+const PLATFORMS: GamePlatform[] = ['PC', 'PS5', 'Xbox', 'Switch', 'Mobile', 'Other'];
+
+const PLATFORM_OPTIONS = PLATFORMS.map((platform) => ({ value: platform, label: platform }));
+
+const STATUS_OPTIONS = (Object.keys(STATUS_LABEL) as GameStatus[]).map((value) => ({
+  value,
+  label: STATUS_LABEL[value],
+}));
+
+const FILTER_OPTIONS: Array<{ value: Filter; label: string }> = [
+  { value: 'all', label: '全部' },
+  { value: 'playing', label: '在玩' },
+  { value: 'completed', label: '已通关' },
+  { value: 'backlog', label: '搁置' },
+];
 
 export const GamesPage: React.FC = () => {
   const {
     games,
     addGame,
     deleteGame,
+    updateGame,
     updateGameStatus,
     updateHoursPlayed,
     addAchievement,
     toggleAchievement,
+    deleteAchievement,
   } = useGameStore();
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [showAchievementModal, setShowAchievementModal] = useState<string | null>(null);
-  const [form, setForm] = useState({ name: '', platform: 'PC' as GamePlatform });
-  const [achievementForm, setAchievementForm] = useState({ name: '', description: '' });
-  const [filterStatus, setFilterStatus] = useState<'all' | GameStatus>('all');
 
-  const handleAdd = () => {
-    if (!form.name.trim()) return;
-    addGame(form.name, form.platform);
-    setForm({ name: '', platform: 'PC' });
+  const [keyword, setKeyword] = useState('');
+  const [filter, setFilter] = useState<Filter>('all');
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [achievementGameId, setAchievementGameId] = useState<string | null>(null);
+  const [noteGameId, setNoteGameId] = useState<string | null>(null);
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const [form, setForm] = useState<{ name: string; platform: GamePlatform }>({
+    name: '',
+    platform: 'PC',
+  });
+  const [achievementForm, setAchievementForm] = useState({ name: '', description: '' });
+  const [noteInput, setNoteInput] = useState('');
+
+  const countOf = (status: GameStatus): number =>
+    games.filter((game) => game.status === status).length;
+
+  const totalHours = games.reduce((sum, game) => sum + game.hoursPlayed, 0);
+
+  const visibleGames = useMemo(() => {
+    const byStatus = filter === 'all' ? games : games.filter((game) => game.status === filter);
+    return filterByKeyword(byStatus, keyword, (game) => [
+      game.name,
+      game.platform,
+      game.notes,
+      ...game.achievements.map((achievement) => achievement.name),
+    ]);
+  }, [games, filter, keyword]);
+
+  const achievementGame = games.find((game) => game.id === achievementGameId) ?? null;
+  const noteGame = games.find((game) => game.id === noteGameId) ?? null;
+  const pendingGame = games.find((game) => game.id === pendingDeleteId) ?? null;
+
+  const openNotes = (game: Game): void => {
+    setNoteInput(game.notes);
+    setNoteGameId(game.id);
+  };
+
+  const handleAddGame = (): void => {
+    const name = form.name.trim();
+    if (!name) return;
+    addGame(name, form.platform);
     setShowAddModal(false);
   };
 
-  const handleAddAchievement = () => {
-    if (showAchievementModal && achievementForm.name.trim()) {
-      addAchievement(showAchievementModal, achievementForm.name, achievementForm.description);
-      setAchievementForm({ name: '', description: '' });
-    }
-  };
-
-  const filtered = games.filter((g) => filterStatus === 'all' || g.status === filterStatus);
-
-  const statusLabels: Record<GameStatus, string> = {
-    playing: '在玩',
-    completed: '已通关',
-    backlog: '搁置',
-  };
-
-  const statusColors: Record<GameStatus, string> = {
-    playing: 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400',
-    completed: 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400',
-    backlog: 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400',
+  const handleAddAchievement = (): void => {
+    if (!achievementGameId) return;
+    const name = achievementForm.name.trim();
+    if (!name) return;
+    addAchievement(achievementGameId, name, achievementForm.description.trim());
+    setAchievementForm({ name: '', description: '' });
   };
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">游戏娱乐</h1>
-          <p className="text-gray-500 dark:text-gray-400 mt-1">管理你的游戏库</p>
-        </div>
-        <Button onClick={() => setShowAddModal(true)}>
-          <Plus size={16} className="mr-2" /> 添加游戏
-        </Button>
-      </div>
-
-      <div className="flex gap-2">
-        {(['all', 'playing', 'completed', 'backlog'] as const).map((f) => (
-          <button
-            key={f}
-            onClick={() => setFilterStatus(f)}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-              filterStatus === f
-                ? 'bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300'
-                : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
-            }`}
+    <div className="space-y-section">
+      <PageHeader
+        title="游戏"
+        description="游戏库、游玩时长与成就进度"
+        icon={Gamepad2}
+        actions={
+          <Button
+            icon={<Plus size={16} aria-hidden />}
+            onClick={() => {
+              setForm({ name: '', platform: 'PC' });
+              setShowAddModal(true);
+            }}
           >
-            {f === 'all' ? '全部' : statusLabels[f]}
-          </button>
-        ))}
+            添加游戏
+          </Button>
+        }
+      />
+
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard
+          label="游戏总数"
+          value={games.length}
+          unit="款"
+          icon={<Gamepad2 size={16} aria-hidden />}
+        />
+        <StatCard
+          label="在玩中"
+          value={countOf('playing')}
+          unit="款"
+          tone="accent"
+          icon={<Gamepad2 size={16} aria-hidden />}
+        />
+        <StatCard
+          label="已通关数"
+          value={countOf('completed')}
+          unit="款"
+          tone="success"
+          icon={<Trophy size={16} aria-hidden />}
+        />
+        <StatCard
+          label="总时长"
+          value={formatDuration(totalHours)}
+          icon={<Clock size={16} aria-hidden />}
+          footer={`合计 ${formatNumber(Math.round(totalHours * 10) / 10)} 小时`}
+        />
       </div>
 
-      <div className="grid gap-4">
-        {filtered.length === 0 ? (
-          <Card className="p-8 text-center">
-            <p className="text-gray-400">暂无游戏</p>
-          </Card>
-        ) : (
-          filtered.map((game) => (
-            <Card key={game.id} className="p-4">
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-1">
-                    <h3 className="font-semibold text-gray-900 dark:text-gray-100">{game.name}</h3>
-                    <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-500">
-                      {game.platform}
-                    </span>
-                    <Select
-                      value={game.status}
-                      onChange={(v) => updateGameStatus(game.id, v as GameStatus)}
-                      options={Object.entries(statusLabels).map(([k, l]) => ({
-                        value: k,
-                        label: l,
-                      }))}
-                      className="w-auto"
-                    />
-                  </div>
-                  <div className="flex items-center gap-4 mt-2">
-                    <div className="flex items-center gap-2">
-                      <Clock size={14} className="text-gray-400" />
-                      <input
-                        type="number"
-                        value={game.hoursPlayed}
-                        onChange={(e) =>
-                          updateHoursPlayed(game.id, parseFloat(e.target.value) || 0)
-                        }
-                        className="w-16 px-2 py-1 text-sm border border-gray-200 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
-                      />
-                      <span className="text-sm text-gray-500">小时</span>
-                    </div>
-                    {game.progress > 0 && (
-                      <div className="flex items-center gap-2">
-                        <div className="w-20 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                          <div
-                            className="bg-primary-500 h-2 rounded-full"
-                            style={{ width: `${game.progress}%` }}
+      <Toolbar
+        search={{ value: keyword, onChange: setKeyword, placeholder: '搜索游戏、平台或成就…' }}
+        actions={
+          <SegmentedControl
+            label="按游玩状态筛选"
+            value={filter}
+            onChange={setFilter}
+            options={FILTER_OPTIONS.map((option) => ({
+              ...option,
+              count: option.value === 'all' ? games.length : countOf(option.value),
+            }))}
+          />
+        }
+      />
+
+      {visibleGames.length === 0 ? (
+        <Card>
+          <EmptyState
+            icon={<Gamepad2 size={22} aria-hidden />}
+            title={games.length === 0 ? '游戏库还是空的' : '没有符合条件的游戏'}
+            description={
+              games.length === 0
+                ? '把在玩的、想玩的都加进来，时长和成就可以慢慢补。'
+                : '换个关键词，或者切换上面的状态筛选。'
+            }
+            action={
+              games.length === 0 ? (
+                <Button icon={<Plus size={16} aria-hidden />} onClick={() => setShowAddModal(true)}>
+                  添加游戏
+                </Button>
+              ) : (
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    setKeyword('');
+                    setFilter('all');
+                  }}
+                >
+                  清除筛选
+                </Button>
+              )
+            }
+          />
+        </Card>
+      ) : (
+        <ul className="grid gap-4">
+          {visibleGames.map((game) => {
+            const unlocked = game.achievements.filter((achievement) => achievement.unlocked).length;
+            return (
+              <li key={game.id}>
+                <Card className="p-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="font-semibold text-content">{game.name}</h3>
+                        <Badge tone="info">{game.platform}</Badge>
+                        {game.achievements.length > 0 && (
+                          <Badge tone={unlocked > 0 ? 'success' : 'default'}>
+                            成就 {unlocked}/{game.achievements.length}
+                          </Badge>
+                        )}
+                      </div>
+
+                      {game.notes && (
+                        <p className="mt-1.5 line-clamp-2 text-sm text-content-tertiary">
+                          {game.notes}
+                        </p>
+                      )}
+
+                      <div className="mt-3 flex flex-wrap items-end gap-3">
+                        <div className="w-36">
+                          <NumberInput
+                            ariaLabel={`「${game.name}」的游玩时长`}
+                            label="游玩时长"
+                            value={game.hoursPlayed}
+                            onChange={(value) =>
+                              updateHoursPlayed(game.id, value === '' ? 0 : value)
+                            }
+                            min={0}
+                            step={0.5}
+                            suffix="小时"
                           />
                         </div>
-                        <span className="text-xs text-gray-500">{game.progress}%</span>
+                        <div className="w-32">
+                          <Select
+                            aria-label={`调整「${game.name}」的状态`}
+                            value={game.status}
+                            onChange={(value) => updateGameStatus(game.id, value as GameStatus)}
+                            options={STATUS_OPTIONS}
+                          />
+                        </div>
                       </div>
-                    )}
-                  </div>
-                  {game.achievements.length > 0 && (
-                    <div className="flex flex-wrap gap-2 mt-3">
-                      {game.achievements.map((ach) => (
-                        <button
-                          key={ach.id}
-                          onClick={() => toggleAchievement(game.id, ach.id)}
-                          className={`flex items-center gap-1 text-xs px-2 py-1 rounded-full transition-colors ${
-                            ach.unlocked
-                              ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
-                              : 'bg-gray-100 text-gray-400 dark:bg-gray-700 dark:text-gray-500'
-                          }`}
-                          title={ach.description}
-                        >
-                          <Trophy size={10} />
-                          {ach.name}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                <div className="flex gap-1 shrink-0">
-                  <button
-                    onClick={() => setShowAchievementModal(game.id)}
-                    className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-400 hover:text-yellow-500 transition-colors"
-                    title="管理成就"
-                  >
-                    <Trophy size={16} />
-                  </button>
-                  <button
-                    onClick={() => deleteGame(game.id)}
-                    className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-400 hover:text-red-500 transition-colors"
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                </div>
-              </div>
-            </Card>
-          ))
-        )}
-      </div>
 
-      {/* Add Game Modal */}
-      <Modal isOpen={showAddModal} onClose={() => setShowAddModal(false)} title="添加游戏">
+                      <div className="mt-3 space-y-2">
+                        <ProgressBar
+                          value={game.progress}
+                          label="通关进度"
+                          showValue
+                          tone={game.progress >= 100 ? 'success' : 'accent'}
+                        />
+                        <Slider
+                          ariaLabel={`调整「${game.name}」的进度`}
+                          value={game.progress}
+                          onChange={(value) => updateGame(game.id, { progress: value })}
+                          showValue
+                          formatValue={(value) => `${value}%`}
+                        />
+                      </div>
+
+                      <div className="mt-3 flex flex-wrap items-center gap-1.5">
+                        {game.achievements.map((achievement) => (
+                          <button
+                            key={achievement.id}
+                            type="button"
+                            aria-pressed={achievement.unlocked}
+                            title={achievement.description || achievement.name}
+                            onClick={() => toggleAchievement(game.id, achievement.id)}
+                            className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-2xs font-medium transition-colors duration-fast ease-standard focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-line-focus ${
+                              achievement.unlocked
+                                ? 'bg-success-soft text-success'
+                                : 'bg-inset text-content-tertiary hover:text-content-secondary'
+                            }`}
+                          >
+                            <Trophy size={11} aria-hidden />
+                            {achievement.name}
+                          </button>
+                        ))}
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          icon={<Trophy size={13} aria-hidden />}
+                          onClick={() => setAchievementGameId(game.id)}
+                        >
+                          管理成就
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          icon={<StickyNote size={13} aria-hidden />}
+                          onClick={() => openNotes(game)}
+                        >
+                          笔记
+                        </Button>
+                      </div>
+                    </div>
+
+                    <IconButton
+                      label={`删除《${game.name}》`}
+                      size="sm"
+                      icon={<Trash2 size={15} />}
+                      onClick={() => setPendingDeleteId(game.id)}
+                      className="hover:text-danger"
+                    />
+                  </div>
+                </Card>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
+      <Modal
+        isOpen={showAddModal}
+        onClose={() => setShowAddModal(false)}
+        title="添加游戏"
+        description="新加入的游戏默认是「在玩」，之后可以改状态"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setShowAddModal(false)}>
+              取消
+            </Button>
+            <Button onClick={handleAddGame} disabled={!form.name.trim()}>
+              添加
+            </Button>
+          </>
+        }
+      >
         <div className="space-y-4">
           <Input
             label="游戏名称"
             value={form.name}
-            onChange={(e) => setForm({ ...form, name: e.target.value })}
+            onChange={(event) => setForm({ ...form, name: event.target.value })}
             placeholder="输入游戏名称"
+            required
           />
           <Select
             label="平台"
             value={form.platform}
-            onChange={(v) => setForm({ ...form, platform: v as GamePlatform })}
-            options={(['PC', 'PS5', 'Xbox', 'Switch', 'Mobile', 'Other'] as GamePlatform[]).map(
-              (p) => ({ value: p, label: p }),
-            )}
+            onChange={(value) => setForm({ ...form, platform: value as GamePlatform })}
+            options={PLATFORM_OPTIONS}
           />
-          <div className="flex justify-end gap-2 pt-2">
-            <Button variant="secondary" onClick={() => setShowAddModal(false)}>
-              取消
-            </Button>
-            <Button onClick={handleAdd}>添加</Button>
-          </div>
         </div>
       </Modal>
 
-      {/* Achievement Modal */}
       <Modal
-        isOpen={!!showAchievementModal}
-        onClose={() => setShowAchievementModal(null)}
-        title="管理成就"
+        isOpen={achievementGame !== null}
+        onClose={() => {
+          setAchievementGameId(null);
+          setAchievementForm({ name: '', description: '' });
+        }}
+        title={achievementGame ? `《${achievementGame.name}》的成就` : '成就'}
+        description="点击已有成就可以切换解锁状态"
       >
         <div className="space-y-4">
-          <div className="flex gap-2">
-            <input
+          <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+            <Input
+              label="成就名称"
               value={achievementForm.name}
-              onChange={(e) => setAchievementForm({ ...achievementForm, name: e.target.value })}
-              placeholder="成就名称"
-              className="flex-1 px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-            />
-            <input
-              value={achievementForm.description}
-              onChange={(e) =>
-                setAchievementForm({ ...achievementForm, description: e.target.value })
+              onChange={(event) =>
+                setAchievementForm({ ...achievementForm, name: event.target.value })
               }
-              placeholder="描述"
-              className="flex-1 px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+              placeholder="如：无伤通关"
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault();
+                  handleAddAchievement();
+                }
+              }}
             />
-            <Button size="sm" onClick={handleAddAchievement}>
+            <Input
+              label="描述"
+              value={achievementForm.description}
+              onChange={(event) =>
+                setAchievementForm({ ...achievementForm, description: event.target.value })
+              }
+              placeholder="可选"
+            />
+            <Button onClick={handleAddAchievement} disabled={!achievementForm.name.trim()}>
               添加
             </Button>
           </div>
-          {showAchievementModal &&
-            games.find((g) => g.id === showAchievementModal)?.achievements.length === 0 && (
-              <p className="text-sm text-gray-400 text-center py-4">暂无成就</p>
-            )}
+
+          {achievementGame && achievementGame.achievements.length === 0 ? (
+            <EmptyState
+              icon={<Trophy size={20} aria-hidden />}
+              title="还没有成就"
+              description="把想要拿的成就先列出来，解锁后点一下就行。"
+              className="py-6"
+            />
+          ) : (
+            <ul className="space-y-1">
+              {achievementGame?.achievements.map((achievement) => (
+                <li
+                  key={achievement.id}
+                  className="flex items-center justify-between gap-3 rounded px-2 py-1.5 hover:bg-hover"
+                >
+                  <button
+                    type="button"
+                    aria-pressed={achievement.unlocked}
+                    onClick={() =>
+                      achievementGame && toggleAchievement(achievementGame.id, achievement.id)
+                    }
+                    className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                  >
+                    <span
+                      className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border text-2xs ${
+                        achievement.unlocked
+                          ? 'border-success bg-success text-white'
+                          : 'border-line text-transparent'
+                      }`}
+                      aria-hidden
+                    >
+                      ✓
+                    </span>
+                    <span className="min-w-0">
+                      <span
+                        className={`block truncate text-sm ${
+                          achievement.unlocked ? 'text-content' : 'text-content-secondary'
+                        }`}
+                      >
+                        {achievement.name}
+                      </span>
+                      {achievement.description && (
+                        <span className="block truncate text-2xs text-content-tertiary">
+                          {achievement.description}
+                        </span>
+                      )}
+                    </span>
+                  </button>
+                  <IconButton
+                    label={`删除成就「${achievement.name}」`}
+                    size="sm"
+                    icon={<Trash2 size={13} />}
+                    onClick={() =>
+                      achievementGame && deleteAchievement(achievementGame.id, achievement.id)
+                    }
+                    className="hover:text-danger"
+                  />
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       </Modal>
+
+      <Modal
+        isOpen={noteGame !== null}
+        onClose={() => setNoteGameId(null)}
+        title={noteGame ? `《${noteGame.name}》的笔记` : '笔记'}
+        description="留空并保存即可清空"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setNoteGameId(null)}>
+              取消
+            </Button>
+            <Button
+              onClick={() => {
+                if (noteGameId) updateGame(noteGameId, { notes: noteInput.trim() });
+                setNoteGameId(null);
+              }}
+            >
+              保存
+            </Button>
+          </>
+        }
+      >
+        <Textarea
+          label="笔记"
+          value={noteInput}
+          onChange={(event) => setNoteInput(event.target.value)}
+          rows={6}
+          placeholder="攻略、心得、待补的 DLC…"
+        />
+      </Modal>
+
+      <ConfirmDialog
+        isOpen={pendingGame !== null}
+        onClose={() => setPendingDeleteId(null)}
+        onConfirm={() => {
+          if (pendingDeleteId) deleteGame(pendingDeleteId);
+          setPendingDeleteId(null);
+        }}
+        title="删除游戏"
+        description={
+          pendingGame
+            ? `确定要删除《${pendingGame.name}》吗？${pendingGame.achievements.length} 个成就记录与 ${pendingGame.hoursPlayed} 小时时长会一起删除。`
+            : ''
+        }
+        confirmText="删除"
+        tone="danger"
+      />
     </div>
   );
 };

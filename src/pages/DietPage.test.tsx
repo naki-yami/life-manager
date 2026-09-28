@@ -1,0 +1,180 @@
+import React from 'react';
+import { render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { beforeEach, describe, expect, it } from 'vitest';
+import { DietPage } from './DietPage';
+import { useDietStore } from '../store/dietStore';
+import { addDays, formatDayLabel, todayKey } from '../utils/date';
+import { FoodItem, MealType } from '../types';
+
+beforeEach(() => {
+  useDietStore.setState({ records: [] });
+});
+
+const today = todayKey();
+const yesterday = addDays(today, -1);
+
+/** 统计卡片的整块文本，避免多个卡片出现相同数字时选择器歧义 */
+const statText = (label: string): string =>
+  screen.getByText(label).closest('div.rounded-lg')?.textContent ?? '';
+
+const addMeal = (date: string, type: MealType, items: FoodItem[]): void => {
+  useDietStore.getState().addRecord(date, type, items);
+};
+
+const openAddModal = async (): Promise<HTMLElement> => {
+  await userEvent.click(screen.getAllByRole('button', { name: '记录饮食' })[0]!);
+  return screen.getByRole('dialog', { name: '记录饮食' });
+};
+
+describe('DietPage', () => {
+  it('默认展示今天，没有记录时给出空态与引导', async () => {
+    render(<DietPage />);
+
+    expect(screen.getByText(/这天还是空的/)).toBeInTheDocument();
+    expect(screen.getByText('早餐 · 0 kcal')).toBeInTheDocument();
+    expect(statText('当日摄入')).toContain('0');
+    expect(statText('当日餐次')).toContain('0');
+
+    const dialog = await openAddModal();
+    expect(within(dialog).getByLabelText('日期')).toHaveValue(today);
+  });
+
+  it('记录饮食后进入对应餐次并计入当日摄入', async () => {
+    render(<DietPage />);
+    const dialog = await openAddModal();
+
+    await userEvent.selectOptions(within(dialog).getByLabelText('餐次'), 'lunch');
+    await userEvent.type(within(dialog).getByLabelText('第 1 个食物名称'), '鸡胸肉');
+    const calories = within(dialog).getByRole('spinbutton', { name: '第 1 个食物的热量' });
+    await userEvent.clear(calories);
+    await userEvent.type(calories, '200');
+    await userEvent.selectOptions(within(dialog).getByLabelText('第 1 个食物的分类'), '蛋白质');
+    await userEvent.click(within(dialog).getByRole('button', { name: '保存' }));
+
+    const records = useDietStore.getState().records;
+    expect(records).toHaveLength(1);
+    expect(records[0]!.date).toBe(today);
+    expect(records[0]!.type).toBe('lunch');
+    expect(records[0]!.totalCalories).toBe(200);
+    expect(records[0]!.items[0]!.category).toBe('蛋白质');
+
+    expect(screen.getByText('鸡胸肉 · 200 kcal')).toBeInTheDocument();
+    expect(screen.getByText('午餐 · 200 kcal')).toBeInTheDocument();
+    expect(statText('当日摄入')).toContain('200');
+  });
+
+  it('食物名为空时不能保存，添加多个食物会累加热量', async () => {
+    render(<DietPage />);
+    const dialog = await openAddModal();
+
+    expect(within(dialog).getByRole('button', { name: '保存' })).toBeDisabled();
+
+    await userEvent.type(within(dialog).getByLabelText('第 1 个食物名称'), '全麦面包');
+    await userEvent.click(within(dialog).getByRole('button', { name: '添加食物' }));
+    await userEvent.type(within(dialog).getByLabelText('第 2 个食物名称'), '牛奶');
+    const calories = within(dialog).getByRole('spinbutton', { name: '第 2 个食物的热量' });
+    await userEvent.clear(calories);
+    await userEvent.type(calories, '150');
+
+    expect(within(dialog).getByText(/合计/)).toHaveTextContent('150');
+
+    await userEvent.click(within(dialog).getByRole('button', { name: '移除第 2 个食物' }));
+    expect(within(dialog).queryByLabelText('第 2 个食物名称')).not.toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: '移除第 1 个食物' })).toBeDisabled();
+  });
+
+  it('餐次卡片的「添加」会预设对应餐次', async () => {
+    render(<DietPage />);
+
+    const dinnerCard = screen.getByText(/^晚餐 ·/).closest('div.rounded-lg')!;
+    await userEvent.click(within(dinnerCard as HTMLElement).getByRole('button', { name: '添加' }));
+
+    const dialog = screen.getByRole('dialog', { name: '记录饮食' });
+    expect(within(dialog).getByLabelText('餐次')).toHaveValue('dinner');
+  });
+
+  it('可以切换日期，今天之后不能往后翻', async () => {
+    addMeal(yesterday, 'dinner', [{ name: '番茄牛腩', category: '蛋白质', calories: 700 }]);
+
+    render(<DietPage />);
+    expect(screen.getByText(/这天还是空的/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '后一天' })).toBeDisabled();
+
+    await userEvent.click(screen.getByRole('button', { name: '前一天' }));
+    expect(screen.getByText('番茄牛腩 · 700 kcal')).toBeInTheDocument();
+    expect(screen.getByText('晚餐 · 700 kcal')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '后一天' })).toBeEnabled();
+    expect(statText('当日摄入')).toContain('700');
+    expect(statText('当日摄入')).toContain(formatDayLabel(yesterday));
+
+    await userEvent.click(screen.getByRole('button', { name: '回到今天' }));
+    expect(screen.getByText(/这天还是空的/)).toBeInTheDocument();
+  });
+
+  it('统计卡片汇总当日摄入、餐次、近 7 天日均与累计记录', () => {
+    addMeal(today, 'breakfast', [{ name: '鸡蛋', category: '蛋白质', calories: 300 }]);
+    addMeal(today, 'lunch', [{ name: '鸡胸肉', category: '蛋白质', calories: 500 }]);
+    addMeal(yesterday, 'dinner', [{ name: '番茄牛腩', category: '蛋白质', calories: 700 }]);
+
+    render(<DietPage />);
+
+    expect(statText('当日摄入')).toContain('800');
+    expect(statText('当日餐次')).toContain('2');
+    expect(statText('近 7 天日均')).toContain('750');
+    expect(statText('累计记录')).toContain('3');
+  });
+
+  it('按日视图可以搜索食物名', async () => {
+    addMeal(today, 'breakfast', [{ name: '鸡蛋', category: '蛋白质', calories: 100 }]);
+    addMeal(today, 'lunch', [{ name: '鸡胸肉', category: '蛋白质', calories: 200 }]);
+
+    render(<DietPage />);
+    await userEvent.type(screen.getByRole('textbox', { name: '搜索' }), '鸡胸');
+
+    expect(screen.getByText('鸡胸肉 · 200 kcal')).toBeInTheDocument();
+    expect(screen.queryByText('鸡蛋 · 100 kcal')).not.toBeInTheDocument();
+
+    await userEvent.clear(screen.getByRole('textbox', { name: '搜索' }));
+    await userEvent.type(screen.getByRole('textbox', { name: '搜索' }), 'zzz');
+    expect(screen.getByText('没有匹配的食物')).toBeInTheDocument();
+  });
+
+  it('全部记录视图按日期分组，并按关键词过滤', async () => {
+    addMeal(today, 'lunch', [{ name: '鸡胸肉', category: '蛋白质', calories: 200 }]);
+    addMeal(yesterday, 'dinner', [{ name: '番茄牛腩', category: '蛋白质', calories: 700 }]);
+
+    render(<DietPage />);
+    await userEvent.click(screen.getByRole('button', { name: /^全部记录/ }));
+
+    expect(screen.getByText(formatDayLabel(today))).toBeInTheDocument();
+    expect(screen.getByText(formatDayLabel(yesterday))).toBeInTheDocument();
+
+    await userEvent.type(screen.getByRole('textbox', { name: '搜索' }), '牛腩');
+    expect(screen.getByText('番茄牛腩 · 700 kcal')).toBeInTheDocument();
+    expect(screen.queryByText('鸡胸肉 · 200 kcal')).not.toBeInTheDocument();
+    expect(screen.queryByText(formatDayLabel(today))).not.toBeInTheDocument();
+  });
+
+  it('删除记录要二次确认', async () => {
+    addMeal(today, 'lunch', [{ name: '鸡胸肉', category: '蛋白质', calories: 200 }]);
+
+    render(<DietPage />);
+    await userEvent.click(screen.getByRole('button', { name: '删除「鸡胸肉」这条记录' }));
+
+    const dialog = screen.getByRole('dialog', { name: '删除饮食记录' });
+    expect(within(dialog).getByText(/200 kcal/)).toBeInTheDocument();
+
+    await userEvent.click(within(dialog).getByRole('button', { name: '取消' }));
+    expect(useDietStore.getState().records).toHaveLength(1);
+
+    await userEvent.click(screen.getByRole('button', { name: '删除「鸡胸肉」这条记录' }));
+    await userEvent.click(
+      within(screen.getByRole('dialog', { name: '删除饮食记录' })).getByRole('button', {
+        name: '删除',
+      }),
+    );
+    expect(useDietStore.getState().records).toHaveLength(0);
+    expect(screen.getByText(/这天还是空的/)).toBeInTheDocument();
+  });
+});

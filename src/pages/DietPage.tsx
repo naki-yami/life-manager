@@ -1,190 +1,511 @@
-import React, { useState } from 'react';
-import { Plus, Trash2 } from 'lucide-react';
-import { Card, CardHeader, CardBody, Button, Input, Modal, Select } from '../components/ui';
+import React, { useMemo, useState } from 'react';
+import {
+  CalendarDays,
+  ChevronLeft,
+  ChevronRight,
+  Coffee,
+  Flame,
+  Moon,
+  Plus,
+  Sun,
+  Sunrise,
+  Trash2,
+  TrendingUp,
+  UtensilsCrossed,
+  X,
+} from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
+import {
+  Badge,
+  Button,
+  Card,
+  CardBody,
+  CardHeader,
+  ConfirmDialog,
+  Divider,
+  EmptyState,
+  IconButton,
+  Input,
+  Modal,
+  NumberInput,
+  SegmentedControl,
+  Select,
+  StatCard,
+} from '../components/ui';
+import { PageHeader, Toolbar } from '../components/layout';
 import { useDietStore } from '../store/dietStore';
-import { MealType, FoodItem } from '../types';
+import { filterByKeyword, matchesKeyword } from '../utils/search';
+import { addDays, formatDayLabel, formatNumber, todayKey } from '../utils/date';
+import { FoodItem, MealRecord, MealType } from '../types';
+
+type View = 'day' | 'all';
+
+interface FoodDraft {
+  name: string;
+  category: string;
+  calories: number;
+}
+
+const MEAL_ORDER: MealType[] = ['breakfast', 'lunch', 'dinner', 'snack'];
+
+const MEAL_LABEL: Record<MealType, string> = {
+  breakfast: '早餐',
+  lunch: '午餐',
+  dinner: '晚餐',
+  snack: '加餐',
+};
+
+const MEAL_ICON: Record<MealType, LucideIcon> = {
+  breakfast: Sunrise,
+  lunch: Sun,
+  dinner: Moon,
+  snack: Coffee,
+};
+
+const FOOD_CATEGORIES = ['主食', '蛋白质', '蔬菜', '水果', '乳制品', '饮品', '零食', '其他'];
+
+const CATEGORY_OPTIONS = FOOD_CATEGORIES.map((category) => ({
+  value: category,
+  label: category,
+}));
+
+const MEAL_OPTIONS = MEAL_ORDER.map((type) => ({ value: type, label: MEAL_LABEL[type] }));
+
+const emptyItem = (): FoodDraft => ({ name: '', category: '主食', calories: 0 });
 
 export const DietPage: React.FC = () => {
   const { records, addRecord, deleteRecord } = useDietStore();
+
+  const [view, setView] = useState<View>('day');
+  const [keyword, setKeyword] = useState('');
+  const [selectedDate, setSelectedDate] = useState(todayKey());
   const [showAddModal, setShowAddModal] = useState(false);
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
-  const [form, setForm] = useState({
-    type: 'breakfast' as MealType,
-    items: [{ name: '', category: '主食', calories: 0 }] as FoodItem[],
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const [form, setForm] = useState<{ type: MealType; date: string; items: FoodDraft[] }>({
+    type: 'breakfast',
+    date: todayKey(),
+    items: [emptyItem()],
   });
 
-  const handleAddItem = () => {
-    setForm({ ...form, items: [...form.items, { name: '', category: '主食', calories: 0 }] });
+  const today = todayKey();
+
+  const dayRecords = useMemo(() => {
+    const forDay = records.filter((record) => record.date === selectedDate);
+    if (keyword.trim() === '') return forDay;
+    return forDay.filter((record) =>
+      record.items.some((item) => matchesKeyword(keyword, item.name, item.category)),
+    );
+  }, [records, selectedDate, keyword]);
+
+  const visibleAllRecords = useMemo(
+    () =>
+      filterByKeyword(records, keyword, (record) => [
+        record.date,
+        ...record.items.map((item) => item.name),
+        ...record.items.map((item) => item.category),
+      ]),
+    [records, keyword],
+  );
+
+  const groupedAllRecords = useMemo(() => {
+    const sorted = [...visibleAllRecords].sort((a, b) => b.date.localeCompare(a.date));
+    return sorted.reduce<Array<{ date: string; items: typeof sorted }>>((groups, record) => {
+      const last = groups[groups.length - 1];
+      if (last && last.date === record.date) last.items.push(record);
+      else groups.push({ date: record.date, items: [record] });
+      return groups;
+    }, []);
+  }, [visibleAllRecords]);
+
+  const dayCalories = dayRecords.reduce((sum, record) => sum + record.totalCalories, 0);
+
+  /** 当天有没有记录（不受搜索影响），用于空态提示 */
+  const dayIsEmpty = !records.some((record) => record.date === selectedDate);
+  const formCalories = form.items.reduce((sum, item) => sum + item.calories, 0);
+
+  const weekStart = addDays(today, -6);
+  const recentRecords = records.filter(
+    (record) => record.date >= weekStart && record.date <= today,
+  );
+  const recentDays = new Set(recentRecords.map((record) => record.date)).size;
+  const recentTotal = recentRecords.reduce((sum, record) => sum + record.totalCalories, 0);
+  const recentAverage = recentDays === 0 ? 0 : Math.round(recentTotal / recentDays);
+
+  const pendingRecord = records.find((record) => record.id === pendingDeleteId) ?? null;
+
+  const openAddModal = (type: MealType, date = selectedDate): void => {
+    setForm({ type, date, items: [emptyItem()] });
+    setShowAddModal(true);
   };
 
-  const updateItem = (index: number, field: string, value: string | number) => {
-    setForm({
-      ...form,
-      items: form.items.map((item, i) => (i === index ? { ...item, [field]: value } : item)),
-    });
+  const updateItem = (index: number, patch: Partial<FoodDraft>): void => {
+    setForm((current) => ({
+      ...current,
+      items: current.items.map((item, i) => (i === index ? { ...item, ...patch } : item)),
+    }));
   };
 
-  const handleAdd = () => {
-    const validItems = form.items.filter((i) => i.name.trim());
+  const canSave = form.items.some((item) => item.name.trim());
+
+  const handleAdd = (): void => {
+    const validItems: FoodItem[] = form.items
+      .filter((item) => item.name.trim())
+      .map((item) => ({ ...item, name: item.name.trim() }));
     if (validItems.length === 0) return;
-    addRecord(selectedDate, form.type, validItems);
-    setForm({ type: 'breakfast', items: [{ name: '', category: '主食', calories: 0 }] });
+    addRecord(form.date, form.type, validItems);
+    setSelectedDate(form.date);
     setShowAddModal(false);
   };
 
-  const dateRecords = records.filter((r) => r.date === selectedDate);
+  const itemNames = (items: FoodItem[]): string => items.map((item) => item.name).join('、');
 
-  const totalCalories = dateRecords.reduce((sum, r) => sum + r.totalCalories, 0);
-
-  const mealTypeLabels: Record<MealType, string> = {
-    breakfast: '早餐',
-    lunch: '午餐',
-    dinner: '晚餐',
-    snack: '加餐',
-  };
-
-  const mealTypeIcons: Record<MealType, string> = {
-    breakfast: '🌅',
-    lunch: '☀️',
-    dinner: '🌙',
-    snack: '🍪',
-  };
-
-  const foodCategories = ['主食', '蛋白质', '蔬菜', '水果', '乳制品', '饮品', '零食', '其他'];
+  const renderRecordRow =
+    (recordDate: string, mealType: MealType) =>
+    (record: MealRecord): React.ReactElement => (
+      <div
+        key={record.id}
+        className="flex items-start justify-between gap-3 rounded border border-line-subtle p-3"
+      >
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-1.5">
+            {record.items.map((item) => (
+              <span
+                key={item.id ?? item.name}
+                className="rounded-full bg-inset px-2 py-0.5 text-2xs text-content-secondary"
+              >
+                {item.name} · {item.calories} kcal
+              </span>
+            ))}
+          </div>
+          <p className="mt-1.5 text-2xs text-content-tertiary">
+            共 {formatNumber(record.totalCalories)} kcal
+            {view === 'all' ? ` · ${MEAL_LABEL[mealType]} · ${recordDate}` : ''}
+          </p>
+        </div>
+        <IconButton
+          label={`删除「${itemNames(record.items)}」这条记录`}
+          size="sm"
+          icon={<Trash2 size={15} />}
+          onClick={() => setPendingDeleteId(record.id)}
+          className="hover:text-danger"
+        />
+      </div>
+    );
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">饮食计划</h1>
-          <p className="text-gray-500 dark:text-gray-400 mt-1">记录每日饮食摄入</p>
-        </div>
-        <Button onClick={() => setShowAddModal(true)}>
-          <Plus size={16} className="mr-2" /> 记录饮食
-        </Button>
-      </div>
+    <div className="space-y-section">
+      <PageHeader
+        title="饮食"
+        description="按天记录三餐与加餐，顺带看看热量"
+        icon={UtensilsCrossed}
+        actions={
+          <Button icon={<Plus size={16} aria-hidden />} onClick={() => openAddModal(form.type)}>
+            记录饮食
+          </Button>
+        }
+      />
 
-      {/* Date Selector */}
-      <div className="flex items-center gap-4">
-        <input
-          type="date"
-          value={selectedDate}
-          onChange={(e) => setSelectedDate(e.target.value)}
-          className="px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-primary-500"
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard
+          label="当日摄入"
+          value={formatNumber(dayCalories)}
+          unit="kcal"
+          tone="warning"
+          icon={<Flame size={16} aria-hidden />}
+          footer={selectedDate === today ? '今天' : formatDayLabel(selectedDate)}
         />
-        <Card className="px-4 py-2">
+        <StatCard
+          label="当日餐次"
+          value={dayRecords.length}
+          unit="条"
+          icon={<UtensilsCrossed size={16} aria-hidden />}
+        />
+        <StatCard
+          label="近 7 天日均"
+          value={formatNumber(recentAverage)}
+          unit="kcal"
+          tone="accent"
+          icon={<TrendingUp size={16} aria-hidden />}
+          footer={recentDays === 0 ? '最近 7 天还没有记录' : `按 ${recentDays} 天有记录的天数计算`}
+        />
+        <StatCard
+          label="累计记录"
+          value={records.length}
+          unit="条"
+          icon={<CalendarDays size={16} aria-hidden />}
+        />
+      </div>
+
+      <Toolbar
+        search={{ value: keyword, onChange: setKeyword, placeholder: '搜索食物或分类…' }}
+        actions={
+          <SegmentedControl
+            label="切换饮食视图"
+            value={view}
+            onChange={setView}
+            options={[
+              { value: 'day', label: '按日' },
+              { value: 'all', label: '全部记录', count: records.length },
+            ]}
+          />
+        }
+      >
+        {view === 'day' && (
           <div className="flex items-center gap-2">
-            <span className="text-sm text-gray-500 dark:text-gray-400">当日总热量:</span>
-            <span className="text-lg font-bold text-orange-600">{totalCalories} kcal</span>
-          </div>
-        </Card>
-      </div>
-
-      {/* Meal Records */}
-      <div className="space-y-4">
-        {(['breakfast', 'lunch', 'dinner', 'snack'] as MealType[]).map((mealType) => {
-          const mealRecords = dateRecords.filter((r) => r.type === mealType);
-          if (mealRecords.length === 0) return null;
-          return (
-            <Card key={mealType}>
-              <CardHeader
-                title={`${mealTypeIcons[mealType]} ${mealTypeLabels[mealType]}`}
-                subtitle={`${mealRecords.reduce((s, r) => s + r.totalCalories, 0)} kcal`}
+            <IconButton
+              label="前一天"
+              size="sm"
+              icon={<ChevronLeft size={16} />}
+              onClick={() => setSelectedDate((date) => addDays(date, -1))}
+            />
+            <div className="w-40">
+              <Input
+                aria-label="选择日期"
+                type="date"
+                value={selectedDate}
+                onChange={(event) => setSelectedDate(event.target.value)}
               />
-              <CardBody>
-                {mealRecords.map((record) => (
-                  <div
-                    key={record.id}
-                    className="flex items-center justify-between py-2 border-b border-gray-50 dark:border-gray-700 last:border-0"
-                  >
-                    <div className="flex-1">
-                      {record.items.map((item, i) => (
-                        <span key={i} className="text-sm text-gray-700 dark:text-gray-300 mr-3">
-                          {item.name} ({item.calories}kcal)
-                        </span>
-                      ))}
-                    </div>
-                    <button
-                      onClick={() => deleteRecord(record.id)}
-                      className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-400 hover:text-red-500"
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
-                ))}
-              </CardBody>
-            </Card>
-          );
-        })}
-        {dateRecords.length === 0 && (
-          <Card className="p-8 text-center">
-            <p className="text-gray-400">当天暂无饮食记录</p>
-          </Card>
-        )}
-      </div>
-
-      {/* Add Modal */}
-      <Modal isOpen={showAddModal} onClose={() => setShowAddModal(false)} title="记录饮食">
-        <div className="space-y-4">
-          <Input
-            label="日期"
-            type="date"
-            value={selectedDate}
-            onChange={(e) => setSelectedDate(e.target.value)}
-          />
-          <Select
-            label="餐次"
-            value={form.type}
-            onChange={(v) => setForm({ ...form, type: v as MealType })}
-            options={Object.entries(mealTypeLabels).map(([k, l]) => ({ value: k, label: l }))}
-          />
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              食物
-            </label>
-            {form.items.map((item, i) => (
-              <div key={i} className="flex gap-2 mb-2 items-center">
-                <input
-                  value={item.name}
-                  onChange={(e) => updateItem(i, 'name', e.target.value)}
-                  placeholder="食物名称"
-                  className="flex-1 px-2 py-1.5 text-sm border border-gray-200 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
-                />
-                <select
-                  value={item.category}
-                  onChange={(e) => updateItem(i, 'category', e.target.value)}
-                  className="px-2 py-1.5 text-sm border border-gray-200 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
-                >
-                  {foodCategories.map((c) => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
-                  ))}
-                </select>
-                <input
-                  type="number"
-                  value={item.calories}
-                  onChange={(e) => updateItem(i, 'calories', parseFloat(e.target.value) || 0)}
-                  placeholder="kcal"
-                  className="w-20 px-2 py-1.5 text-sm border border-gray-200 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
-                />
-              </div>
-            ))}
-            <button
-              onClick={handleAddItem}
-              className="text-sm text-primary-600 hover:text-primary-700"
-            >
-              + 添加食物
-            </button>
+            </div>
+            <IconButton
+              label="后一天"
+              size="sm"
+              icon={<ChevronRight size={16} />}
+              disabled={selectedDate >= today}
+              onClick={() => setSelectedDate((date) => addDays(date, 1))}
+            />
+            {selectedDate !== today && (
+              <Button size="sm" variant="ghost" onClick={() => setSelectedDate(today)}>
+                回到今天
+              </Button>
+            )}
           </div>
-          <div className="flex justify-end gap-2 pt-2">
+        )}
+      </Toolbar>
+
+      {view === 'day' ? (
+        dayRecords.length === 0 && keyword.trim() !== '' ? (
+          <Card>
+            <EmptyState
+              icon={<UtensilsCrossed size={22} aria-hidden />}
+              title="没有匹配的食物"
+              description="换个关键词，或者清除搜索，看这一天的全部记录。"
+              action={
+                <Button variant="secondary" onClick={() => setKeyword('')}>
+                  清除搜索
+                </Button>
+              }
+            />
+          </Card>
+        ) : (
+          <>
+            {dayIsEmpty && (
+              <Card className="flex flex-wrap items-center gap-2 p-4 text-sm text-content-tertiary">
+                <UtensilsCrossed size={16} aria-hidden />
+                {formatDayLabel(selectedDate)}这天还是空的，点下面餐次卡片里的「添加」记一条。
+              </Card>
+            )}
+            <div className="grid gap-4">
+              {MEAL_ORDER.map((mealType) => {
+                const mealRecords = dayRecords.filter((record) => record.type === mealType);
+                const mealCalories = mealRecords.reduce(
+                  (sum, record) => sum + record.totalCalories,
+                  0,
+                );
+                const MealIcon = MEAL_ICON[mealType];
+                return (
+                  <Card key={mealType}>
+                    <CardHeader
+                      title={`${MEAL_LABEL[mealType]} · ${formatNumber(mealCalories)} kcal`}
+                      subtitle={`${mealRecords.length} 条记录`}
+                      action={
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          icon={<Plus size={14} aria-hidden />}
+                          onClick={() => openAddModal(mealType)}
+                        >
+                          添加
+                        </Button>
+                      }
+                    />
+                    <CardBody className="space-y-2">
+                      {mealRecords.length === 0 ? (
+                        <p className="flex items-center gap-2 text-sm text-content-tertiary">
+                          <MealIcon size={14} aria-hidden />
+                          还没有记录
+                        </p>
+                      ) : (
+                        mealRecords.map((record) => renderRecordRow(selectedDate, mealType)(record))
+                      )}
+                    </CardBody>
+                  </Card>
+                );
+              })}
+            </div>
+          </>
+        )
+      ) : groupedAllRecords.length === 0 ? (
+        <Card>
+          <EmptyState
+            icon={<CalendarDays size={22} aria-hidden />}
+            title={records.length === 0 ? '还没有任何饮食记录' : '没有符合条件的记录'}
+            description={
+              records.length === 0
+                ? '记录第一条饮食后，这里会按日期汇总。'
+                : '换个关键词试试，比如食物名或分类。'
+            }
+            action={
+              records.length === 0 ? (
+                <Button
+                  icon={<Plus size={16} aria-hidden />}
+                  onClick={() => openAddModal('breakfast')}
+                >
+                  记录饮食
+                </Button>
+              ) : (
+                <Button variant="secondary" onClick={() => setKeyword('')}>
+                  清除搜索
+                </Button>
+              )
+            }
+          />
+        </Card>
+      ) : (
+        <div className="space-y-section">
+          {groupedAllRecords.map((group) => {
+            const groupCalories = group.items.reduce(
+              (sum, record) => sum + record.totalCalories,
+              0,
+            );
+            return (
+              <section key={group.date} className="space-y-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Divider label={formatDayLabel(group.date)} className="flex-1" />
+                  <Badge tone={group.date === today ? 'accent' : 'default'}>
+                    {formatNumber(groupCalories)} kcal
+                  </Badge>
+                </div>
+                <div className="grid gap-2">
+                  {group.items.map((record) => renderRecordRow(group.date, record.type)(record))}
+                </div>
+              </section>
+            );
+          })}
+        </div>
+      )}
+
+      <Modal
+        isOpen={showAddModal}
+        onClose={() => setShowAddModal(false)}
+        title="记录饮食"
+        description="热量可以估算，先记下来再慢慢校准"
+        size="lg"
+        footer={
+          <>
             <Button variant="secondary" onClick={() => setShowAddModal(false)}>
               取消
             </Button>
-            <Button onClick={handleAdd}>保存</Button>
+            <Button onClick={handleAdd} disabled={!canSave}>
+              保存
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Input
+              label="日期"
+              type="date"
+              value={form.date}
+              onChange={(event) => setForm({ ...form, date: event.target.value })}
+            />
+            <Select
+              label="餐次"
+              value={form.type}
+              onChange={(value) => setForm({ ...form, type: value as MealType })}
+              options={MEAL_OPTIONS}
+            />
           </div>
+
+          <div className="space-y-3">
+            {form.items.map((item, index) => (
+              <div key={index} className="rounded border border-line-subtle p-3">
+                <div className="flex items-center gap-2">
+                  <div className="min-w-0 flex-1">
+                    <Input
+                      aria-label={`第 ${index + 1} 个食物名称`}
+                      value={item.name}
+                      onChange={(event) => updateItem(index, { name: event.target.value })}
+                      placeholder="食物名，如：鸡胸肉"
+                    />
+                  </div>
+                  <IconButton
+                    label={`移除第 ${index + 1} 个食物`}
+                    size="sm"
+                    icon={<X size={14} />}
+                    disabled={form.items.length === 1}
+                    onClick={() =>
+                      setForm((current) => ({
+                        ...current,
+                        items: current.items.filter((_, i) => i !== index),
+                      }))
+                    }
+                  />
+                </div>
+                <div className="mt-2 grid grid-cols-2 gap-2">
+                  <Select
+                    aria-label={`第 ${index + 1} 个食物的分类`}
+                    value={item.category}
+                    onChange={(value) => updateItem(index, { category: value })}
+                    options={CATEGORY_OPTIONS}
+                  />
+                  <NumberInput
+                    ariaLabel={`第 ${index + 1} 个食物的热量`}
+                    value={item.calories}
+                    onChange={(value) => updateItem(index, { calories: value === '' ? 0 : value })}
+                    min={0}
+                    step={10}
+                    suffix="kcal"
+                  />
+                </div>
+              </div>
+            ))}
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={<Plus size={14} aria-hidden />}
+              onClick={() =>
+                setForm((current) => ({ ...current, items: [...current.items, emptyItem()] }))
+              }
+            >
+              添加食物
+            </Button>
+          </div>
+
+          <p className="rounded bg-inset px-3 py-2 text-sm text-content-secondary">
+            合计{' '}
+            <span className="font-semibold text-content tabular">{formatNumber(formCalories)}</span>{' '}
+            kcal
+          </p>
         </div>
       </Modal>
+
+      <ConfirmDialog
+        isOpen={pendingRecord !== null}
+        onClose={() => setPendingDeleteId(null)}
+        onConfirm={() => {
+          if (pendingDeleteId) deleteRecord(pendingDeleteId);
+          setPendingDeleteId(null);
+        }}
+        title="删除饮食记录"
+        description={
+          pendingRecord
+            ? `确定要删除${pendingRecord.date}的「${itemNames(pendingRecord.items)}」吗？共 ${pendingRecord.totalCalories} kcal。`
+            : ''
+        }
+        confirmText="删除"
+        tone="danger"
+      />
     </div>
   );
 };

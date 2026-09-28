@@ -27,3 +27,25 @@ export function formatDuration(hours: number): string {
   if (m === 0) return `${h} 小时`;
   return `${h} 小时 ${m} 分`;
 }
+
+/** 在 YYYY-MM-DD 日期键上按本地日历加减天数，避免时区把日期挪到前一天 */
+export function addDays(key: string, days: number): string {
+  const [year, month, day] = key.split('-').map((part) => Number(part));
+  if (!year || !month || !day) return key;
+  const date = new Date(year, month - 1, day);
+  date.setDate(date.getDate() + days);
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${date.getFullYear()}-${m}-${d}`;
+}
+
+/** 日期键 → 「9月28日 周一」，用于按天展示的标题 */
+export function formatDayLabel(key: string): string {
+  const [year, month, day] = key.split('-').map((part) => Number(part));
+  if (!year || !month || !day) return key;
+  return new Date(year, month - 1, day).toLocaleDateString('zh-CN', {
+    month: 'long',
+    day: 'numeric',
+    weekday: 'short',
+  });
+}

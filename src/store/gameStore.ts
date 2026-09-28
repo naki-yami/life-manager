@@ -14,6 +14,7 @@ interface GameState {
   updateHoursPlayed: (id: string, hours: number) => void;
   addAchievement: (gameId: string, name: string, description: string) => void;
   toggleAchievement: (gameId: string, achievementId: string) => void;
+  deleteAchievement: (gameId: string, achievementId: string) => void;
   replaceGames: (games: Game[]) => void;
 }
 
@@ -77,6 +78,14 @@ export const useGameStore = create<GameState>()(
                     a.id === achievementId ? { ...a, unlocked: !a.unlocked } : a,
                   ),
                 }
+              : g,
+          ),
+        })),
+      deleteAchievement: (gameId, achievementId) =>
+        set((state) => ({
+          games: state.games.map((g) =>
+            g.id === gameId
+              ? { ...g, achievements: g.achievements.filter((a) => a.id !== achievementId) }
               : g,
           ),
         })),
