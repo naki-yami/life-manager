@@ -25,11 +25,12 @@ const PRIORITY_OPTIONS = [
   { value: 'low', label: '较低' },
 ];
 
-const PRIORITY_BADGE: Record<Priority, { tone: 'danger' | 'warning' | 'default'; label: string }> = {
-  high: { tone: 'danger', label: '紧急' },
-  medium: { tone: 'warning', label: '中等' },
-  low: { tone: 'default', label: '较低' },
-};
+const PRIORITY_BADGE: Record<Priority, { tone: 'danger' | 'warning' | 'default'; label: string }> =
+  {
+    high: { tone: 'danger', label: '紧急' },
+    medium: { tone: 'warning', label: '中等' },
+    low: { tone: 'default', label: '较低' },
+  };
 
 const PRIORITY_ORDER: Record<Priority, number> = { high: 0, medium: 1, low: 2 };
 

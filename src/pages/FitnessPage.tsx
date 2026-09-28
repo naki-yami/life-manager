@@ -12,7 +12,12 @@ export const FitnessPage: React.FC = () => {
   const [workoutForm, setWorkoutForm] = useState({
     planName: '',
     date: new Date().toISOString().split('T')[0],
-    exercises: [{ name: '', sets: 3, reps: 10, weight: 0 }] as Array<{ name: string; sets: number; reps: number; weight: number }>,
+    exercises: [{ name: '', sets: 3, reps: 10, weight: 0 }] as Array<{
+      name: string;
+      sets: number;
+      reps: number;
+      weight: number;
+    }>,
     notes: '',
   });
 
@@ -33,7 +38,9 @@ export const FitnessPage: React.FC = () => {
   const updateExercise = (index: number, field: string, value: string | number) => {
     setWorkoutForm({
       ...workoutForm,
-      exercises: workoutForm.exercises.map((ex, i) => (i === index ? { ...ex, [field]: value } : ex)),
+      exercises: workoutForm.exercises.map((ex, i) =>
+        i === index ? { ...ex, [field]: value } : ex,
+      ),
     });
   };
 
@@ -72,16 +79,25 @@ export const FitnessPage: React.FC = () => {
         <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3">训练计划</h2>
         <div className="grid gap-3">
           {plans.length === 0 ? (
-            <Card className="p-6 text-center"><p className="text-gray-400">暂无训练计划</p></Card>
+            <Card className="p-6 text-center">
+              <p className="text-gray-400">暂无训练计划</p>
+            </Card>
           ) : (
             plans.map((plan) => (
               <Card key={plan.id} className="p-4">
                 <div className="flex items-center justify-between">
                   <div>
                     <h3 className="font-medium text-gray-900 dark:text-gray-100">{plan.name}</h3>
-                    {plan.description && <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">{plan.description}</p>}
+                    {plan.description && (
+                      <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+                        {plan.description}
+                      </p>
+                    )}
                   </div>
-                  <button onClick={() => deletePlan(plan.id)} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-400 hover:text-red-500">
+                  <button
+                    onClick={() => deletePlan(plan.id)}
+                    className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-400 hover:text-red-500"
+                  >
                     <Trash2 size={16} />
                   </button>
                 </div>
@@ -96,14 +112,18 @@ export const FitnessPage: React.FC = () => {
         <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3">训练记录</h2>
         <div className="space-y-3">
           {records.length === 0 ? (
-            <Card className="p-6 text-center"><p className="text-gray-400">暂无训练记录</p></Card>
+            <Card className="p-6 text-center">
+              <p className="text-gray-400">暂无训练记录</p>
+            </Card>
           ) : (
             records.map((record) => (
               <Card key={record.id} className="p-4">
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-2">
-                      <h3 className="font-medium text-gray-900 dark:text-gray-100">{record.planName || '自由训练'}</h3>
+                      <h3 className="font-medium text-gray-900 dark:text-gray-100">
+                        {record.planName || '自由训练'}
+                      </h3>
                       <span className="text-xs text-gray-400">{record.date}</span>
                     </div>
                     <div className="space-y-1">
@@ -113,9 +133,16 @@ export const FitnessPage: React.FC = () => {
                         </p>
                       ))}
                     </div>
-                    {record.notes && <p className="text-sm text-gray-500 dark:text-gray-400 mt-2 italic">{record.notes}</p>}
+                    {record.notes && (
+                      <p className="text-sm text-gray-500 dark:text-gray-400 mt-2 italic">
+                        {record.notes}
+                      </p>
+                    )}
                   </div>
-                  <button onClick={() => deleteRecord(record.id)} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-400 hover:text-red-500">
+                  <button
+                    onClick={() => deleteRecord(record.id)}
+                    className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-400 hover:text-red-500"
+                  >
                     <Trash2 size={16} />
                   </button>
                 </div>
@@ -128,10 +155,24 @@ export const FitnessPage: React.FC = () => {
       {/* Add Plan Modal */}
       <Modal isOpen={showAddPlan} onClose={() => setShowAddPlan(false)} title="新建训练计划">
         <div className="space-y-4">
-          <Input label="计划名称" value={planForm.name} onChange={(e) => setPlanForm({ ...planForm, name: e.target.value })} placeholder="如：增肌计划、减脂计划" />
-          <Input label="描述" value={planForm.description} onChange={(e) => setPlanForm({ ...planForm, description: e.target.value })} placeholder="计划描述" multiline rows={3} />
+          <Input
+            label="计划名称"
+            value={planForm.name}
+            onChange={(e) => setPlanForm({ ...planForm, name: e.target.value })}
+            placeholder="如：增肌计划、减脂计划"
+          />
+          <Input
+            label="描述"
+            value={planForm.description}
+            onChange={(e) => setPlanForm({ ...planForm, description: e.target.value })}
+            placeholder="计划描述"
+            multiline
+            rows={3}
+          />
           <div className="flex justify-end gap-2 pt-2">
-            <Button variant="secondary" onClick={() => setShowAddPlan(false)}>取消</Button>
+            <Button variant="secondary" onClick={() => setShowAddPlan(false)}>
+              取消
+            </Button>
             <Button onClick={handleAddPlan}>创建</Button>
           </div>
         </div>
@@ -144,12 +185,22 @@ export const FitnessPage: React.FC = () => {
             label="选择计划"
             value={workoutForm.planName}
             onChange={(v) => setWorkoutForm({ ...workoutForm, planName: v })}
-            options={[{ value: '', label: '自由训练' }, ...plans.map((p) => ({ value: p.name, label: p.name }))]}
+            options={[
+              { value: '', label: '自由训练' },
+              ...plans.map((p) => ({ value: p.name, label: p.name })),
+            ]}
           />
-          <Input label="日期" type="date" value={workoutForm.date} onChange={(e) => setWorkoutForm({ ...workoutForm, date: e.target.value })} />
-          
+          <Input
+            label="日期"
+            type="date"
+            value={workoutForm.date}
+            onChange={(e) => setWorkoutForm({ ...workoutForm, date: e.target.value })}
+          />
+
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">训练动作</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              训练动作
+            </label>
             {workoutForm.exercises.map((ex, i) => (
               <div key={i} className="flex gap-2 mb-2 items-center">
                 <input
@@ -181,14 +232,26 @@ export const FitnessPage: React.FC = () => {
                 />
               </div>
             ))}
-            <button onClick={addExerciseField} className="text-sm text-primary-600 hover:text-primary-700">
+            <button
+              onClick={addExerciseField}
+              className="text-sm text-primary-600 hover:text-primary-700"
+            >
               + 添加动作
             </button>
           </div>
 
-          <Input label="备注" value={workoutForm.notes} onChange={(e) => setWorkoutForm({ ...workoutForm, notes: e.target.value })} placeholder="训练感受..." multiline rows={2} />
+          <Input
+            label="备注"
+            value={workoutForm.notes}
+            onChange={(e) => setWorkoutForm({ ...workoutForm, notes: e.target.value })}
+            placeholder="训练感受..."
+            multiline
+            rows={2}
+          />
           <div className="flex justify-end gap-2 pt-2">
-            <Button variant="secondary" onClick={() => setShowLogWorkout(false)}>取消</Button>
+            <Button variant="secondary" onClick={() => setShowLogWorkout(false)}>
+              取消
+            </Button>
             <Button onClick={handleLogWorkout}>保存记录</Button>
           </div>
         </div>

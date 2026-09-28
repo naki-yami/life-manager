@@ -87,10 +87,16 @@ export const DietPage: React.FC = () => {
           if (mealRecords.length === 0) return null;
           return (
             <Card key={mealType}>
-              <CardHeader title={`${mealTypeIcons[mealType]} ${mealTypeLabels[mealType]}`} subtitle={`${mealRecords.reduce((s, r) => s + r.totalCalories, 0)} kcal`} />
+              <CardHeader
+                title={`${mealTypeIcons[mealType]} ${mealTypeLabels[mealType]}`}
+                subtitle={`${mealRecords.reduce((s, r) => s + r.totalCalories, 0)} kcal`}
+              />
               <CardBody>
                 {mealRecords.map((record) => (
-                  <div key={record.id} className="flex items-center justify-between py-2 border-b border-gray-50 dark:border-gray-700 last:border-0">
+                  <div
+                    key={record.id}
+                    className="flex items-center justify-between py-2 border-b border-gray-50 dark:border-gray-700 last:border-0"
+                  >
                     <div className="flex-1">
                       {record.items.map((item, i) => (
                         <span key={i} className="text-sm text-gray-700 dark:text-gray-300 mr-3">
@@ -98,7 +104,10 @@ export const DietPage: React.FC = () => {
                         </span>
                       ))}
                     </div>
-                    <button onClick={() => deleteRecord(record.id)} className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-400 hover:text-red-500">
+                    <button
+                      onClick={() => deleteRecord(record.id)}
+                      className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-400 hover:text-red-500"
+                    >
                       <Trash2 size={14} />
                     </button>
                   </div>
@@ -108,14 +117,21 @@ export const DietPage: React.FC = () => {
           );
         })}
         {dateRecords.length === 0 && (
-          <Card className="p-8 text-center"><p className="text-gray-400">当天暂无饮食记录</p></Card>
+          <Card className="p-8 text-center">
+            <p className="text-gray-400">当天暂无饮食记录</p>
+          </Card>
         )}
       </div>
 
       {/* Add Modal */}
       <Modal isOpen={showAddModal} onClose={() => setShowAddModal(false)} title="记录饮食">
         <div className="space-y-4">
-          <Input label="日期" type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} />
+          <Input
+            label="日期"
+            type="date"
+            value={selectedDate}
+            onChange={(e) => setSelectedDate(e.target.value)}
+          />
           <Select
             label="餐次"
             value={form.type}
@@ -123,7 +139,9 @@ export const DietPage: React.FC = () => {
             options={Object.entries(mealTypeLabels).map(([k, l]) => ({ value: k, label: l }))}
           />
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">食物</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              食物
+            </label>
             {form.items.map((item, i) => (
               <div key={i} className="flex gap-2 mb-2 items-center">
                 <input
@@ -138,7 +156,9 @@ export const DietPage: React.FC = () => {
                   className="px-2 py-1.5 text-sm border border-gray-200 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
                 >
                   {foodCategories.map((c) => (
-                    <option key={c} value={c}>{c}</option>
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
                   ))}
                 </select>
                 <input
@@ -150,12 +170,17 @@ export const DietPage: React.FC = () => {
                 />
               </div>
             ))}
-            <button onClick={handleAddItem} className="text-sm text-primary-600 hover:text-primary-700">
+            <button
+              onClick={handleAddItem}
+              className="text-sm text-primary-600 hover:text-primary-700"
+            >
               + 添加食物
             </button>
           </div>
           <div className="flex justify-end gap-2 pt-2">
-            <Button variant="secondary" onClick={() => setShowAddModal(false)}>取消</Button>
+            <Button variant="secondary" onClick={() => setShowAddModal(false)}>
+              取消
+            </Button>
             <Button onClick={handleAdd}>保存</Button>
           </div>
         </div>

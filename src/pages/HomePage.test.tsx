@@ -101,9 +101,9 @@ describe('HomePage', () => {
   it('模块概览展示各模块统计并支持跳转', async () => {
     useBookStore.getState().addBook('深入理解计算机系统', 'Randal', '技术');
     useBookStore.getState().updateBookStatus(useBookStore.getState().books[0]!.id, 'reading');
-    useDietStore.getState().addRecord(todayKey(), 'lunch', [
-      { name: '鸡胸肉', category: 'protein', calories: 300 },
-    ]);
+    useDietStore
+      .getState()
+      .addRecord(todayKey(), 'lunch', [{ name: '鸡胸肉', category: 'protein', calories: 300 }]);
     useGameStore.getState().addGame('黑神话', 'PC');
 
     renderHome();

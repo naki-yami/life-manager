@@ -114,9 +114,7 @@ describe('TasksPage', () => {
     await userEvent.type(titleInput, '改名后的任务');
     await userEvent.click(within(dialog).getByRole('button', { name: '保存' }));
 
-    expect(
-      useTaskStore.getState().tasks.some((task) => task.title === '改名后的任务'),
-    ).toBe(true);
+    expect(useTaskStore.getState().tasks.some((task) => task.title === '改名后的任务')).toBe(true);
   });
 
   it('删除需要二次确认，取消则不动数据', async () => {

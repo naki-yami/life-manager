@@ -1,195 +1,365 @@
-import React, { useState } from 'react';
-import { Plus, Trash2, Edit3, StickyNote } from 'lucide-react';
-import { Card, CardHeader, CardBody, Button, Input, Modal, Select } from '../components/ui';
+import React, { useMemo, useState } from 'react';
+import { BookOpen, CheckCircle2, NotebookPen, Play, Plus, StickyNote, Trash2 } from 'lucide-react';
+import {
+  Badge,
+  Button,
+  Card,
+  ConfirmDialog,
+  EmptyState,
+  IconButton,
+  Input,
+  Modal,
+  ProgressBar,
+  SegmentedControl,
+  Slider,
+} from '../components/ui';
+import { PageHeader, Toolbar } from '../components/layout';
 import { useBookStore } from '../store/bookStore';
-import { BookStatus } from '../types';
+import { filterByKeyword } from '../utils/search';
+import { Book, BookStatus } from '../types';
+
+type Filter = 'all' | BookStatus;
+
+const STATUS_LABEL: Record<BookStatus, string> = {
+  'want-to-read': '想读',
+  reading: '在读',
+  finished: '已读',
+};
+
+const STATUS_TONE: Record<BookStatus, 'default' | 'accent' | 'success'> = {
+  'want-to-read': 'default',
+  reading: 'accent',
+  finished: 'success',
+};
+
+const FILTER_OPTIONS: Array<{ value: Filter; label: string }> = [
+  { value: 'all', label: '全部' },
+  { value: 'want-to-read', label: '想读' },
+  { value: 'reading', label: '在读' },
+  { value: 'finished', label: '已读' },
+];
 
 export const BooksPage: React.FC = () => {
-  const { books, addBook, deleteBook, updateBookStatus, updateProgress, addNote, deleteNote } = useBookStore();
+  const { books, addBook, deleteBook, updateBookStatus, updateProgress, addNote, deleteNote } =
+    useBookStore();
+
   const [showAddModal, setShowAddModal] = useState(false);
-  const [showNoteModal, setShowNoteModal] = useState(false);
-  const [selectedBookId, setSelectedBookId] = useState<string | null>(null);
+  const [noteBookId, setNoteBookId] = useState<string | null>(null);
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [noteInput, setNoteInput] = useState('');
-  const [filterStatus, setFilterStatus] = useState<'all' | BookStatus>('all');
+  const [noteError, setNoteError] = useState<string | undefined>();
+  const [keyword, setKeyword] = useState('');
+  const [filter, setFilter] = useState<Filter>('all');
   const [form, setForm] = useState({ title: '', author: '', category: '' });
 
-  const handleAdd = () => {
+  const countOf = (status: BookStatus): number =>
+    books.filter((book) => book.status === status).length;
+
+  const visibleBooks = useMemo(() => {
+    const byStatus = filter === 'all' ? books : books.filter((book) => book.status === filter);
+    return filterByKeyword(byStatus, keyword, (book) => [book.title, book.author, book.category]);
+  }, [books, filter, keyword]);
+
+  const noteBook = books.find((book) => book.id === noteBookId) ?? null;
+  const deletingBook = books.find((book) => book.id === pendingDeleteId) ?? null;
+
+  const handleAdd = (): void => {
     if (!form.title.trim()) return;
-    addBook(form.title, form.author, form.category);
+    addBook(form.title.trim(), form.author.trim(), form.category.trim());
     setForm({ title: '', author: '', category: '' });
     setShowAddModal(false);
   };
 
-  const handleAddNote = () => {
-    if (selectedBookId && noteInput.trim()) {
-      addNote(selectedBookId, noteInput.trim());
-      setNoteInput('');
+  const handleAddNote = (): void => {
+    if (!noteBookId) return;
+    const content = noteInput.trim();
+    if (!content) {
+      setNoteError('笔记内容不能为空');
+      return;
     }
+    addNote(noteBookId, content);
+    setNoteInput('');
+    setNoteError(undefined);
   };
 
-  const filtered = books.filter((b) => filterStatus === 'all' || b.status === filterStatus);
-
-  const statusLabels: Record<BookStatus, string> = {
-    'want-to-read': '想读',
-    'reading': '在读',
-    'finished': '已读',
+  const closeNotes = (): void => {
+    setNoteBookId(null);
+    setNoteInput('');
+    setNoteError(undefined);
   };
 
-  const statusColors: Record<BookStatus, string> = {
-    'want-to-read': 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400',
-    'reading': 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400',
-    'finished': 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400',
-  };
+  const progressTone = (book: Book) => (book.progress >= 100 ? 'success' : 'accent');
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">读书</h1>
-          <p className="text-gray-500 dark:text-gray-400 mt-1">管理你的阅读书单</p>
-        </div>
-        <Button onClick={() => setShowAddModal(true)}>
-          <Plus size={16} className="mr-2" /> 添加书籍
-        </Button>
-      </div>
-
-      <div className="flex gap-2">
-        {(['all', 'want-to-read', 'reading', 'finished'] as const).map((f) => (
-          <button
-            key={f}
-            onClick={() => setFilterStatus(f)}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-              filterStatus === f
-                ? 'bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300'
-                : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
-            }`}
+    <div className="space-y-section">
+      <PageHeader
+        title="读书"
+        description="书单、进度与读书笔记都在这里"
+        icon={BookOpen}
+        actions={
+          <Button
+            icon={<Plus size={16} aria-hidden />}
+            onClick={() => {
+              setForm({ title: '', author: '', category: '' });
+              setShowAddModal(true);
+            }}
           >
-            {f === 'all' ? '全部' : statusLabels[f]}
-          </button>
-        ))}
-      </div>
+            添加书籍
+          </Button>
+        }
+      />
 
-      <div className="grid gap-4">
-        {filtered.length === 0 ? (
-          <Card className="p-8 text-center">
-            <p className="text-gray-400 dark:text-gray-500">暂无书籍</p>
-          </Card>
-        ) : (
-          filtered.map((book) => (
-            <Card key={book.id} className="p-4">
-              <div className="flex items-start gap-4">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-1">
-                    <h3 className="font-semibold text-gray-900 dark:text-gray-100">{book.title}</h3>
-                    <span className={`text-xs px-2 py-0.5 rounded-full ${statusColors[book.status]}`}>
-                      {statusLabels[book.status]}
-                    </span>
-                  </div>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">{book.author} · {book.category}</p>
-                  
-                  {book.status === 'reading' && (
-                    <div className="mt-3">
-                      <div className="flex items-center gap-2">
-                        <div className="flex-1 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                          <div
-                            className="bg-primary-500 h-2 rounded-full transition-all"
-                            style={{ width: `${book.progress}%` }}
-                          />
-                        </div>
-                        <span className="text-xs text-gray-500 w-10 text-right">{book.progress}%</span>
-                      </div>
-                      <input
-                        type="range"
-                        min="0"
-                        max="100"
-                        value={book.progress}
-                        onChange={(e) => updateProgress(book.id, parseInt(e.target.value))}
-                        className="w-full mt-1 accent-primary-600"
-                      />
+      <Toolbar
+        search={{ value: keyword, onChange: setKeyword, placeholder: '搜索书名、作者或分类…' }}
+        actions={
+          <SegmentedControl
+            label="按阅读状态筛选"
+            value={filter}
+            onChange={setFilter}
+            options={FILTER_OPTIONS.map((option) => ({
+              ...option,
+              count: option.value === 'all' ? books.length : countOf(option.value),
+            }))}
+          />
+        }
+      />
+
+      {visibleBooks.length === 0 ? (
+        <Card>
+          <EmptyState
+            icon={<BookOpen size={22} aria-hidden />}
+            title={books.length === 0 ? '书单还是空的' : '没有符合条件的书'}
+            description={
+              books.length === 0
+                ? '把想读的书加进来，之后可以记录进度和笔记。'
+                : '换个关键词，或者切换上面的状态筛选。'
+            }
+            action={
+              books.length === 0 ? (
+                <Button icon={<Plus size={16} aria-hidden />} onClick={() => setShowAddModal(true)}>
+                  添加书籍
+                </Button>
+              ) : (
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    setKeyword('');
+                    setFilter('all');
+                  }}
+                >
+                  清除筛选
+                </Button>
+              )
+            }
+          />
+        </Card>
+      ) : (
+        <ul className="grid gap-4">
+          {visibleBooks.map((book) => (
+            <li key={book.id}>
+              <Card className="p-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="font-semibold text-content">{book.title}</h3>
+                      <Badge tone={STATUS_TONE[book.status]}>{STATUS_LABEL[book.status]}</Badge>
                     </div>
-                  )}
+                    <p className="mt-1 text-sm text-content-tertiary">
+                      {[book.author, book.category].filter(Boolean).join(' · ') ||
+                        '未填写作者与分类'}
+                    </p>
 
-                  <div className="flex items-center gap-2 mt-3">
-                    {book.status !== 'reading' && (
-                      <button
-                        onClick={() => updateBookStatus(book.id, 'reading')}
-                        className="text-xs px-3 py-1 rounded-full bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 hover:bg-blue-100 transition-colors"
-                      >
-                        开始阅读
-                      </button>
+                    {book.status === 'reading' && (
+                      <div className="mt-3 space-y-2">
+                        <ProgressBar
+                          value={book.progress}
+                          showValue
+                          label="阅读进度"
+                          tone={progressTone(book)}
+                        />
+                        <Slider
+                          ariaLabel={`调整「${book.title}」的阅读进度`}
+                          value={book.progress}
+                          onChange={(value) => updateProgress(book.id, value)}
+                          showValue
+                          formatValue={(value) => `${value}%`}
+                        />
+                      </div>
                     )}
-                    {book.status !== 'finished' && (
-                      <button
-                        onClick={() => updateBookStatus(book.id, 'finished')}
-                        className="text-xs px-3 py-1 rounded-full bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 hover:bg-green-100 transition-colors"
+
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      {book.status !== 'reading' && (
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          icon={<Play size={13} aria-hidden />}
+                          onClick={() => updateBookStatus(book.id, 'reading')}
+                        >
+                          开始阅读
+                        </Button>
+                      )}
+                      {book.status !== 'finished' && (
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          icon={<CheckCircle2 size={13} aria-hidden />}
+                          onClick={() => {
+                            updateBookStatus(book.id, 'finished');
+                            updateProgress(book.id, 100);
+                          }}
+                        >
+                          标记已读
+                        </Button>
+                      )}
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        icon={<StickyNote size={13} aria-hidden />}
+                        onClick={() => {
+                          setNoteInput('');
+                          setNoteError(undefined);
+                          setNoteBookId(book.id);
+                        }}
                       >
-                        标记已读
-                      </button>
-                    )}
-                    <button
-                      onClick={() => { setSelectedBookId(book.id); setShowNoteModal(true); }}
-                      className="text-xs px-3 py-1 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 transition-colors flex items-center gap-1"
-                    >
-                      <StickyNote size={12} /> 笔记 ({book.notes.length})
-                    </button>
-                    <button
-                      onClick={() => deleteBook(book.id)}
-                      className="text-xs px-3 py-1 rounded-full text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-                    >
-                      <Trash2 size={12} />
-                    </button>
+                        笔记（{book.notes.length}）
+                      </Button>
+                    </div>
                   </div>
-                </div>
-              </div>
-            </Card>
-          ))
-        )}
-      </div>
 
-      {/* Add Book Modal */}
-      <Modal isOpen={showAddModal} onClose={() => setShowAddModal(false)} title="添加书籍">
+                  <IconButton
+                    label={`删除《${book.title}》`}
+                    size="sm"
+                    icon={<Trash2 size={15} />}
+                    onClick={() => setPendingDeleteId(book.id)}
+                    className="hover:text-danger"
+                  />
+                </div>
+              </Card>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <Modal
+        isOpen={showAddModal}
+        onClose={() => setShowAddModal(false)}
+        title="添加书籍"
+        description="填上书名即可，作者与分类可以之后再补"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setShowAddModal(false)}>
+              取消
+            </Button>
+            <Button onClick={handleAdd} disabled={!form.title.trim()}>
+              添加
+            </Button>
+          </>
+        }
+      >
         <div className="space-y-4">
-          <Input label="书名" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="输入书名" />
-          <Input label="作者" value={form.author} onChange={(e) => setForm({ ...form, author: e.target.value })} placeholder="输入作者" />
-          <Input label="分类" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} placeholder="如：技术、文学、历史" />
-          <div className="flex justify-end gap-2 pt-2">
-            <Button variant="secondary" onClick={() => setShowAddModal(false)}>取消</Button>
-            <Button onClick={handleAdd}>添加</Button>
-          </div>
+          <Input
+            label="书名"
+            value={form.title}
+            onChange={(event) => setForm({ ...form, title: event.target.value })}
+            placeholder="输入书名"
+            required
+          />
+          <Input
+            label="作者"
+            value={form.author}
+            onChange={(event) => setForm({ ...form, author: event.target.value })}
+            placeholder="输入作者"
+          />
+          <Input
+            label="分类"
+            value={form.category}
+            onChange={(event) => setForm({ ...form, category: event.target.value })}
+            placeholder="如：技术、文学、历史"
+          />
         </div>
       </Modal>
 
-      {/* Notes Modal */}
-      <Modal isOpen={showNoteModal} onClose={() => { setShowNoteModal(false); setSelectedBookId(null); }} title="读书笔记">
+      <Modal
+        isOpen={noteBook !== null}
+        onClose={closeNotes}
+        title={noteBook ? `《${noteBook.title}》的笔记` : '读书笔记'}
+        description="回车即可保存，笔记会按时间倒序排列"
+      >
         <div className="space-y-4">
-          <div className="flex gap-2">
-            <input
-              value={noteInput}
-              onChange={(e) => setNoteInput(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleAddNote()}
-              placeholder="输入笔记内容..."
-              className="flex-1 px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+          <div className="flex items-start gap-2">
+            <div className="min-w-0 flex-1">
+              <Input
+                aria-label="笔记内容"
+                value={noteInput}
+                onChange={(event) => {
+                  setNoteInput(event.target.value);
+                  if (noteError) setNoteError(undefined);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault();
+                    handleAddNote();
+                  }
+                }}
+                placeholder="写下这一段的收获…"
+                error={noteError}
+              />
+            </div>
+            <IconButton
+              label="保存笔记"
+              variant="primary"
+              icon={<Plus size={16} />}
+              onClick={handleAddNote}
             />
-            <Button size="sm" onClick={handleAddNote}>添加</Button>
           </div>
-          {selectedBookId && books.find(b => b.id === selectedBookId)?.notes.length === 0 && (
-            <p className="text-sm text-gray-400 text-center py-4">暂无笔记</p>
+
+          {noteBook && noteBook.notes.length === 0 ? (
+            <EmptyState
+              icon={<NotebookPen size={20} aria-hidden />}
+              title="还没有笔记"
+              description="读到有感触的地方，随手记一句。"
+              className="py-6"
+            />
+          ) : (
+            <ul className="max-h-72 space-y-2 overflow-y-auto">
+              {noteBook?.notes.map((note) => (
+                <li key={note.id} className="group rounded bg-inset p-3">
+                  <p className="text-sm text-content-secondary">{note.content}</p>
+                  <div className="mt-2 flex items-center justify-between">
+                    <span className="text-2xs text-content-tertiary">
+                      {new Date(note.createdAt).toLocaleDateString('zh-CN')}
+                    </span>
+                    <IconButton
+                      label="删除这条笔记"
+                      size="sm"
+                      icon={<Trash2 size={13} />}
+                      onClick={() => noteBook && deleteNote(noteBook.id, note.id)}
+                      className="hover:text-danger"
+                    />
+                  </div>
+                </li>
+              ))}
+            </ul>
           )}
-          <div className="space-y-2 max-h-60 overflow-y-auto">
-            {selectedBookId && books.find(b => b.id === selectedBookId)?.notes.map((note) => (
-              <div key={note.id} className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-                <p className="text-sm text-gray-700 dark:text-gray-300">{note.content}</p>
-                <div className="flex justify-between items-center mt-2">
-                  <span className="text-xs text-gray-400">{new Date(note.createdAt).toLocaleDateString('zh-CN')}</span>
-                  <button onClick={() => deleteNote(selectedBookId, note.id)} className="text-gray-400 hover:text-red-500">
-                    <Trash2 size={14} />
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
         </div>
       </Modal>
+
+      <ConfirmDialog
+        isOpen={deletingBook !== null}
+        onClose={() => setPendingDeleteId(null)}
+        onConfirm={() => {
+          if (pendingDeleteId) deleteBook(pendingDeleteId);
+          setPendingDeleteId(null);
+        }}
+        title="删除书籍"
+        description={
+          deletingBook
+            ? `确定要删除《${deletingBook.title}》吗？这本书的 ${deletingBook.notes.length} 条笔记也会一起删除。`
+            : ''
+        }
+        confirmText="删除"
+        tone="danger"
+      />
     </div>
   );
 };

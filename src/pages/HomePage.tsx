@@ -48,11 +48,12 @@ const TONE_CLASS: Record<ModuleTone, string> = {
   danger: 'bg-danger-soft text-danger',
 };
 
-const PRIORITY_BADGE: Record<Priority, { tone: 'danger' | 'warning' | 'default'; label: string }> = {
-  high: { tone: 'danger', label: '紧急' },
-  medium: { tone: 'warning', label: '中等' },
-  low: { tone: 'default', label: '较低' },
-};
+const PRIORITY_BADGE: Record<Priority, { tone: 'danger' | 'warning' | 'default'; label: string }> =
+  {
+    high: { tone: 'danger', label: '紧急' },
+    medium: { tone: 'warning', label: '中等' },
+    low: { tone: 'default', label: '较低' },
+  };
 
 interface ModuleCard {
   icon: LucideIcon;

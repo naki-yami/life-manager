@@ -5,7 +5,8 @@ import { useWritingStore } from '../store/writingStore';
 import { WritingType, WritingStatus } from '../types';
 
 export const WritingPage: React.FC = () => {
-  const { projects, addProject, deleteProject, updateStatus, updateWordCount, updateNotes } = useWritingStore();
+  const { projects, addProject, deleteProject, updateStatus, updateWordCount, updateNotes } =
+    useWritingStore();
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState({ title: '', type: 'article' as WritingType });
@@ -19,17 +20,21 @@ export const WritingPage: React.FC = () => {
   };
 
   const statusLabels: Record<WritingStatus, string> = {
-    'draft': '草稿', 'in-progress': '进行中', 'completed': '已完成',
+    draft: '草稿',
+    'in-progress': '进行中',
+    completed: '已完成',
   };
 
   const typeLabels: Record<WritingType, string> = {
-    'article': '文章', 'copy': '文案', 'book': '书籍',
+    article: '文章',
+    copy: '文案',
+    book: '书籍',
   };
 
   const statusColors: Record<WritingStatus, string> = {
-    'draft': 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400',
+    draft: 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400',
     'in-progress': 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400',
-    'completed': 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400',
+    completed: 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400',
   };
 
   return (
@@ -46,7 +51,9 @@ export const WritingPage: React.FC = () => {
 
       <div className="grid gap-4">
         {projects.length === 0 ? (
-          <Card className="p-8 text-center"><p className="text-gray-400">暂无写作项目</p></Card>
+          <Card className="p-8 text-center">
+            <p className="text-gray-400">暂无写作项目</p>
+          </Card>
         ) : (
           projects.map((project) => (
             <Card key={project.id} className="p-4">
@@ -54,14 +61,19 @@ export const WritingPage: React.FC = () => {
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-1">
                     <FileText size={16} className="text-gray-400" />
-                    <h3 className="font-semibold text-gray-900 dark:text-gray-100">{project.title}</h3>
+                    <h3 className="font-semibold text-gray-900 dark:text-gray-100">
+                      {project.title}
+                    </h3>
                     <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400">
                       {typeLabels[project.type]}
                     </span>
                     <Select
                       value={project.status}
                       onChange={(v) => updateStatus(project.id, v as WritingStatus)}
-                      options={Object.entries(statusLabels).map(([k, l]) => ({ value: k, label: l }))}
+                      options={Object.entries(statusLabels).map(([k, l]) => ({
+                        value: k,
+                        label: l,
+                      }))}
                       className="w-auto"
                     />
                   </div>
@@ -90,7 +102,10 @@ export const WritingPage: React.FC = () => {
                   >
                     <FileText size={16} />
                   </button>
-                  <button onClick={() => deleteProject(project.id)} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-400 hover:text-red-500 transition-colors">
+                  <button
+                    onClick={() => deleteProject(project.id)}
+                    className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-400 hover:text-red-500 transition-colors"
+                  >
                     <Trash2 size={16} />
                   </button>
                 </div>
@@ -103,7 +118,12 @@ export const WritingPage: React.FC = () => {
       {/* Add Modal */}
       <Modal isOpen={showAddModal} onClose={() => setShowAddModal(false)} title="新建写作项目">
         <div className="space-y-4">
-          <Input label="标题" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="输入标题" />
+          <Input
+            label="标题"
+            value={form.title}
+            onChange={(e) => setForm({ ...form, title: e.target.value })}
+            placeholder="输入标题"
+          />
           <Select
             label="类型"
             value={form.type}
@@ -111,7 +131,9 @@ export const WritingPage: React.FC = () => {
             options={Object.entries(typeLabels).map(([k, l]) => ({ value: k, label: l }))}
           />
           <div className="flex justify-end gap-2 pt-2">
-            <Button variant="secondary" onClick={() => setShowAddModal(false)}>取消</Button>
+            <Button variant="secondary" onClick={() => setShowAddModal(false)}>
+              取消
+            </Button>
             <Button onClick={handleAdd}>创建</Button>
           </div>
         </div>
@@ -128,8 +150,17 @@ export const WritingPage: React.FC = () => {
             className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none"
           />
           <div className="flex justify-end gap-2">
-            <Button variant="secondary" onClick={() => setEditingId(null)}>取消</Button>
-            <Button onClick={() => { if (editingId) updateNotes(editingId, notesForm); setEditingId(null); }}>保存</Button>
+            <Button variant="secondary" onClick={() => setEditingId(null)}>
+              取消
+            </Button>
+            <Button
+              onClick={() => {
+                if (editingId) updateNotes(editingId, notesForm);
+                setEditingId(null);
+              }}
+            >
+              保存
+            </Button>
           </div>
         </div>
       </Modal>

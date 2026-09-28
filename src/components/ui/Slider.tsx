@@ -9,6 +9,8 @@ export interface SliderProps {
   step?: number;
   label?: string;
   hint?: string;
+  /** 无障碍名称；不传时回落到 label。注意 label 会渲染成可见文字 */
+  ariaLabel?: string;
   showValue?: boolean;
   formatValue?: (value: number) => string;
   disabled?: boolean;
@@ -24,6 +26,7 @@ export const Slider: React.FC<SliderProps> = ({
   step = 1,
   label,
   hint,
+  ariaLabel,
   showValue = false,
   formatValue,
   disabled = false,
@@ -41,6 +44,7 @@ export const Slider: React.FC<SliderProps> = ({
         <input
           id={fieldId}
           type="range"
+          aria-label={ariaLabel ?? label}
           min={min}
           max={max}
           step={step}

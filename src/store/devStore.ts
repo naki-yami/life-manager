@@ -7,7 +7,8 @@ import { STORE_VERSION, migrateState } from './persist';
 
 interface DevState {
   projects: DevProject[];
-  addProject: (name: string, description: string) => void;
+  /** 返回新项目的 id，方便调用方立刻展开它 */
+  addProject: (name: string, description: string) => string;
   updateProject: (id: string, updates: Partial<DevProject>) => void;
   deleteProject: (id: string) => void;
   updateProjectStatus: (id: string, status: DevProjectStatus) => void;
@@ -23,20 +24,18 @@ export const useDevStore = create<DevState>()(
   persist(
     (set) => ({
       ...defaultState,
-      addProject: (name, description) =>
-        set((state) => ({
-          projects: [
-            ...state.projects,
-            {
-              id: createId(),
-              name,
-              description,
-              status: 'planning' as DevProjectStatus,
-              tasks: [],
-              createdAt: new Date().toISOString(),
-            },
-          ],
-        })),
+      addProject: (name, description) => {
+        const project: DevProject = {
+          id: createId(),
+          name,
+          description,
+          status: 'planning',
+          tasks: [],
+          createdAt: new Date().toISOString(),
+        };
+        set((state) => ({ projects: [...state.projects, project] }));
+        return project.id;
+      },
       updateProject: (id, updates) =>
         set((state) => ({
           projects: state.projects.map((p) => (p.id === id ? { ...p, ...updates } : p)),
