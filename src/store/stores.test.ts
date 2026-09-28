@@ -15,7 +15,7 @@ beforeEach(async () => {
   useGameStore.setState({ games: [] });
   useDietStore.setState({ records: [] });
   useFitnessStore.setState({ plans: [], records: [] });
-  useThemeStore.setState({ theme: 'light' });
+  useThemeStore.setState({ themeMode: 'light' });
 });
 
 describe('taskStore', () => {
@@ -86,7 +86,7 @@ describe('持久化 key', () => {
     useThemeStore.getState().setTheme('dark');
 
     expect(JSON.parse(localStorage.getItem(STORAGE_KEYS.books)!).state.books).toHaveLength(1);
-    expect(JSON.parse(localStorage.getItem(STORAGE_KEYS.theme)!).state.theme).toBe('dark');
+    expect(JSON.parse(localStorage.getItem(STORAGE_KEYS.theme)!).state.themeMode).toBe('dark');
   });
 });
 
@@ -146,7 +146,7 @@ describe('版本迁移', () => {
   });
 
   it('当前版本号是 2', () => {
-    expect(STORE_VERSION).toBe(2);
+    expect(STORE_VERSION).toBe(3);
   });
 });
 

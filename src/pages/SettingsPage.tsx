@@ -3,9 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import {
   Download,
   Upload,
-  Trash2,
   Sun,
   Moon,
+  Monitor,
+  Trash2,
   AlertTriangle,
   History,
   RotateCcw,
@@ -13,7 +14,15 @@ import {
   Database,
   LayoutGrid,
 } from 'lucide-react';
-import { Card, CardHeader, CardBody, Button, Modal } from '../components/ui';
+import {
+  Card,
+  CardHeader,
+  CardBody,
+  Button,
+  Modal,
+  SegmentedControl,
+  Switch,
+} from '../components/ui';
 import { useTheme } from '../hooks/useTheme';
 import { useTaskStore } from '../store/taskStore';
 import { useBookStore } from '../store/bookStore';
@@ -23,6 +32,7 @@ import { useFitnessStore } from '../store/fitnessStore';
 import { useDietStore } from '../store/dietStore';
 import { useGameStore } from '../store/gameStore';
 import { useThemeStore } from '../store/themeStore';
+import { useUiStore } from '../store/uiStore';
 import { BACKUP_MODULES, MODULE_LABELS } from '../services/schemas';
 import type { BackupData, BackupModule } from '../services/schemas';
 import {
@@ -50,7 +60,11 @@ function readAllData(): BackupData {
     fitnessRecords: useFitnessStore.getState().records,
     dietRecords: useDietStore.getState().records,
     games: useGameStore.getState().games,
-    settings: { theme: useThemeStore.getState().theme },
+    settings: {
+      themeMode: useThemeStore.getState().themeMode,
+      density: useUiStore.getState().density,
+      sidebarCollapsed: useUiStore.getState().sidebarCollapsed,
+    },
   };
 }
 
@@ -65,8 +79,16 @@ function applyPlan(data: Partial<BackupData>): void {
   if (data.fitnessRecords) useFitnessStore.getState().replaceRecords(data.fitnessRecords);
   if (data.dietRecords) useDietStore.getState().replaceRecords(data.dietRecords);
   if (data.games) useGameStore.getState().replaceGames(data.games);
-  const theme = data.settings?.theme;
-  if (theme) useThemeStore.getState().setTheme(theme);
+  const settings = data.settings;
+  if (settings) {
+    // 旧备份只有二态 theme，按 themeMode 处理
+    const mode = settings.themeMode ?? settings.theme;
+    if (mode) useThemeStore.getState().setThemeMode(mode);
+    if (settings.density) useUiStore.getState().setDensity(settings.density);
+    if (typeof settings.sidebarCollapsed === 'boolean') {
+      useUiStore.getState().setSidebarCollapsed(settings.sidebarCollapsed);
+    }
+  }
 }
 
 /** 只清空各 store 的内存状态（不清 localStorage，localStorage 由 clearAppStorage 负责） */
@@ -80,6 +102,10 @@ function resetStores(): void {
   useFitnessStore.getState().replaceRecords([]);
   useDietStore.getState().replaceRecords([]);
   useGameStore.getState().replaceGames([]);
+  // 外观也回到默认，避免「清除数据」后还停留在上一次的皮肤
+  useThemeStore.getState().setThemeMode('system');
+  useUiStore.getState().setDensity('comfortable');
+  useUiStore.getState().setSidebarCollapsed(false);
 }
 
 function formatBytes(bytes: number): string {
@@ -95,7 +121,8 @@ const MODE_OPTIONS: { value: ImportMode; label: string; hint: string }[] = [
 ];
 
 export const SettingsPage: React.FC = () => {
-  const { theme, toggleTheme } = useTheme();
+  const { themeMode, setThemeMode } = useTheme();
+  const { density, setDensity } = useUiStore();
   const navigate = useNavigate();
   const [showClearModal, setShowClearModal] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
@@ -206,27 +233,33 @@ export const SettingsPage: React.FC = () => {
       )}
 
       {/* Theme */}
+      {/* 外观 */}
       <Card>
-        <CardHeader title="主题设置" subtitle="切换亮色/暗色模式" />
+        <CardHeader title="外观" subtitle="主题模式与界面密度，会随备份一起导出" />
         <CardBody>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              {theme === 'light' ? (
-                <Sun size={20} className="text-yellow-500" />
-              ) : (
-                <Moon size={20} className="text-blue-400" />
-              )}
-              <span className="text-gray-700 dark:text-gray-300">
-                {theme === 'light' ? '亮色模式' : '暗色模式'}
-              </span>
+          <div className="space-y-5">
+            <div>
+              <p className="mb-2 text-sm font-medium text-content-secondary">主题模式</p>
+              <SegmentedControl
+                label="主题模式"
+                value={themeMode}
+                onChange={setThemeMode}
+                options={[
+                  { value: 'light', label: '亮色', icon: <Sun size={14} /> },
+                  { value: 'dark', label: '暗色', icon: <Moon size={14} /> },
+                  { value: 'system', label: '跟随系统', icon: <Monitor size={14} /> },
+                ]}
+              />
             </div>
-            <Button onClick={toggleTheme} variant="secondary">
-              切换主题
-            </Button>
+            <Switch
+              checked={density === 'compact'}
+              onChange={(next) => setDensity(next ? 'compact' : 'comfortable')}
+              label="紧凑密度"
+              description="收紧页面留白，一屏能放下更多内容"
+            />
           </div>
         </CardBody>
       </Card>
-
       {/* Data overview */}
       <Card>
         <CardHeader

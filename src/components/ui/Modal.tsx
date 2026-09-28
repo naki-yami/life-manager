@@ -1,17 +1,9 @@
-import React, { useEffect, useId, useRef } from 'react';
+import React, { useId, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
+import { useFocusTrap } from '../../hooks/useFocusTrap';
 import { IconButton } from './Button';
 import { Input } from './Input';
-
-const FOCUSABLE_SELECTOR = [
-  'a[href]',
-  'button:not([disabled])',
-  'textarea:not([disabled])',
-  'input:not([disabled])',
-  'select:not([disabled])',
-  '[tabindex]:not([tabindex="-1"])',
-].join(',');
 
 export type ModalSize = 'sm' | 'md' | 'lg';
 
@@ -45,56 +37,11 @@ const ModalInner: React.FC<ModalInnerProps> = ({
   const titleId = useId();
   const descId = useId();
 
-  // 打开时把焦点移入弹层、关闭后归还给原来的元素；同时锁住背景滚动
-  useEffect(() => {
-    const previous = document.activeElement as HTMLElement | null;
-    const dialog = dialogRef.current;
-    const first = dialog?.querySelector<HTMLElement>(FOCUSABLE_SELECTOR);
-    (first ?? dialog)?.focus();
-
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      previous?.focus?.();
-    };
-  }, []);
-
-  // Esc 关闭 + Tab 在弹层内循环（焦点陷阱）
-  const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>): void => {
-    if (event.key === 'Escape') {
-      event.stopPropagation();
-      onClose();
-      return;
-    }
-    if (event.key !== 'Tab') return;
-
-    const dialog = dialogRef.current;
-    if (!dialog) return;
-    const focusable = Array.from(dialog.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(
-      (element) => element.offsetParent !== null || element === document.activeElement,
-    );
-    if (focusable.length === 0) {
-      event.preventDefault();
-      return;
-    }
-
-    const first = focusable[0];
-    const last = focusable[focusable.length - 1];
-    const active = document.activeElement;
-
-    if (event.shiftKey && (active === first || !dialog.contains(active))) {
-      event.preventDefault();
-      last?.focus();
-    } else if (!event.shiftKey && (active === last || !dialog.contains(active))) {
-      event.preventDefault();
-      first?.focus();
-    }
-  };
+  // 焦点移入／归还、背景滚动锁、Esc 关闭、Tab 循环，全部由 useFocusTrap 统一处理
+  const handleKeyDown = useFocusTrap(dialogRef, { onClose });
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-page">
       <div
         aria-hidden
         onClick={onClose}

@@ -141,6 +141,11 @@ export const gameSchema = z.object({
 
 // ---------- 设置 ----------
 export const settingsSchema = z.object({
+  /** 新字段（v3）：三态主题 */
+  themeMode: z.enum(['light', 'dark', 'system']).optional(),
+  density: z.enum(['comfortable', 'compact']).optional(),
+  sidebarCollapsed: z.boolean().optional(),
+  /** 旧备份里只有二态 theme，导入时按 themeMode 处理 */
   theme: z.enum(['light', 'dark']).optional(),
 });
 

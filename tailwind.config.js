@@ -63,6 +63,16 @@ export default {
         info: { DEFAULT: 'var(--lm-info)', soft: 'var(--lm-info-soft)' },
       },
 
+      spacing: {
+        // 密度驱动：由 tokens.css 里的 --lm-page-pad / --lm-section-gap 提供
+        page: 'var(--lm-page-pad)',
+        section: 'var(--lm-section-gap)',
+      },
+
+      maxWidth: {
+        reading: '46rem',
+      },
+
       borderRadius: {
         sm: '6px',
         DEFAULT: '8px',
@@ -104,6 +114,10 @@ export default {
           from: { opacity: '0', transform: 'translateY(8px)' },
           to: { opacity: '1', transform: 'translateY(0)' },
         },
+        'slide-in-left': {
+          from: { opacity: '0', transform: 'translateX(-16px)' },
+          to: { opacity: '1', transform: 'translateX(0)' },
+        },
         'slide-in-right': {
           from: { opacity: '0', transform: 'translateX(16px)' },
           to: { opacity: '1', transform: 'translateX(0)' },
@@ -120,6 +134,7 @@ export default {
       animation: {
         'fade-in': 'fade-in 180ms cubic-bezier(0.32, 0.72, 0, 1)',
         'slide-up': 'slide-up 200ms cubic-bezier(0.32, 0.72, 0, 1)',
+        'slide-in-left': 'slide-in-left 200ms cubic-bezier(0.32, 0.72, 0, 1)',
         'slide-in-right': 'slide-in-right 200ms cubic-bezier(0.32, 0.72, 0, 1)',
         'scale-in': 'scale-in 180ms cubic-bezier(0.32, 0.72, 0, 1)',
         shimmer: 'shimmer 1.6s infinite',

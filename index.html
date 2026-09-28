@@ -1,10 +1,56 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="本地优先的个人生活与工作管理工具" />
     <title>Life Manager</title>
+    <script>
+      /*
+       * 首屏防闪烁：在 CSS 之前把主题与密度写到 <html> 上。
+       * 逻辑与 src/hooks/useTheme.ts / useDensity.ts 保持一致，
+       * 只是提前执行一次，避免白底闪一下再变暗。
+       */
+      (function () {
+        try {
+          var THEME_KEY = 'lm:theme';
+          var UI_KEY = 'lm:ui';
+          var root = document.documentElement;
+
+          function readState(key) {
+            var raw = localStorage.getItem(key);
+            if (!raw) return null;
+            var parsed = JSON.parse(raw);
+            if (!parsed || typeof parsed !== 'object') return null;
+            return parsed.state && typeof parsed.state === 'object' ? parsed.state : parsed;
+          }
+
+          var theme = readState(THEME_KEY) || {};
+          var mode =
+            theme.themeMode === 'light' ||
+            theme.themeMode === 'dark' ||
+            theme.themeMode === 'system'
+              ? theme.themeMode
+              : theme.theme === 'light' || theme.theme === 'dark'
+                ? theme.theme
+                : 'system';
+
+          var prefersDark =
+            typeof window.matchMedia === 'function' &&
+            window.matchMedia('(prefers-color-scheme: dark)').matches;
+          var dark = mode === 'dark' || (mode === 'system' && prefersDark);
+
+          if (dark) root.classList.add('dark');
+          root.style.colorScheme = dark ? 'dark' : 'light';
+
+          var ui = readState(UI_KEY);
+          if (ui && ui.density === 'compact') root.setAttribute('data-density', 'compact');
+        } catch (error) {
+          /* 存储不可用时按默认外观渲染即可，不要因此阻塞首屏 */
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

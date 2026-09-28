@@ -16,6 +16,7 @@ export const STORAGE_KEYS = {
   diet: 'lm:diet',
   games: 'lm:games',
   theme: 'lm:theme',
+  ui: 'lm:ui',
 } as const;
 
 export type StorageKeyName = keyof typeof STORAGE_KEYS;

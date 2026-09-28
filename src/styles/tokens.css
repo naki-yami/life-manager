@@ -121,3 +121,20 @@
   outline: 2px solid var(--lm-line-focus);
   outline-offset: 2px;
 }
+
+/* ---------------------------------------------------------------------------
+ * 密度（density）
+ * <html data-density="compact"> 时整体收紧留白，小屏或想一屏看更多内容时用。
+ * 只覆盖「结构间距」，不改变字号，避免影响可读性。
+ * ------------------------------------------------------------------------- */
+:root {
+  --lm-page-pad: 24px;
+  --lm-section-gap: 20px;
+  --lm-row-pad-y: 10px;
+}
+
+[data-density='compact'] {
+  --lm-page-pad: 14px;
+  --lm-section-gap: 12px;
+  --lm-row-pad-y: 6px;
+}
