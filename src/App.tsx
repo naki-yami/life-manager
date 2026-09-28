@@ -18,6 +18,7 @@ const FitnessPage = lazy(() =>
 );
 const DietPage = lazy(() => import('./pages/DietPage').then((m) => ({ default: m.DietPage })));
 const GamesPage = lazy(() => import('./pages/GamesPage').then((m) => ({ default: m.GamesPage })));
+const StatsPage = lazy(() => import('./pages/StatsPage').then((m) => ({ default: m.StatsPage })));
 const SettingsPage = lazy(() =>
   import('./pages/SettingsPage').then((m) => ({ default: m.SettingsPage })),
 );
@@ -40,6 +41,7 @@ const App: React.FC = () => {
             <Route path="/fitness" element={<FitnessPage />} />
             <Route path="/diet" element={<DietPage />} />
             <Route path="/games" element={<GamesPage />} />
+            <Route path="/stats" element={<StatsPage />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/ui" element={<UiPage />} />
             <Route path="*" element={<NotFoundPage />} />

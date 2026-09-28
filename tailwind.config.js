@@ -61,6 +61,15 @@ export default {
           contrast: 'var(--lm-danger-contrast)',
         },
         info: { DEFAULT: 'var(--lm-info)', soft: 'var(--lm-info-soft)' },
+
+        // 活动热力图等级色（0 = 无活动）
+        heat: {
+          0: 'var(--lm-heat-0)',
+          1: 'var(--lm-heat-1)',
+          2: 'var(--lm-heat-2)',
+          3: 'var(--lm-heat-3)',
+          4: 'var(--lm-heat-4)',
+        },
       },
 
       spacing: {

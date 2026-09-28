@@ -1,4 +1,5 @@
 import {
+  BarChart3,
   BookOpen,
   CalendarCheck,
   Code2,
@@ -89,6 +90,14 @@ export const NAV_ITEMS: NavItem[] = [
     description: '时长统计与成就进度',
     icon: Gamepad2,
     keywords: ['games', 'youxi', '游戏', '娱乐'],
+    group: 'main',
+  },
+  {
+    path: '/stats',
+    label: '统计',
+    description: '活动热力图、趋势与各模块进度',
+    icon: BarChart3,
+    keywords: ['stats', 'chart', 'tongji', '统计', '图表', '趋势'],
     group: 'main',
   },
   {

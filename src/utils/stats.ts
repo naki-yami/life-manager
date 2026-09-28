@@ -1,0 +1,104 @@
+import { addDays } from './date';
+
+export interface DayPoint {
+  /** 日期键 YYYY-MM-DD */
+  date: string;
+  value: number;
+}
+
+/**
+ * 从 endKey 往前推 days 天（含 endKey），按时间升序返回日期键。
+ * 所有「按天」的统计都从这里出发，保证图表与列表用同一套日期口径。
+ */
+export function dayRange(endKey: string, days: number): string[] {
+  if (days <= 0) return [];
+  const keys: string[] = [];
+  for (let i = days - 1; i >= 0; i -= 1) keys.push(addDays(endKey, -i));
+  return keys;
+}
+
+/** 把流水账按「天」聚合成图表数据；没有记录的日期补 0，保证 x 轴连续 */
+export function seriesByDay<T>(
+  items: readonly T[],
+  days: number,
+  endKey: string,
+  dateOf: (item: T) => string | undefined,
+  valueOf: (item: T) => number = () => 1,
+): DayPoint[] {
+  const totals = new Map<string, number>();
+  for (const item of items) {
+    const date = dateOf(item);
+    if (!date) continue;
+    totals.set(date, (totals.get(date) ?? 0) + valueOf(item));
+  }
+  return dayRange(endKey, days).map((date) => ({ date, value: totals.get(date) ?? 0 }));
+}
+
+/** 热力等级：0 表示没有活动，1-4 表示活动量递增（按当前区间最大值分档） */
+export function heatLevel(value: number, max: number, levels = 4): number {
+  if (value <= 0 || max <= 0) return 0;
+  const ratio = value / max;
+  return Math.max(1, Math.min(levels, Math.ceil(ratio * levels)));
+}
+
+/** 线性归一到 0..1，用于迷你折线的高度比例；全部相等时统一给 0.5 避免贴底 */
+export function normalizeToUnit(values: readonly number[]): number[] {
+  if (values.length === 0) return [];
+  const max = Math.max(...values);
+  const min = Math.min(...values);
+  if (max === min) return values.map(() => (max === 0 ? 0 : 0.5));
+  const span = max - min;
+  return values.map((value) => (value - min) / span);
+}
+
+/** 百分比整数；分母 <= 0 时返回 0，避免 NaN 渗透到界面 */
+export function percentOf(value: number, total: number): number {
+  if (total <= 0) return 0;
+  return Math.round((value / total) * 100);
+}
+
+/** 平均值取整；空数组返回 0 */
+export function averageOf(values: readonly number[]): number {
+  if (values.length === 0) return 0;
+  return Math.round(values.reduce((sum, value) => sum + value, 0) / values.length);
+}
+
+/** 求和 */
+export function sumOf(values: readonly number[]): number {
+  return values.reduce((sum, value) => sum + value, 0);
+}
+
+/** 只保留值大于 0 的日期（用于「有记录的天数」这类统计） */
+export function activeDays(series: readonly DayPoint[]): string[] {
+  return series.filter((point) => point.value > 0).map((point) => point.date);
+}
+
+/** 从 endKey 往前数连续有记录的天数；今天没有记录时为 0 */
+export function currentStreak(series: readonly DayPoint[], endKey: string): number {
+  let streak = 0;
+  let cursor = endKey;
+  const byDate = new Map(series.map((point) => [point.date, point.value]));
+  while ((byDate.get(cursor) ?? 0) > 0) {
+    streak += 1;
+    cursor = addDays(cursor, -1);
+  }
+  return streak;
+}
+
+/** 日期键 → 星期几（0 = 周一，6 = 周日）；按 UTC 解析，和日期键的生成口径一致 */
+export function weekdayIndex(key: string): number {
+  const date = new Date(`${key}T00:00:00Z`);
+  if (Number.isNaN(date.getTime())) return 0;
+  return (date.getUTCDay() + 6) % 7;
+}
+
+/** 把多条同区间序列逐日相加（例如任务 + 训练 + 饮食 = 当日活动量） */
+export function sumSeries(...series: DayPoint[][]): DayPoint[] {
+  const totals = new Map<string, number>();
+  for (const line of series) {
+    for (const point of line) totals.set(point.date, (totals.get(point.date) ?? 0) + point.value);
+  }
+  return [...totals.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([date, value]) => ({ date, value }));
+}
