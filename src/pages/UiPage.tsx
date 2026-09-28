@@ -274,8 +274,14 @@ export const UiPage: React.FC = () => {
         </div>
         <div className="flex flex-wrap items-center gap-6 pt-2">
           <ProgressRing value={progress} label="默认圆环" />
-          <ProgressRing value={progress} tone="success" size={88} strokeWidth={8} />
-          <ProgressRing value={progress} tone="warning">
+          <ProgressRing
+            value={progress}
+            tone="success"
+            size={88}
+            strokeWidth={8}
+            label="成功色圆环"
+          />
+          <ProgressRing value={progress} tone="warning" label="自定义内容圆环">
             <span className="text-xs">42/100</span>
           </ProgressRing>
         </div>

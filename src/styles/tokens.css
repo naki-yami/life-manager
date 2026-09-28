@@ -12,8 +12,10 @@
  *   accent     主色        DEFAULT / soft / strong
  *   语义状态    success / warning / danger / info（各带 soft 变体）
  *
- * 强调色：靛蓝 #4C6EF5（与旧 primary 色阶同源）
- * 对比度：正文与次要文字在各自背景上均 >= 4.5:1
+ * 强调色：靛蓝，亮色用 #3B5BDB、暗色用 #8B9DFF（同一色阶的深浅两端）。
+ * 对比度：所有承载文字的颜色都在 tokens.test.ts 里按 WCAG 2.1 逐对核验，
+ * 正文、辅助文字、主色文字与各语义色文字在各自背景上均 >= 4.5:1。
+ * 亮色下之所以比 #4C6EF5 更深，是因为原色配白字只有 4.32:1，达不到 AA。
  */
 
 :root {
@@ -26,7 +28,7 @@
   --lm-bg-inset: #f1f3f5;
   --lm-bg-hover: rgba(17, 24, 39, 0.04);
   --lm-bg-active: rgba(17, 24, 39, 0.08);
-  --lm-bg-selected: rgba(76, 110, 245, 0.1);
+  --lm-bg-selected: rgba(59, 91, 219, 0.1);
 
   /* 描边 */
   --lm-line-subtle: rgba(17, 24, 39, 0.06);
@@ -37,25 +39,25 @@
   /* 文字 */
   --lm-content: #111827;
   --lm-content-secondary: #4b5563;
-  --lm-content-tertiary: #6b7280;
+  --lm-content-tertiary: #646c7a;
   --lm-content-disabled: #9ca3af;
 
   /* 主色 */
-  --lm-accent: #4c6ef5;
-  --lm-accent-strong: #4263eb;
-  --lm-accent-soft: rgba(76, 110, 245, 0.1);
+  --lm-accent: #3b5bdb;
+  --lm-accent-strong: #364fc7;
+  --lm-accent-soft: rgba(59, 91, 219, 0.1);
   --lm-accent-contrast: #ffffff;
-  --lm-accent-ring: rgba(76, 110, 245, 0.28);
+  --lm-accent-ring: rgba(59, 91, 219, 0.28);
 
   /* 语义状态 */
-  --lm-success: #15803d;
+  --lm-success: #146c34;
   --lm-success-soft: rgba(21, 128, 61, 0.1);
-  --lm-warning: #b45309;
+  --lm-warning: #a04708;
   --lm-warning-soft: rgba(180, 83, 9, 0.12);
-  --lm-danger: #dc2626;
+  --lm-danger: #c81e1e;
   --lm-danger-soft: rgba(220, 38, 38, 0.1);
   --lm-danger-contrast: #ffffff;
-  --lm-info: #2563eb;
+  --lm-info: #1d4ed8;
   --lm-info-soft: rgba(37, 99, 235, 0.1);
 
   /* 活动热力图：0 = 无活动，1-4 逐级加深 */
@@ -63,7 +65,7 @@
   --lm-heat-1: rgba(76, 110, 245, 0.22);
   --lm-heat-2: rgba(76, 110, 245, 0.45);
   --lm-heat-3: rgba(76, 110, 245, 0.7);
-  --lm-heat-4: #4c6ef5;
+  --lm-heat-4: #3b5bdb;
 
   /* 阴影：亮色用真实投影 */
   --lm-shadow-xs: 0 1px 2px rgba(17, 24, 39, 0.06);

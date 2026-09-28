@@ -63,8 +63,10 @@ export const Header: React.FC<HeaderProps> = ({ onOpenNav }) => {
       </div>
 
       <div className="ml-auto flex items-center gap-1.5">
+        {/* 窄屏时展开的是纯图标按钮，可见文字被 hidden 掉，所以名称要写在 aria-label 上 */}
         <button
           type="button"
+          aria-label="搜索或跳转（快捷键 ⌘K）"
           onClick={openPalette}
           className="flex h-9 items-center gap-2 rounded border border-line-subtle bg-inset px-2.5 text-xs text-content-tertiary transition-colors duration-fast ease-standard hover:border-line hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-line-focus"
         >

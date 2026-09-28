@@ -33,10 +33,8 @@ export default [
         'warn',
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
       ],
-      'jsx-a11y/alt-text': 'warn',
-      'jsx-a11y/anchor-is-valid': 'warn',
-      'jsx-a11y/click-events-have-key-events': 'warn',
-      'jsx-a11y/no-static-element-interactions': 'warn',
+      // 无障碍规则整体按 jsx-a11y 推荐档开启，避免「有的组件查、有的不查」
+      ...jsxA11y.configs.recommended.rules,
     },
   },
   prettierConfig,

@@ -38,6 +38,8 @@ const DrawerInner: React.FC<Omit<DrawerProps, 'isOpen'>> = ({
         onClick={onClose}
         className="fixed inset-0 bg-black/40 backdrop-blur-[2px] animate-fade-in motion-reduce:animate-none"
       />
+      {/* 抽屉自己承载焦点陷阱：Tab 循环与 Esc 关闭必须挂在这个非交互容器上 */}
+      {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions */}
       <div
         ref={panelRef}
         role="dialog"

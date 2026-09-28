@@ -55,7 +55,7 @@ export const CardHeader: React.FC<CardHeaderProps> = ({
     className={`flex items-center justify-between gap-4 border-b border-line-subtle px-4 py-3 ${className}`}
   >
     <div className="min-w-0">
-      <h3 className="text-base font-semibold text-content">{title}</h3>
+      <h2 className="text-base font-semibold text-content">{title}</h2>
       {subtitle && <p className="mt-0.5 text-xs text-content-tertiary">{subtitle}</p>}
     </div>
     {action && <div className="shrink-0">{action}</div>}

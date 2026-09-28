@@ -89,6 +89,8 @@ export const Alert: React.FC<AlertProps> = ({
 export interface EmptyStateProps {
   icon?: React.ReactNode;
   title: string;
+  /** 标题用哪个元素。整页空态（例如 404）传 h1，避免页面没有主标题 */
+  titleAs?: 'p' | 'h1' | 'h2';
   description?: string;
   action?: React.ReactNode;
   className?: string;
@@ -97,6 +99,7 @@ export interface EmptyStateProps {
 export const EmptyState: React.FC<EmptyStateProps> = ({
   icon,
   title,
+  titleAs = 'p',
   description,
   action,
   className = '',
@@ -108,7 +111,16 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
       {icon ?? <Inbox size={20} />}
     </span>
     <div>
-      <p className="text-sm font-medium text-content">{title}</p>
+      {React.createElement(
+        titleAs,
+        {
+          className:
+            titleAs === 'p'
+              ? 'text-sm font-medium text-content'
+              : 'text-2xl font-semibold tracking-tight text-content',
+        },
+        title,
+      )}
       {description && (
         <p className="mx-auto mt-1 max-w-sm text-xs leading-relaxed text-content-tertiary">
           {description}

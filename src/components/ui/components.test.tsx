@@ -261,6 +261,13 @@ describe('EmptyState / ErrorState', () => {
     expect(screen.getByText('还没有书')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '添加' })).toBeInTheDocument();
   });
+
+  it('titleAs 可以换成 h1，供整页空态当主标题用', () => {
+    render(<EmptyState titleAs="h1" title="找不到这个页面" description="地址可能写错了" />);
+
+    const heading = screen.getByRole('heading', { level: 1, name: '找不到这个页面' });
+    expect(heading).toHaveClass('text-2xl');
+  });
 });
 
 describe('窄屏适配', () => {

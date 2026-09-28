@@ -1,7 +1,7 @@
 import React from 'react';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { Link, MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Layout } from './Layout';
 import { NavList, Sidebar } from './Sidebar';
@@ -194,6 +194,48 @@ describe('Layout', () => {
     await userEvent.type(within(palette).getByRole('combobox'), 'zzzz');
 
     expect(within(palette).getByText('没有匹配的结果')).toBeInTheDocument();
+  });
+});
+
+describe('Layout 无障碍', () => {
+  it('提供跳过导航的链接，落点是可聚焦的主区域', () => {
+    renderLayout('/');
+
+    const skipLink = screen.getByRole('link', { name: '跳到主内容' });
+    expect(skipLink).toHaveAttribute('href', '#main-content');
+
+    const main = screen.getByRole('main');
+    expect(main).toHaveAttribute('id', 'main-content');
+    // 主区域要能被程序化聚焦，跳转链接才有落点，但不应进入 Tab 序列
+    expect(main).toHaveAttribute('tabindex', '-1');
+  });
+
+  it('换路由后播报新页面名称，首次进入保持安静', async () => {
+    renderLayout('/');
+
+    const status = screen.getByRole('status');
+    expect(status).toBeEmptyDOMElement();
+
+    await userEvent.click(screen.getAllByRole('button', { name: '读书' })[0]!);
+
+    await waitFor(() => expect(status).toHaveTextContent('读书已打开'));
+  });
+
+  it('地址没有对应导航项时播报通用文案', async () => {
+    render(
+      <MemoryRouter initialEntries={['/']}>
+        <Layout>
+          <Routes>
+            <Route path="/" element={<Link to="/nowhere">去未知页面</Link>} />
+            <Route path="/nowhere" element={<div>未知内容</div>} />
+          </Routes>
+        </Layout>
+      </MemoryRouter>,
+    );
+
+    await userEvent.click(screen.getByRole('link', { name: '去未知页面' }));
+
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('页面已打开'));
   });
 });
 

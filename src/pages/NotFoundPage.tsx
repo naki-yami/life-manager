@@ -7,6 +7,7 @@ import { Button, EmptyState } from '../components/ui';
 export const NotFoundPage: React.FC = () => (
   <EmptyState
     icon={<Compass size={28} />}
+    titleAs="h1"
     title="找不到这个页面"
     description="地址可能写错了，或者该功能已经调整。"
     action={

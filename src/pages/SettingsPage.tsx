@@ -518,10 +518,18 @@ export const SettingsPage: React.FC = () => {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="text-xs text-content-tertiary">
-                    <th className="py-1 text-left font-medium">模块</th>
-                    <th className="py-1 text-right font-medium">备份中</th>
-                    <th className="py-1 text-right font-medium">新增</th>
-                    <th className="py-1 text-right font-medium">跳过</th>
+                    <th scope="col" className="py-1 text-left font-medium">
+                      模块
+                    </th>
+                    <th scope="col" className="py-1 text-right font-medium">
+                      备份中
+                    </th>
+                    <th scope="col" className="py-1 text-right font-medium">
+                      新增
+                    </th>
+                    <th scope="col" className="py-1 text-right font-medium">
+                      跳过
+                    </th>
                   </tr>
                 </thead>
                 <tbody>

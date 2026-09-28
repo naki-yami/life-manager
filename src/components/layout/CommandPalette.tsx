@@ -179,10 +179,11 @@ const CommandPaletteInner: React.FC<{ onClose: () => void }> = ({ onClose }) => 
       >
         <div className="flex items-center gap-2.5 border-b border-line-subtle px-4 py-3">
           <Search size={16} aria-hidden className="shrink-0 text-content-tertiary" />
+          {/* 打开后焦点由 useFocusTrap 落到这个搜索框上，不需要 autoFocus */}
           <input
-            autoFocus
             role="combobox"
             aria-expanded="true"
+            aria-autocomplete="list"
             aria-controls={listId}
             aria-activedescendant={activeId}
             aria-label="搜索功能与命令"

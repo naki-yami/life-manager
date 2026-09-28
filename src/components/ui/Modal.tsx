@@ -48,6 +48,8 @@ const ModalInner: React.FC<ModalInnerProps> = ({
         onClick={onClose}
         className="fixed inset-0 bg-black/40 backdrop-blur-[2px] animate-fade-in motion-reduce:animate-none"
       />
+      {/* 弹层自己就是焦点陷阱的宿主：Tab 循环与 Esc 关闭都得挂在这个非交互容器上 */}
+      {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions */}
       <div
         ref={dialogRef}
         role="dialog"
