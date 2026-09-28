@@ -33,12 +33,28 @@ import {
   StatCard,
 } from '../components/ui';
 import { PageHeader, Toolbar } from '../components/layout';
+import { BarChart, Sparkline } from '../components/charts';
 import { useDietStore } from '../store/dietStore';
 import { filterByKeyword, matchesKeyword } from '../utils/search';
-import { addDays, formatDayLabel, formatNumber, todayKey } from '../utils/date';
+import {
+  addDays,
+  formatDayLabel,
+  formatMonthLabel,
+  formatNumber,
+  formatShortDate,
+  todayKey,
+} from '../utils/date';
+import { seriesByDay, seriesByMonth, seriesByWeek } from '../utils/stats';
 import { FoodItem, MealRecord, MealType } from '../types';
 
 type View = 'day' | 'all';
+type TrendRange = 'day' | 'week' | 'month';
+
+const TREND_RANGE: Array<{ value: TrendRange; label: string }> = [
+  { value: 'day', label: '近 7 天' },
+  { value: 'week', label: '近 4 周' },
+  { value: 'month', label: '近 6 月' },
+];
 
 interface FoodDraft {
   name: string;
@@ -77,6 +93,7 @@ export const DietPage: React.FC = () => {
   const { records, addRecord, deleteRecord } = useDietStore();
 
   const [view, setView] = useState<View>('day');
+  const [trendRange, setTrendRange] = useState<TrendRange>('day');
   const [keyword, setKeyword] = useState('');
   const [selectedDate, setSelectedDate] = useState(todayKey());
   const [showAddModal, setShowAddModal] = useState(false);
@@ -130,6 +147,29 @@ export const DietPage: React.FC = () => {
   const recentDays = new Set(recentRecords.map((record) => record.date)).size;
   const recentTotal = recentRecords.reduce((sum, record) => sum + record.totalCalories, 0);
   const recentAverage = recentDays === 0 ? 0 : Math.round(recentTotal / recentDays);
+
+  const calorieByDay = useMemo(
+    () =>
+      seriesByDay(
+        records,
+        7,
+        today,
+        (record) => record.date,
+        (record) => record.totalCalories,
+      ),
+    [records, today],
+  );
+  const calorieTrend = useMemo(() => {
+    const caloriesOf = (record: MealRecord): number => record.totalCalories;
+    if (trendRange === 'week') {
+      return seriesByWeek(records, 4, today, (record) => record.date, caloriesOf);
+    }
+    if (trendRange === 'month') {
+      return seriesByMonth(records, 6, today, (record) => record.date, caloriesOf);
+    }
+    return calorieByDay;
+  }, [calorieByDay, records, today, trendRange]);
+  const trendLabel = TREND_RANGE.find((range) => range.value === trendRange)?.label ?? '';
 
   const pendingRecord = records.find((record) => record.id === pendingDeleteId) ?? null;
 
@@ -226,7 +266,21 @@ export const DietPage: React.FC = () => {
           unit="kcal"
           tone="accent"
           icon={<TrendingUp size={16} aria-hidden />}
-          footer={recentDays === 0 ? '最近 7 天还没有记录' : `按 ${recentDays} 天有记录的天数计算`}
+          footer={
+            recentDays === 0 ? (
+              '最近 7 天还没有记录'
+            ) : (
+              <span className="block space-y-1.5">
+                <span className="block">按 {recentDays} 天有记录的天数计算</span>
+                <Sparkline
+                  data={calorieByDay.map((point) => point.value)}
+                  label="近 7 天每日摄入热量趋势"
+                  tone="warning"
+                  height={24}
+                />
+              </span>
+            )
+          }
         />
         <StatCard
           label="累计记录"
@@ -235,6 +289,32 @@ export const DietPage: React.FC = () => {
           icon={<CalendarDays size={16} aria-hidden />}
         />
       </div>
+
+      {records.length > 0 && (
+        <Card>
+          <CardHeader
+            title="热量趋势"
+            subtitle={`${trendLabel}的摄入热量合计`}
+            action={
+              <SegmentedControl
+                label="切换热量趋势区间"
+                value={trendRange}
+                onChange={setTrendRange}
+                options={TREND_RANGE}
+              />
+            }
+          />
+          <CardBody>
+            <BarChart
+              data={calorieTrend}
+              label={`热量趋势（${trendLabel}）`}
+              tone="warning"
+              formatValue={(value) => `${formatNumber(value)} kcal`}
+              formatDate={trendRange === 'month' ? formatMonthLabel : formatShortDate}
+            />
+          </CardBody>
+        </Card>
+      )}
 
       <Toolbar
         search={{ value: keyword, onChange: setKeyword, placeholder: '搜索食物或分类…' }}

@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { addDays, formatDayLabel, formatDuration, formatNumber, todayKey } from './date';
+import {
+  addDays,
+  formatDayLabel,
+  formatDuration,
+  formatMonthLabel,
+  formatNumber,
+  formatShortDate,
+  todayKey,
+} from './date';
 
 describe('date utils', () => {
   it('todayKey 输出 YYYY-MM-DD', () => {
@@ -30,5 +38,21 @@ describe('date utils', () => {
     expect(formatDuration(0.5)).toBe('30 分钟');
     expect(formatDuration(2)).toBe('2 小时');
     expect(formatDuration(1.5)).toBe('1 小时 30 分');
+  });
+});
+
+describe('formatMonthLabel', () => {
+  it('输出「N 月」，非法输入原样返回', () => {
+    expect(formatMonthLabel('2026-09-01')).toBe('9 月');
+    expect(formatMonthLabel('2026-12-01')).toBe('12 月');
+    expect(formatMonthLabel('bad')).toBe('bad');
+  });
+});
+
+describe('formatShortDate', () => {
+  it('输出「月/日」，非法输入原样返回', () => {
+    expect(formatShortDate('2026-09-28')).toBe('9/28');
+    expect(formatShortDate('2026-12-05')).toBe('12/5');
+    expect(formatShortDate('bad')).toBe('bad');
   });
 });

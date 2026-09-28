@@ -177,4 +177,41 @@ describe('DietPage', () => {
     expect(useDietStore.getState().records).toHaveLength(0);
     expect(screen.getByText(/这天还是空的/)).toBeInTheDocument();
   });
+  it('没有记录时不渲染热量趋势卡片', () => {
+    render(<DietPage />);
+
+    expect(screen.queryByRole('img', { name: /热量趋势/ })).not.toBeInTheDocument();
+  });
+
+  it('热量趋势可以在近 7 天 / 近 4 周 / 近 6 月之间切换', async () => {
+    addMeal(today, 'lunch', [{ name: '鸡胸肉', category: 'protein', calories: 600 }]);
+    addMeal(yesterday, 'dinner', [{ name: '米饭', category: 'carb', calories: 400 }]);
+
+    render(<DietPage />);
+
+    expect(
+      screen.getByRole('img', { name: '热量趋势（近 7 天）：合计 1,000 kcal，单日最高 600 kcal' }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('合计 1,000 kcal')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: '近 4 周' }));
+    expect(
+      screen.getByRole('img', { name: /热量趋势（近 4 周）：合计 1,000 kcal/ }),
+    ).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: '近 6 月' }));
+    expect(
+      screen.getByRole('img', { name: /热量趋势（近 6 月）：合计 1,000 kcal/ }),
+    ).toBeInTheDocument();
+    // 按月聚合时刻度换成月份，而不是具体日期
+    expect(screen.getByText(`${new Date().getMonth() + 1} 月`)).toBeInTheDocument();
+  });
+
+  it('近 7 天日均卡片里带一条迷你趋势线', () => {
+    addMeal(today, 'lunch', [{ name: '鸡胸肉', category: 'protein', calories: 600 }]);
+
+    render(<DietPage />);
+
+    expect(screen.getByRole('img', { name: '近 7 天每日摄入热量趋势' })).toBeInTheDocument();
+  });
 });

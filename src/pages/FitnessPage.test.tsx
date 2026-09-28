@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { FitnessPage } from './FitnessPage';
 import { useFitnessStore } from '../store/fitnessStore';
-import { todayKey } from '../utils/date';
+import { addDays, todayKey } from '../utils/date';
 
 beforeEach(() => {
   useFitnessStore.setState({ plans: [], records: [] });
@@ -184,5 +184,36 @@ describe('FitnessPage', () => {
     await userEvent.click(within(dialog).getByRole('button', { name: '删除' }));
     expect(useFitnessStore.getState().plans).toHaveLength(0);
     expect(useFitnessStore.getState().records).toHaveLength(1);
+  });
+  it('没有训练记录时不渲染图表，避免一排空网格', () => {
+    addPlan('推日');
+    render(<FitnessPage />);
+
+    expect(screen.queryByRole('img', { name: /训练频率热力图/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('img', { name: /每周训练容量/ })).not.toBeInTheDocument();
+  });
+
+  it('有记录时展示训练频率热力图与每周容量对比', () => {
+    addRecord('推日', todayKey(), 60);
+    addRecord('推日', addDays(todayKey(), -1), 100);
+
+    render(<FitnessPage />);
+
+    expect(
+      screen.getByRole('img', { name: '最近 91 天训练频率热力图：91 天里有 2 天有记录，合计 2' }),
+    ).toBeInTheDocument();
+    // 5 组 × 5 次 × (60 + 100) kg，同属当周时合并到一根柱
+    expect(screen.getByText(/合计 4,000 kg/)).toBeInTheDocument();
+    expect(
+      screen.getByRole('img', { name: /最近 8 周每周训练容量：合计 4,000 kg/ }),
+    ).toBeInTheDocument();
+  });
+
+  it('统计卡里带上练过多少天与近 7 天迷你趋势', () => {
+    addRecord('推日', todayKey(), 60);
+
+    render(<FitnessPage />);
+
+    expect(statText('本周训练')).toContain('近 14 天有 1 天练过');
   });
 });

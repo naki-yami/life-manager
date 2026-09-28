@@ -8,6 +8,12 @@ import {
   normalizeToUnit,
   percentOf,
   seriesByDay,
+  seriesByMonth,
+  seriesByWeek,
+  monthStartKey,
+  splitWindow,
+  changeRate,
+  weekStartKey,
   sumOf,
   sumSeries,
   weekdayIndex,
@@ -149,5 +155,115 @@ describe('sumSeries', () => {
   it('空输入返回空数组', () => {
     expect(sumSeries()).toEqual([]);
     expect(sumSeries([])).toEqual([]);
+  });
+});
+
+describe('weekStartKey / monthStartKey', () => {
+  it('周一为起点：周一归本周，周日归上一周', () => {
+    expect(weekStartKey('2026-09-28')).toBe('2026-09-28');
+    expect(weekStartKey('2026-10-01')).toBe('2026-09-28');
+    expect(weekStartKey('2026-09-27')).toBe('2026-09-21');
+  });
+
+  it('月份键统一归到 1 号', () => {
+    expect(monthStartKey('2026-09-28')).toBe('2026-09-01');
+  });
+});
+
+describe('seriesByWeek', () => {
+  const items = [
+    { at: '2026-09-28', n: 3 },
+    { at: '2026-09-29', n: 4 },
+    { at: '2026-09-22', n: 2 },
+    { at: '2026-09-14', n: 1 },
+    { at: undefined, n: 9 },
+  ];
+
+  it('按自然周求和，日期键是当周周一，缺失周补 0', () => {
+    const series = seriesByWeek(
+      items,
+      3,
+      '2026-09-28',
+      (item) => item.at,
+      (item) => item.n,
+    );
+    expect(series).toEqual([
+      { date: '2026-09-14', value: 1 },
+      { date: '2026-09-21', value: 2 },
+      { date: '2026-09-28', value: 7 },
+    ]);
+  });
+
+  it('默认每条记录算 1 次，周数非正时返回空数组', () => {
+    const series = seriesByWeek(items, 1, '2026-09-28', (item) => item.at);
+    expect(series).toEqual([{ date: '2026-09-28', value: 2 }]);
+    expect(seriesByWeek(items, 0, '2026-09-28', (item) => item.at)).toEqual([]);
+  });
+});
+
+describe('seriesByMonth', () => {
+  it('按自然月求和，跨年也能正确往前推', () => {
+    const items = [
+      { at: '2026-01-15', n: 2 },
+      { at: '2025-12-31', n: 5 },
+      { at: '2025-11-02', n: 1 },
+    ];
+    const series = seriesByMonth(
+      items,
+      3,
+      '2026-01-15',
+      (item) => item.at,
+      (item) => item.n,
+    );
+    expect(series).toEqual([
+      { date: '2025-11-01', value: 1 },
+      { date: '2025-12-01', value: 5 },
+      { date: '2026-01-01', value: 2 },
+    ]);
+  });
+
+  it('同月多条记录合并到一格', () => {
+    const items = [
+      { at: '2026-09-02', n: 1 },
+      { at: '2026-09-28', n: 4 },
+    ];
+    expect(
+      seriesByMonth(
+        items,
+        1,
+        '2026-09-28',
+        (item) => item.at,
+        (item) => item.n,
+      ),
+    ).toEqual([{ date: '2026-09-01', value: 5 }]);
+  });
+});
+
+describe('changeRate', () => {
+  it('按上期计算百分比并四舍五入', () => {
+    expect(changeRate(120, 100)).toBe(20);
+    expect(changeRate(80, 100)).toBe(-20);
+    expect(changeRate(1, 3)).toBe(-67);
+  });
+
+  it('上期为 0 时不会出现 Infinity', () => {
+    expect(changeRate(5, 0)).toBe(100);
+    expect(changeRate(0, 0)).toBe(0);
+  });
+});
+
+describe('splitWindow', () => {
+  it('把区间对半切开，偶数长度时两半等长', () => {
+    const series = dayRange('2026-09-28', 4).map((date, index) => ({ date, value: index + 1 }));
+    expect(splitWindow(series)).toEqual({ current: 7, previous: 3 });
+  });
+
+  it('长度为奇数时本期取最后半天，上期取紧挨着的前半天', () => {
+    const series = dayRange('2026-09-28', 3).map((date, index) => ({ date, value: index + 1 }));
+    expect(splitWindow(series)).toEqual({ current: 3, previous: 2 });
+  });
+
+  it('空区间返回全 0', () => {
+    expect(splitWindow([])).toEqual({ current: 0, previous: 0 });
   });
 });

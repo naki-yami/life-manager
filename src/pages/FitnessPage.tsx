@@ -4,6 +4,8 @@ import {
   Badge,
   Button,
   Card,
+  CardBody,
+  CardHeader,
   ConfirmDialog,
   Divider,
   EmptyState,
@@ -16,9 +18,11 @@ import {
   StatCard,
 } from '../components/ui';
 import { PageHeader, Toolbar } from '../components/layout';
+import { BarChart, Heatmap } from '../components/charts';
 import { useFitnessStore } from '../store/fitnessStore';
 import { filterByKeyword } from '../utils/search';
 import { formatNumber, todayKey } from '../utils/date';
+import { activeDays, seriesByDay, seriesByWeek } from '../utils/stats';
 
 type View = 'plans' | 'records';
 
@@ -54,6 +58,11 @@ const weekStartKey = (): string => {
   return todayKey(new Date(now.getTime() - offset * 24 * 60 * 60 * 1000));
 };
 
+/** 热力图看长期习惯，所以窗口比图表长得多 */
+const HEATMAP_DAYS = 91;
+const TREND_DAYS = 14;
+const WEEK_BUCKETS = 8;
+
 export const FitnessPage: React.FC = () => {
   const { plans, records, addPlan, deletePlan, addRecord, deleteRecord } = useFitnessStore();
 
@@ -72,6 +81,27 @@ export const FitnessPage: React.FC = () => {
   const thisWeekCount = records.filter(
     (record) => record.date >= weekStart && record.date <= today,
   ).length;
+
+  const trainingSeries = useMemo(
+    () => seriesByDay(records, HEATMAP_DAYS, today, (record) => record.date),
+    [records, today],
+  );
+  const trendSeries = useMemo(
+    () => seriesByDay(records, TREND_DAYS, today, (record) => record.date),
+    [records, today],
+  );
+  const weeklyVolume = useMemo(
+    () =>
+      seriesByWeek(
+        records,
+        WEEK_BUCKETS,
+        today,
+        (record) => record.date,
+        (record) => volumeOf(record.exercises),
+      ),
+    [records, today],
+  );
+  const recentTrainingDays = activeDays(trendSeries).length;
 
   const visiblePlans = useMemo(
     () => filterByKeyword(plans, keyword, (plan) => [plan.name, plan.description]),
@@ -182,6 +212,7 @@ export const FitnessPage: React.FC = () => {
           unit="次"
           tone="accent"
           icon={<CalendarDays size={16} aria-hidden />}
+          footer={thisWeekCount === 0 ? '本周还没练' : `近 14 天有 ${recentTrainingDays} 天练过`}
         />
         <StatCard
           label="累计容量"
@@ -190,6 +221,35 @@ export const FitnessPage: React.FC = () => {
           icon={<TrendingUp size={16} aria-hidden />}
         />
       </div>
+
+      {records.length > 0 && (
+        <div className="grid gap-4 lg:grid-cols-2">
+          <Card>
+            <CardHeader
+              title="训练频率"
+              subtitle={`最近 ${HEATMAP_DAYS} 天里哪些日子练过，颜色越深练得越多`}
+            />
+            <CardBody>
+              <Heatmap data={trainingSeries} label="最近 91 天训练频率热力图" />
+            </CardBody>
+          </Card>
+
+          <Card>
+            <CardHeader
+              title="每周训练容量"
+              subtitle={`最近 ${WEEK_BUCKETS} 周的总容量（组数 × 次数 × 重量）`}
+            />
+            <CardBody>
+              <BarChart
+                data={weeklyVolume}
+                label="最近 8 周每周训练容量"
+                tone="accent"
+                formatValue={(value) => `${formatNumber(value)} kg`}
+              />
+            </CardBody>
+          </Card>
+        </div>
+      )}
 
       <Toolbar
         search={{ value: keyword, onChange: setKeyword, placeholder: '搜索计划、动作或备注…' }}

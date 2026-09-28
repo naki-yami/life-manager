@@ -49,3 +49,20 @@ export function formatDayLabel(key: string): string {
     weekday: 'short',
   });
 }
+
+/** 日期键 → 「9月」，用于按月聚合的图表刻度 */
+export function formatMonthLabel(key: string): string {
+  const parts = key.split('-').map((part) => Number(part));
+  const month = parts[1];
+  if (!month) return key;
+  return `${month} 月`;
+}
+
+/** 日期键 → 「9/28」，用作图表刻度这种空间很小的地方 */
+export function formatShortDate(key: string): string {
+  const parts = key.split('-').map((part) => Number(part));
+  const month = parts[1];
+  const day = parts[2];
+  if (!month || !day) return key;
+  return `${month}/${day}`;
+}

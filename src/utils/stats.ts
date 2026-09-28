@@ -102,3 +102,98 @@ export function sumSeries(...series: DayPoint[][]): DayPoint[] {
     .sort((a, b) => a[0].localeCompare(b[0]))
     .map(([date, value]) => ({ date, value }));
 }
+
+/** 某个日期键所在自然周的周一（周一为一周之始） */
+export function weekStartKey(key: string): string {
+  return addDays(key, -weekdayIndex(key));
+}
+
+/** 某个日期键所在自然月的 1 号 */
+export function monthStartKey(key: string): string {
+  return `${key.slice(0, 7)}-01`;
+}
+
+/** 月份键平移，跨年也能算对 */
+function shiftMonth(monthKey: string, delta: number): string {
+  const parts = monthKey.split('-').map((part) => Number(part));
+  const year = parts[0] ?? 1970;
+  const month = parts[1] ?? 1;
+  const date = new Date(Date.UTC(year, month - 1 + delta, 1));
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-01`;
+}
+
+/**
+ * 按任意「桶」聚合流水账的通用实现。
+ * keyOf 决定一条记录属于哪个桶，step 决定桶怎么往前推，
+ * 这样周、月共用一套补零与排序逻辑。
+ */
+function bucketSeries<T>(
+  items: readonly T[],
+  buckets: number,
+  endKey: string,
+  dateOf: (item: T) => string | undefined,
+  valueOf: (item: T) => number,
+  keyOf: (date: string) => string,
+  step: (key: string, delta: number) => string,
+): DayPoint[] {
+  if (buckets <= 0) return [];
+  const totals = new Map<string, number>();
+  for (const item of items) {
+    const date = dateOf(item);
+    if (!date) continue;
+    const bucket = keyOf(date);
+    totals.set(bucket, (totals.get(bucket) ?? 0) + valueOf(item));
+  }
+  const last = keyOf(endKey);
+  const keys: string[] = [];
+  for (let i = buckets - 1; i >= 0; i -= 1) keys.push(step(last, -i));
+  return keys.map((date) => ({ date, value: totals.get(date) ?? 0 }));
+}
+
+/** 按自然周（周一起）聚合，最后一格是包含 endKey 的那一周；日期键是当周周一 */
+export function seriesByWeek<T>(
+  items: readonly T[],
+  weeks: number,
+  endKey: string,
+  dateOf: (item: T) => string | undefined,
+  valueOf: (item: T) => number = () => 1,
+): DayPoint[] {
+  return bucketSeries(items, weeks, endKey, dateOf, valueOf, weekStartKey, (key, delta) =>
+    addDays(key, delta * 7),
+  );
+}
+
+/** 按自然月聚合，最后一格是包含 endKey 的那个月；日期键是当月 1 号 */
+export function seriesByMonth<T>(
+  items: readonly T[],
+  months: number,
+  endKey: string,
+  dateOf: (item: T) => string | undefined,
+  valueOf: (item: T) => number = () => 1,
+): DayPoint[] {
+  return bucketSeries(items, months, endKey, dateOf, valueOf, monthStartKey, shiftMonth);
+}
+
+/**
+ * 环比变化百分比（四舍五入）。
+ * 上期为 0 时：本期有增长记 100%，没有增长记 0%，避免出现 ∞ 或 NaN。
+ */
+export function changeRate(current: number, previous: number): number {
+  if (previous <= 0) return current > 0 ? 100 : 0;
+  return Math.round(((current - previous) / previous) * 100);
+}
+
+/** 把区间按天切成前后两半，返回本期与上期的合计，用于「环比上一周期」 */
+export function splitWindow(series: readonly DayPoint[]): {
+  current: number;
+  previous: number;
+} {
+  const half = Math.floor(series.length / 2);
+  if (half === 0) return { current: sumOf(series.map((point) => point.value)), previous: 0 };
+  const currentHalf = series.slice(series.length - half);
+  const previousHalf = series.slice(series.length - half * 2, series.length - half);
+  return {
+    current: sumOf(currentHalf.map((point) => point.value)),
+    previous: sumOf(previousHalf.map((point) => point.value)),
+  };
+}

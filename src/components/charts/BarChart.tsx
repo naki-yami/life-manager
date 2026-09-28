@@ -3,7 +3,7 @@ import type { DayPoint } from '../../utils/stats';
 import { sumOf } from '../../utils/stats';
 import { CHART_BAR } from './tones';
 import type { ChartTone } from './tones';
-import { formatDayLabel } from '../../utils/date';
+import { formatShortDate } from '../../utils/date';
 
 export interface BarChartProps {
   data: DayPoint[];
@@ -12,6 +12,8 @@ export interface BarChartProps {
   tone?: ChartTone;
   height?: number;
   formatValue?: (value: number) => string;
+  /** 底部首尾刻度的格式化；按周或按月聚合时换成对应标签 */
+  formatDate?: (key: string) => string;
   className?: string;
 }
 
@@ -25,6 +27,7 @@ export const BarChart: React.FC<BarChartProps> = ({
   tone = 'accent',
   height = 120,
   formatValue = (value) => String(value),
+  formatDate = formatShortDate,
   className = '',
 }) => {
   const max = Math.max(1, ...data.map((point) => point.value));
@@ -63,9 +66,9 @@ export const BarChart: React.FC<BarChartProps> = ({
         ))}
       </div>
       <div className="mt-1.5 flex items-center justify-between text-2xs text-content-tertiary">
-        <span>{data.length > 0 ? formatDayLabel(data[0]!.date) : ''}</span>
+        <span>{data.length > 0 ? formatDate(data[0]!.date) : ''}</span>
         <span>合计 {formatValue(total)}</span>
-        <span>{data.length > 0 ? formatDayLabel(data[data.length - 1]!.date) : ''}</span>
+        <span>{data.length > 0 ? formatDate(data[data.length - 1]!.date) : ''}</span>
       </div>
       <figcaption className="sr-only">
         <ul>
