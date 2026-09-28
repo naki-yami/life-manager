@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useTaskStore } from './taskStore';
 import { useBookStore } from './bookStore';
 import { useGameStore } from './gameStore';
@@ -195,5 +195,66 @@ describe('其它 store', () => {
 
     useFitnessStore.getState().replaceRecords([]);
     expect(useFitnessStore.getState().records).toHaveLength(0);
+  });
+});
+
+describe('旧版数据迁移（端到端）', () => {
+  it('v1 旧 key 中的数据在 store 初始化时已被迁移，用户数据不丢', async () => {
+    vi.resetModules();
+    localStorage.clear();
+    localStorage.setItem(
+      'tasks-storage',
+      JSON.stringify({
+        state: {
+          tasks: [
+            {
+              id: 'old-task',
+              title: '旧版留下的任务',
+              description: '',
+              priority: 'high',
+              status: 'completed',
+              dueDate: '',
+              createdAt: '2026-01-01T00:00:00.000Z',
+            },
+          ],
+          memos: [{ id: 'old-memo', content: '旧备忘', createdAt: '2026-01-01T00:00:00.000Z' }],
+        },
+        version: 0,
+      }),
+    );
+    localStorage.setItem(
+      'books-storage',
+      JSON.stringify({
+        state: {
+          books: [
+            {
+              id: 'old-book',
+              title: '旧版在读的书',
+              author: '',
+              category: '',
+              status: 'reading',
+              progress: 42,
+              notes: [{ id: 'old-note', content: '旧笔记', createdAt: '2026-01-01T00:00:00.000Z' }],
+              createdAt: '2026-01-01T00:00:00.000Z',
+            },
+          ],
+        },
+        version: 0,
+      }),
+    );
+
+    // 模拟真实的启动顺序：全新的模块图 -> 加载 store
+    const freshTaskStore = (await import('./taskStore')).useTaskStore;
+    const freshBookStore = (await import('./bookStore')).useBookStore;
+
+    expect(freshTaskStore.getState().tasks).toHaveLength(1);
+    expect(freshTaskStore.getState().tasks[0]!.id).toBe('old-task');
+    expect(freshTaskStore.getState().tasks[0]!.status).toBe('completed');
+    expect(freshTaskStore.getState().memos).toHaveLength(1);
+    expect(freshBookStore.getState().books[0]!.progress).toBe(42);
+    expect(freshBookStore.getState().books[0]!.notes).toHaveLength(1);
+
+    // 旧 key 保留作为兜底，不删除
+    expect(localStorage.getItem('tasks-storage')).not.toBeNull();
   });
 });
