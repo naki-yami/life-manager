@@ -111,6 +111,16 @@ function sampleData(): BackupData {
         createdAt: '2026-08-01T00:00:00.000Z',
       },
     ],
+    gameSessions: [
+      {
+        id: 'session-1',
+        gameId: 'game-1',
+        date: '2026-09-20',
+        hours: 3.5,
+        note: '打过了女武神',
+        createdAt: '2026-09-20T22:00:00.000Z',
+      },
+    ],
     settings: { theme: 'dark' },
   };
 }
@@ -125,6 +135,7 @@ const emptyData = (): BackupData => ({
   fitnessRecords: [],
   dietRecords: [],
   games: [],
+  gameSessions: [],
 });
 
 describe('导出 / 导入 往返', () => {
@@ -175,7 +186,7 @@ describe('导出 / 导入 往返', () => {
   it('信封结构包含 schemaVersion 与 exportedAt', () => {
     const envelope = buildBackupEnvelope(emptyData(), new Date('2026-09-28T00:00:00.000Z'));
     expect(envelope.app).toBe('life-manager');
-    expect(envelope.schemaVersion).toBe(2);
+    expect(envelope.schemaVersion).toBe(3);
     expect(envelope.exportedAt).toBe('2026-09-28T00:00:00.000Z');
   });
 });
@@ -250,6 +261,70 @@ describe('parseBackup 兼容性与健壮性', () => {
   });
 });
 
+describe('覆盖模式下的数据安全', () => {
+  it('备份里缺失的模块保持现状，显式的空数组才代表清空', () => {
+    const current = emptyData();
+    current.books = [
+      {
+        id: 'book-1',
+        title: '人类简史',
+        author: '',
+        category: '',
+        status: 'reading',
+        progress: 10,
+        notes: [],
+        createdAt: '2026-01-01T00:00:00.000Z',
+      },
+    ];
+
+    const plan = planImport(current, { tasks: [] }, 'overwrite');
+
+    // tasks 在备份里是明确的空数组 -> 确实清空
+    expect(plan.data.tasks).toEqual([]);
+    // books 压根没出现在备份里 -> 不能连它一起抹掉
+    expect(plan.data.books).toHaveLength(1);
+    expect(plan.data.books![0]!.id).toBe('book-1');
+    expect(plan.stats.books).toEqual({ incoming: 0, added: 0, skipped: 0 });
+  });
+});
+describe('游玩记录的导入兼容', () => {
+  it('旧备份没有 gameSessions 时该模块视为缺失，覆盖模式也不会清空现有记录', () => {
+    const legacy = sampleData() as Record<string, unknown>;
+    delete legacy.gameSessions;
+    const parsed = parseBackup(JSON.stringify(legacy));
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+
+    expect(parsed.backup.modules.gameSessions).toBeUndefined();
+
+    const plan = planImport(
+      {
+        gameSessions: [
+          { id: 'keep', gameId: 'g', date: '2026-01-01', hours: 1, note: '', createdAt: 'x' },
+        ],
+      },
+      parsed.backup.modules,
+      'overwrite',
+    );
+    expect(plan.data.gameSessions).toEqual([
+      { id: 'keep', gameId: 'g', date: '2026-01-01', hours: 1, note: '', createdAt: 'x' },
+    ]);
+  });
+
+  it('新备份里的游玩记录按 id 去重合并', () => {
+    const session = {
+      id: 'session-1',
+      gameId: 'game-1',
+      date: '2026-09-20',
+      hours: 3.5,
+      note: '',
+      createdAt: '2026-09-20T22:00:00.000Z',
+    };
+    const plan = planImport({ gameSessions: [session] }, { gameSessions: [session] }, 'merge');
+    expect(plan.data.gameSessions).toHaveLength(1);
+    expect(plan.stats.gameSessions).toEqual({ incoming: 1, added: 0, skipped: 1 });
+  });
+});
 describe('导入模式', () => {
   const existing = [{ id: 'a', title: '现有' }];
 
@@ -313,6 +388,7 @@ describe('导入模式', () => {
       plan.data.fitnessRecords,
       plan.data.dietRecords,
       plan.data.games,
+      plan.data.gameSessions,
     ].reduce((sum, list) => sum + (list?.length ?? 0), 0);
 
     expect(totals.added).toBe(actual);

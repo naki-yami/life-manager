@@ -12,7 +12,7 @@ beforeEach(async () => {
   localStorage.clear();
   useTaskStore.setState({ tasks: [], memos: [] });
   useBookStore.setState({ books: [] });
-  useGameStore.setState({ games: [] });
+  useGameStore.setState({ games: [], sessions: [] });
   useDietStore.setState({ records: [] });
   useFitnessStore.setState({ plans: [], records: [] });
   useThemeStore.setState({ themeMode: 'light' });
@@ -145,8 +145,8 @@ describe('版本迁移', () => {
     expect(result).toEqual({ tasks: [], futureField: 'keep' });
   });
 
-  it('当前版本号是 2', () => {
-    expect(STORE_VERSION).toBe(3);
+  it('当前版本号是 4', () => {
+    expect(STORE_VERSION).toBe(4);
   });
 });
 
@@ -280,5 +280,67 @@ describe('bookStore 读完时间', () => {
 
     expect(useBookStore.getState().books[0]!.finishedAt).toBeUndefined();
     expect(useBookStore.getState().books[0]!.status).toBe('reading');
+  });
+});
+
+describe('gameStore 游玩流水', () => {
+  const addGame = (name = '黑神话'): string => {
+    useGameStore.getState().addGame(name, 'PC');
+    return useGameStore.getState().games.find((game) => game.name === name)!.id;
+  };
+
+  it('记一次游玩会同时写流水并累加到总时长', () => {
+    const id = addGame();
+
+    useGameStore.getState().addSession(id, '2026-09-28', 2.5, '打完第一章');
+
+    const session = useGameStore.getState().sessions[0]!;
+    expect(session.gameId).toBe(id);
+    expect(session.date).toBe('2026-09-28');
+    expect(session.hours).toBe(2.5);
+    expect(session.note).toBe('打完第一章');
+    expect(useGameStore.getState().games[0]!.hoursPlayed).toBe(2.5);
+
+    useGameStore.getState().addSession(id, '2026-09-29', 1.5, '');
+    expect(useGameStore.getState().games[0]!.hoursPlayed).toBe(4);
+    expect(useGameStore.getState().sessions).toHaveLength(2);
+  });
+
+  it('删流水会把时长减回去，且不会变成负数', () => {
+    const id = addGame();
+    useGameStore.getState().addSession(id, '2026-09-28', 2, '');
+    const sessionId = useGameStore.getState().sessions[0]!.id;
+
+    useGameStore.getState().deleteSession(sessionId);
+
+    expect(useGameStore.getState().sessions).toHaveLength(0);
+    expect(useGameStore.getState().games[0]!.hoursPlayed).toBe(0);
+
+    // 手动把总时长调小后再删，不能出现负数
+    useGameStore.getState().addSession(id, '2026-09-28', 3, '');
+    useGameStore.getState().updateHoursPlayed(id, 1);
+    useGameStore.getState().deleteSession(useGameStore.getState().sessions[0]!.id);
+    expect(useGameStore.getState().games[0]!.hoursPlayed).toBe(0);
+  });
+
+  it('删掉不存在的流水时原样返回，不会误改总时长', () => {
+    const id = addGame();
+    useGameStore.getState().addSession(id, '2026-09-28', 2, '');
+
+    useGameStore.getState().deleteSession('not-exist');
+
+    expect(useGameStore.getState().sessions).toHaveLength(1);
+    expect(useGameStore.getState().games[0]!.hoursPlayed).toBe(2);
+  });
+
+  it('replaceSessions 用于导入与撤销', () => {
+    useGameStore
+      .getState()
+      .replaceSessions([
+        { id: 's1', gameId: 'g1', date: '2026-09-01', hours: 1, note: '', createdAt: 'x' },
+      ]);
+    expect(useGameStore.getState().sessions).toHaveLength(1);
+    useGameStore.getState().replaceSessions([]);
+    expect(useGameStore.getState().sessions).toHaveLength(0);
   });
 });

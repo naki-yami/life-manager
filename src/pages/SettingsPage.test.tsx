@@ -56,6 +56,7 @@ const emptyBackup: BackupData = {
   fitnessRecords: [],
   dietRecords: [],
   games: [],
+  gameSessions: [],
   settings: { themeMode: 'system', density: 'comfortable', sidebarCollapsed: false },
 };
 

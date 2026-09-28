@@ -68,6 +68,7 @@ function readAllData(): BackupData {
     fitnessRecords: useFitnessStore.getState().records,
     dietRecords: useDietStore.getState().records,
     games: useGameStore.getState().games,
+    gameSessions: useGameStore.getState().sessions,
     settings: {
       themeMode: useThemeStore.getState().themeMode,
       density: useUiStore.getState().density,
@@ -87,6 +88,7 @@ function applyPlan(data: Partial<BackupData>): void {
   if (data.fitnessRecords) useFitnessStore.getState().replaceRecords(data.fitnessRecords);
   if (data.dietRecords) useDietStore.getState().replaceRecords(data.dietRecords);
   if (data.games) useGameStore.getState().replaceGames(data.games);
+  if (data.gameSessions) useGameStore.getState().replaceSessions(data.gameSessions);
   const settings = data.settings;
   if (settings) {
     // 旧备份只有二态 theme，按 themeMode 处理
@@ -110,6 +112,7 @@ function resetStores(): void {
   useFitnessStore.getState().replaceRecords([]);
   useDietStore.getState().replaceRecords([]);
   useGameStore.getState().replaceGames([]);
+  useGameStore.getState().replaceSessions([]);
   // 外观也回到默认，避免「清除数据」后还停留在上一次的皮肤
   useThemeStore.getState().setThemeMode('system');
   useUiStore.getState().setDensity('comfortable');
@@ -157,6 +160,7 @@ export const SettingsPage: React.FC = () => {
   const recordCount = useFitnessStore((state) => state.records.length);
   const dietCount = useDietStore((state) => state.records.length);
   const gameCount = useGameStore((state) => state.games.length);
+  const sessionCount = useGameStore((state) => state.sessions.length);
 
   const counts: { module: BackupModule; label: string; count: number }[] = [
     { module: 'tasks', label: MODULE_LABELS.tasks, count: taskCount },
@@ -168,6 +172,7 @@ export const SettingsPage: React.FC = () => {
     { module: 'fitnessRecords', label: MODULE_LABELS.fitnessRecords, count: recordCount },
     { module: 'dietRecords', label: MODULE_LABELS.dietRecords, count: dietCount },
     { module: 'games', label: MODULE_LABELS.games, count: gameCount },
+    { module: 'gameSessions', label: MODULE_LABELS.gameSessions, count: sessionCount },
   ];
 
   const totalEntries = counts.reduce((sum, item) => sum + item.count, 0);

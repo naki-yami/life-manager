@@ -15,6 +15,7 @@ import {
   devProjectSchema,
   fitnessPlanSchema,
   gameSchema,
+  gameSessionSchema,
   mealRecordSchema,
   memoSchema,
   settingsSchema,
@@ -142,6 +143,7 @@ export function parseBackup(
   modules.fitnessRecords = pick(workoutRecordSchema, 'fitnessRecords');
   modules.dietRecords = pick(mealRecordSchema, 'dietRecords');
   modules.games = pick(gameSchema, 'games');
+  modules.gameSessions = pick(gameSessionSchema, 'gameSessions');
 
   const settings = settingsSchema.safeParse(source.settings);
   if (settings.success) modules.settings = settings.data;
@@ -220,30 +222,30 @@ export function planImport(
   mode: ImportMode,
   makeId: () => string = createId,
 ): ImportPlan {
-  const tasks = mergeById(current.tasks ?? [], backup.tasks ?? [], mode, makeId);
-  const memos = mergeById(current.memos ?? [], backup.memos ?? [], mode, makeId);
-  const books = mergeById(current.books ?? [], backup.books ?? [], mode, makeId);
-  const devProjects = mergeById(current.devProjects ?? [], backup.devProjects ?? [], mode, makeId);
-  const writingProjects = mergeById(
-    current.writingProjects ?? [],
-    backup.writingProjects ?? [],
-    mode,
-    makeId,
-  );
-  const fitnessPlans = mergeById(
-    current.fitnessPlans ?? [],
-    backup.fitnessPlans ?? [],
-    mode,
-    makeId,
-  );
-  const fitnessRecords = mergeById(
-    current.fitnessRecords ?? [],
-    backup.fitnessRecords ?? [],
-    mode,
-    makeId,
-  );
-  const dietRecords = mergeById(current.dietRecords ?? [], backup.dietRecords ?? [], mode, makeId);
-  const games = mergeById(current.games ?? [], backup.games ?? [], mode, makeId);
+  /**
+   * 备份里没有这个模块 ≠ 用户要清空它。
+   * 旧备份（或部分模块缺失的备份）里没有的字段一律保持现状，
+   * 否则「覆盖」模式会把用户现有数据静默抹掉。
+   */
+  const merge = <T extends { id: string }>(
+    module: BackupModule,
+    existing: T[],
+  ): MergeOutcome<T> => {
+    const incoming = backup[module] as unknown as T[] | undefined;
+    if (incoming === undefined) return { items: [...existing], added: 0, skipped: 0 };
+    return mergeById(existing, incoming, mode, makeId);
+  };
+
+  const tasks = merge('tasks', current.tasks ?? []);
+  const memos = merge('memos', current.memos ?? []);
+  const books = merge('books', current.books ?? []);
+  const devProjects = merge('devProjects', current.devProjects ?? []);
+  const writingProjects = merge('writingProjects', current.writingProjects ?? []);
+  const fitnessPlans = merge('fitnessPlans', current.fitnessPlans ?? []);
+  const fitnessRecords = merge('fitnessRecords', current.fitnessRecords ?? []);
+  const dietRecords = merge('dietRecords', current.dietRecords ?? []);
+  const games = merge('games', current.games ?? []);
+  const gameSessions = merge('gameSessions', current.gameSessions ?? []);
 
   const count = (incoming: unknown[] | undefined) => (incoming ?? []).length;
 
@@ -258,6 +260,7 @@ export function planImport(
       fitnessRecords: fitnessRecords.items,
       dietRecords: dietRecords.items,
       games: games.items,
+      gameSessions: gameSessions.items,
       settings: backup.settings,
     },
     stats: {
@@ -290,6 +293,11 @@ export function planImport(
         skipped: dietRecords.skipped,
       },
       games: { incoming: count(backup.games), added: games.added, skipped: games.skipped },
+      gameSessions: {
+        incoming: count(backup.gameSessions),
+        added: gameSessions.added,
+        skipped: gameSessions.skipped,
+      },
     },
   };
 }

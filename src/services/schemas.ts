@@ -7,7 +7,7 @@ import { z } from 'zod';
  */
 
 export const APP_ID = 'life-manager';
-export const BACKUP_SCHEMA_VERSION = 2;
+export const BACKUP_SCHEMA_VERSION = 3;
 
 const isoDateString = z.string();
 const percent = z.number().min(0).max(100).catch(0);
@@ -140,6 +140,16 @@ export const gameSchema = z.object({
   createdAt: isoDateString.default(() => new Date().toISOString()),
 });
 
+/** 游玩流水；旧的备份文件里没有这个模块，导入时不会清空现有记录 */
+export const gameSessionSchema = z.object({
+  id: z.string().min(1),
+  gameId: z.string().default(''),
+  date: z.string().default(''),
+  hours: z.number().min(0).catch(0),
+  note: z.string().default(''),
+  createdAt: isoDateString.default(() => new Date().toISOString()),
+});
+
 // ---------- 设置 ----------
 export const settingsSchema = z.object({
   /** 新字段（v3）：三态主题 */
@@ -161,6 +171,7 @@ export const backupDataSchema = z.object({
   fitnessRecords: z.array(workoutRecordSchema).default([]),
   dietRecords: z.array(mealRecordSchema).default([]),
   games: z.array(gameSchema).default([]),
+  gameSessions: z.array(gameSessionSchema).default([]),
   settings: settingsSchema.optional(),
 });
 
@@ -176,6 +187,7 @@ export const BACKUP_MODULES = [
   'fitnessRecords',
   'dietRecords',
   'games',
+  'gameSessions',
 ] as const;
 
 export type BackupModule = (typeof BACKUP_MODULES)[number];
@@ -190,4 +202,5 @@ export const MODULE_LABELS: Record<BackupModule, string> = {
   fitnessRecords: '训练记录',
   dietRecords: '饮食记录',
   games: '游戏',
+  gameSessions: '游玩记录',
 };

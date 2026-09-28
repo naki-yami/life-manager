@@ -125,6 +125,18 @@ export interface GameAchievement {
   unlocked: boolean;
 }
 
+/** 一次游玩记录；总时长由 game.hoursPlayed 与这些流水共同维护 */
+export interface GameSession {
+  id: string;
+  /** 关联的 Game.id */
+  gameId: string;
+  /** 游玩日期 YYYY-MM-DD */
+  date: string;
+  hours: number;
+  note: string;
+  createdAt: string;
+}
+
 export interface Game {
   id: string;
   name: string;
