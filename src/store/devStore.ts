@@ -1,7 +1,9 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { DevProject, DevProjectStatus, DevTask, DevTaskStatus, Priority } from '../types';
-import { generateId } from '../utils/helpers';
+import { DevProject, DevProjectStatus, DevTaskStatus, Priority } from '../types';
+import { createId } from '../utils/id';
+import { STORAGE_KEYS } from '../utils/storageKeys';
+import { STORE_VERSION, migrateState } from './persist';
 
 interface DevState {
   projects: DevProject[];
@@ -12,18 +14,21 @@ interface DevState {
   addTask: (projectId: string, title: string, priority: Priority) => void;
   updateTaskStatus: (projectId: string, taskId: string, status: DevTaskStatus) => void;
   deleteTask: (projectId: string, taskId: string) => void;
+  replaceProjects: (projects: DevProject[]) => void;
 }
+
+const defaultState = { projects: [] as DevProject[] };
 
 export const useDevStore = create<DevState>()(
   persist(
     (set) => ({
-      projects: [],
+      ...defaultState,
       addProject: (name, description) =>
         set((state) => ({
           projects: [
             ...state.projects,
             {
-              id: generateId(),
+              id: createId(),
               name,
               description,
               status: 'planning' as DevProjectStatus,
@@ -51,7 +56,7 @@ export const useDevStore = create<DevState>()(
                   tasks: [
                     ...p.tasks,
                     {
-                      id: generateId(),
+                      id: createId(),
                       title,
                       status: 'todo' as DevTaskStatus,
                       priority,
@@ -59,29 +64,30 @@ export const useDevStore = create<DevState>()(
                     },
                   ],
                 }
-              : p
+              : p,
           ),
         })),
       updateTaskStatus: (projectId, taskId, status) =>
         set((state) => ({
           projects: state.projects.map((p) =>
             p.id === projectId
-              ? {
-                  ...p,
-                  tasks: p.tasks.map((t) => (t.id === taskId ? { ...t, status } : t)),
-                }
-              : p
+              ? { ...p, tasks: p.tasks.map((t) => (t.id === taskId ? { ...t, status } : t)) }
+              : p,
           ),
         })),
       deleteTask: (projectId, taskId) =>
         set((state) => ({
           projects: state.projects.map((p) =>
-            p.id === projectId
-              ? { ...p, tasks: p.tasks.filter((t) => t.id !== taskId) }
-              : p
+            p.id === projectId ? { ...p, tasks: p.tasks.filter((t) => t.id !== taskId) } : p,
           ),
         })),
+      replaceProjects: (projects) => set({ projects }),
     }),
-    { name: 'dev-storage' }
-  )
+    {
+      name: STORAGE_KEYS.dev,
+      version: STORE_VERSION,
+      partialize: (state) => ({ projects: state.projects }),
+      migrate: (persisted) => migrateState(persisted, defaultState),
+    },
+  ),
 );

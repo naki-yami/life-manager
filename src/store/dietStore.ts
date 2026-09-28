@@ -1,42 +1,43 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { MealRecord, MealType, FoodItem } from '../types';
-import { generateId } from '../utils/helpers';
+import { createId } from '../utils/id';
+import { STORAGE_KEYS } from '../utils/storageKeys';
+import { STORE_VERSION, migrateState } from './persist';
 
 interface DietState {
   records: MealRecord[];
   addRecord: (date: string, type: MealType, items: FoodItem[]) => void;
   deleteRecord: (id: string) => void;
   getRecordsByDate: (date: string) => MealRecord[];
+  replaceRecords: (records: MealRecord[]) => void;
 }
+
+const defaultState = { records: [] as MealRecord[] };
 
 export const useDietStore = create<DietState>()(
   persist(
     (set, get) => ({
-      records: [],
+      ...defaultState,
       addRecord: (date, type, items) => {
-        const itemsWithIds = items.map((item) => ({
-          ...item,
-          id: item.id || generateId(),
-        }));
+        const itemsWithIds = items.map((item) => ({ ...item, id: item.id || createId() }));
         const totalCalories = itemsWithIds.reduce((sum, item) => sum + item.calories, 0);
         set((state) => ({
           records: [
             ...state.records,
-            {
-              id: generateId(),
-              date,
-              type,
-              items: itemsWithIds,
-              totalCalories,
-            },
+            { id: createId(), date, type, items: itemsWithIds, totalCalories },
           ],
         }));
       },
-      deleteRecord: (id) =>
-        set((state) => ({ records: state.records.filter((r) => r.id !== id) })),
+      deleteRecord: (id) => set((state) => ({ records: state.records.filter((r) => r.id !== id) })),
       getRecordsByDate: (date) => get().records.filter((r) => r.date === date),
+      replaceRecords: (records) => set({ records }),
     }),
-    { name: 'diet-storage' }
-  )
+    {
+      name: STORAGE_KEYS.diet,
+      version: STORE_VERSION,
+      partialize: (state) => ({ records: state.records }),
+      migrate: (persisted) => migrateState(persisted, defaultState),
+    },
+  ),
 );

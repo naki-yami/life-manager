@@ -26,3 +26,9 @@ npm-debug.log*
 .env
 .env.local
 .env.production
+
+# Build cache
+*.tsbuildinfo
+
+# Test coverage
+coverage/

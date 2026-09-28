@@ -1,5 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { STORAGE_KEYS } from '../utils/storageKeys';
+import { STORE_VERSION, migrateState } from './persist';
 
 type Theme = 'light' | 'dark';
 
@@ -9,13 +11,20 @@ interface ThemeState {
   setTheme: (theme: Theme) => void;
 }
 
+const defaultState: { theme: Theme } = { theme: 'light' };
+
 export const useThemeStore = create<ThemeState>()(
   persist(
     (set) => ({
-      theme: 'light',
+      ...defaultState,
       toggleTheme: () => set((state) => ({ theme: state.theme === 'light' ? 'dark' : 'light' })),
       setTheme: (theme) => set({ theme }),
     }),
-    { name: 'theme-storage' }
-  )
+    {
+      name: STORAGE_KEYS.theme,
+      version: STORE_VERSION,
+      partialize: (state) => ({ theme: state.theme }),
+      migrate: (persisted) => migrateState(persisted, defaultState),
+    },
+  ),
 );

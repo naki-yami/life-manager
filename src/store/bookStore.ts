@@ -1,7 +1,9 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { Book, BookStatus, BookNote } from '../types';
-import { generateId } from '../utils/helpers';
+import { Book, BookStatus } from '../types';
+import { createId } from '../utils/id';
+import { STORAGE_KEYS } from '../utils/storageKeys';
+import { STORE_VERSION, migrateState } from './persist';
 
 interface BookState {
   books: Book[];
@@ -12,18 +14,21 @@ interface BookState {
   updateProgress: (id: string, progress: number) => void;
   addNote: (bookId: string, content: string) => void;
   deleteNote: (bookId: string, noteId: string) => void;
+  replaceBooks: (books: Book[]) => void;
 }
+
+const defaultState = { books: [] as Book[] };
 
 export const useBookStore = create<BookState>()(
   persist(
     (set) => ({
-      books: [],
+      ...defaultState,
       addBook: (title, author, category) =>
         set((state) => ({
           books: [
             ...state.books,
             {
-              id: generateId(),
+              id: createId(),
               title,
               author,
               category,
@@ -38,8 +43,7 @@ export const useBookStore = create<BookState>()(
         set((state) => ({
           books: state.books.map((b) => (b.id === id ? { ...b, ...updates } : b)),
         })),
-      deleteBook: (id) =>
-        set((state) => ({ books: state.books.filter((b) => b.id !== id) })),
+      deleteBook: (id) => set((state) => ({ books: state.books.filter((b) => b.id !== id) })),
       updateBookStatus: (id, status) =>
         set((state) => ({
           books: state.books.map((b) => (b.id === id ? { ...b, status } : b)),
@@ -55,22 +59,26 @@ export const useBookStore = create<BookState>()(
               ? {
                   ...b,
                   notes: [
-                    { id: generateId(), content, createdAt: new Date().toISOString() },
+                    { id: createId(), content, createdAt: new Date().toISOString() },
                     ...b.notes,
                   ],
                 }
-              : b
+              : b,
           ),
         })),
       deleteNote: (bookId, noteId) =>
         set((state) => ({
           books: state.books.map((b) =>
-            b.id === bookId
-              ? { ...b, notes: b.notes.filter((n) => n.id !== noteId) }
-              : b
+            b.id === bookId ? { ...b, notes: b.notes.filter((n) => n.id !== noteId) } : b,
           ),
         })),
+      replaceBooks: (books) => set({ books }),
     }),
-    { name: 'books-storage' }
-  )
+    {
+      name: STORAGE_KEYS.books,
+      version: STORE_VERSION,
+      partialize: (state) => ({ books: state.books }),
+      migrate: (persisted) => migrateState(persisted, defaultState),
+    },
+  ),
 );
