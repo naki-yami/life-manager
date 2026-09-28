@@ -34,6 +34,7 @@ import { useUndoableRemove } from '../hooks/useUndoableRemove';
 import { daysBetween, formatShortDate, todayKey } from '../utils/date';
 import { seriesByWeek } from '../utils/stats';
 import { Priority, RepeatKind, RepeatRule, Task, TaskStatus } from '../types';
+import { useNewEntryShortcut } from '../hooks/useShortcuts';
 
 type Filter = 'all' | TaskStatus;
 type ViewMode = 'list' | 'kanban' | 'quadrant';
@@ -274,6 +275,11 @@ export const TasksPage: React.FC = () => {
   const undoableRemove = useUndoableRemove();
 
   const [showAddModal, setShowAddModal] = useState(false);
+  useNewEntryShortcut(() => {
+    setForm(EMPTY_FORM);
+    setShowAddModal(true);
+  });
+
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [filter, setFilter] = useState<Filter>('all');

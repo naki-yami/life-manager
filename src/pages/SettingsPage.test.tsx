@@ -68,6 +68,20 @@ const uploadFile = (text: string, name = 'backup.json'): void => {
 };
 
 describe('SettingsPage', () => {
+  it('快捷键说明表列出全局按键', () => {
+    render(
+      <MemoryRouter initialEntries={['/settings']}>
+        <Routes>
+          <Route path="/settings" element={<ToastProvider><SettingsPage /></ToastProvider>} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText('快捷键')).toBeInTheDocument();
+    expect(screen.getByText('Ctrl / ⌘ K')).toBeInTheDocument();
+    expect(screen.getByText('g 后接 1-9')).toBeInTheDocument();
+  });
+
   it('外观区可以切换主题模式、密度与侧边栏折叠', async () => {
     renderSettings();
 

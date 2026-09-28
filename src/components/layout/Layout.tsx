@@ -4,8 +4,10 @@ import { Drawer } from '../ui';
 import { Header } from './Header';
 import { Sidebar, NavList } from './Sidebar';
 import { CommandPaletteProvider } from './CommandPalette';
+import { useCommandPalette } from './commandPaletteContext';
 import { useTheme } from '../../hooks/useTheme';
 import { useDensity } from '../../hooks/useDensity';
+import { useGlobalShortcuts } from '../../hooks/useShortcuts';
 import { findNavItem } from './navItems';
 
 interface LayoutProps {
@@ -35,6 +37,16 @@ const RouteAnnouncer: React.FC = () => {
       {message}
     </div>
   );
+};
+
+/**
+ * 全局单键快捷键（n / / / g+数字）挂在 Provider 内层，
+ * 这样才能拿到命令面板的 open。
+ */
+const ShortcutBinder: React.FC = () => {
+  const palette = useCommandPalette();
+  useGlobalShortcuts(palette.open);
+  return null;
 };
 
 /**
@@ -74,6 +86,8 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
         </div>
 
         <RouteAnnouncer />
+
+        <ShortcutBinder />
 
         <Drawer isOpen={navOpen} onClose={() => setNavOpen(false)} title="导航" side="left">
           <NavList onNavigate={() => setNavOpen(false)} />

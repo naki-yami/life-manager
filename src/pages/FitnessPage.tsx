@@ -24,6 +24,7 @@ import { useUndoableRemove } from '../hooks/useUndoableRemove';
 import { filterByKeyword } from '../utils/search';
 import { formatNumber, todayKey } from '../utils/date';
 import { activeDays, seriesByDay, seriesByWeek } from '../utils/stats';
+import { useNewEntryShortcut } from '../hooks/useShortcuts';
 
 type View = 'plans' | 'records';
 
@@ -151,6 +152,8 @@ export const FitnessPage: React.FC = () => {
     setWorkoutForm({ ...emptyWorkoutForm(), planName });
     setShowWorkoutModal(true);
   };
+
+  useNewEntryShortcut(() => openWorkoutModal());
 
   const handleAddPlan = (): void => {
     const name = planForm.name.trim();

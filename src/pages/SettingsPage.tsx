@@ -54,6 +54,17 @@ import {
 } from '../services/backup';
 import type { ImportMode, ImportPlan, ParseIssue } from '../services/backup';
 import { MAX_AUTO_BACKUPS, clearAppStorage, estimateStorageBytes } from '../utils/storageKeys';
+import { Kbd } from '../components/ui';
+
+/** 快捷键说明表的数据；与 useShortcuts 里真正实现的按键保持一致 */
+const SHORTCUT_ROWS: Array<{ keys: string; action: string }> = [
+  { keys: 'Ctrl / ⌘ K', action: '打开命令面板（跳转页面、切换外观）' },
+  { keys: '/', action: '打开命令面板搜索' },
+  { keys: 'n', action: '新建当前模块的条目' },
+  { keys: 'Esc', action: '关闭弹层与抽屉' },
+  { keys: 'g 后接 1-9', action: '跳转到对应的主页面（1 首页、2 今日计划、3 读书…）' },
+];
+
 
 /** 从各 store 读取当前全量数据（用 getState 读取，避免订阅与闭包过期） */
 function readAllData(): BackupData {
@@ -319,6 +330,30 @@ export const SettingsPage: React.FC = () => {
               label="折叠侧边栏"
               description="只显示图标，给内容让出宽度（大屏生效）"
             />
+          </div>
+        </CardBody>
+      </Card>
+
+      <Card>
+        <CardHeader title="快捷键" subtitle="在任何页面都能用（输入框里打字时不会触发）" />
+        <CardBody>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr className="border-b border-line-subtle text-xs text-content-tertiary">
+                  <th scope="col" className="py-2 pr-4 font-medium">按键</th>
+                  <th scope="col" className="py-2 font-medium">作用</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-line-subtle">
+                {SHORTCUT_ROWS.map((row) => (
+                  <tr key={row.keys}>
+                    <td className="py-2 pr-4 align-top"><Kbd>{row.keys}</Kbd></td>
+                    <td className="py-2 text-content-secondary">{row.action}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </CardBody>
       </Card>

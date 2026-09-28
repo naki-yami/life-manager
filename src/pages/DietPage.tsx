@@ -47,6 +47,7 @@ import {
 } from '../utils/date';
 import { seriesByDay, seriesByMonth, seriesByWeek } from '../utils/stats';
 import { FoodItem, MealRecord, MealType } from '../types';
+import { useNewEntryShortcut } from '../hooks/useShortcuts';
 
 type View = 'day' | 'all';
 type TrendRange = 'day' | 'week' | 'month';
@@ -99,6 +100,8 @@ export const DietPage: React.FC = () => {
   const [keyword, setKeyword] = useState('');
   const [selectedDate, setSelectedDate] = useState(todayKey());
   const [showAddModal, setShowAddModal] = useState(false);
+  useNewEntryShortcut(() => setShowAddModal(true));
+
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [form, setForm] = useState<{ type: MealType; date: string; items: FoodDraft[] }>({
     type: 'breakfast',

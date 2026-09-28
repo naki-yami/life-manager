@@ -33,6 +33,7 @@ import {
 } from '../utils/date';
 import { seriesByMonth } from '../utils/stats';
 import { Game, GamePlatform, GameSession, GameStatus } from '../types';
+import { useNewEntryShortcut } from '../hooks/useShortcuts';
 
 type Filter = 'all' | GameStatus;
 
@@ -89,6 +90,8 @@ export const GamesPage: React.FC = () => {
   const [keyword, setKeyword] = useState('');
   const [filter, setFilter] = useState<Filter>('all');
   const [showAddModal, setShowAddModal] = useState(false);
+  useNewEntryShortcut(() => setShowAddModal(true));
+
   const [achievementGameId, setAchievementGameId] = useState<string | null>(null);
   const [noteGameId, setNoteGameId] = useState<string | null>(null);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);

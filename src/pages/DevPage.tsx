@@ -41,6 +41,7 @@ import { filterByKeyword } from '../utils/search';
 import { formatNumber, formatShortDate, daysBetween, todayKey } from '../utils/date';
 import { seriesByWeek } from '../utils/stats';
 import { DevProject, DevProjectStatus, DevTaskStatus, Priority, WorkSession } from '../types';
+import { useNewEntryShortcut } from '../hooks/useShortcuts';
 
 type ProjectFilter = 'all' | DevProjectStatus | 'archived';
 
@@ -125,6 +126,11 @@ export const DevPage: React.FC = () => {
   const [taskProjectId, setTaskProjectId] = useState<string | null>(null);
   const [pendingDeleteProjectId, setPendingDeleteProjectId] = useState<string | null>(null);
   const [projectForm, setProjectForm] = useState({ name: '', description: '' });
+  useNewEntryShortcut(() => {
+    setProjectForm({ name: '', description: '' });
+    setShowAddProject(true);
+  });
+
   const [taskForm, setTaskForm] = useState({ title: '', priority: 'medium' as Priority });
   const [keyword, setKeyword] = useState('');
   const [filter, setFilter] = useState<ProjectFilter>('all');

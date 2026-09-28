@@ -21,6 +21,7 @@ import { useUndoableRemove } from '../hooks/useUndoableRemove';
 import { filterByKeyword } from '../utils/search';
 import { formatNumber } from '../utils/date';
 import { WritingStatus, WritingType } from '../types';
+import { useNewEntryShortcut } from '../hooks/useShortcuts';
 
 type Filter = 'all' | WritingStatus;
 
@@ -72,6 +73,8 @@ export const WritingPage: React.FC = () => {
   const undoableRemove = useUndoableRemove();
 
   const [showAddModal, setShowAddModal] = useState(false);
+  useNewEntryShortcut(() => setShowAddModal(true));
+
   const [noteId, setNoteId] = useState<string | null>(null);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [noteInput, setNoteInput] = useState('');

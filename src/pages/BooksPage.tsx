@@ -21,6 +21,7 @@ import { useUndoableRemove } from '../hooks/useUndoableRemove';
 import { filterByKeyword } from '../utils/search';
 import { percentOf } from '../utils/stats';
 import { Book, BookStatus } from '../types';
+import { useNewEntryShortcut } from '../hooks/useShortcuts';
 
 /** 年度阅读目标：一年读完 12 本，进度环按它算 */
 const YEARLY_GOAL = 12;
@@ -60,6 +61,8 @@ export const BooksPage: React.FC = () => {
   const undoableRemove = useUndoableRemove();
 
   const [showAddModal, setShowAddModal] = useState(false);
+  useNewEntryShortcut(() => setShowAddModal(true));
+
   const [noteBookId, setNoteBookId] = useState<string | null>(null);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [noteInput, setNoteInput] = useState('');
