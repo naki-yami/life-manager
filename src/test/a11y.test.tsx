@@ -6,6 +6,7 @@ import { computeAccessibleName } from 'dom-accessibility-api';
 import { ToastProvider } from '../components/ui';
 import { BooksPage } from '../pages/BooksPage';
 import { DevPage } from '../pages/DevPage';
+import { DevProjectPage } from '../pages/DevProjectPage';
 import { DietPage } from '../pages/DietPage';
 import { FitnessPage } from '../pages/FitnessPage';
 import { GamesPage } from '../pages/GamesPage';
@@ -117,6 +118,7 @@ const PAGES: Array<{ label: string; element: React.ReactElement }> = [
   { label: '今日计划', element: <TasksPage /> },
   { label: '读书', element: <BooksPage /> },
   { label: '开发工作', element: <DevPage /> },
+  { label: '开发项目详情', element: <DevProjectPage /> },
   { label: '写作', element: <WritingPage /> },
   { label: '健身', element: <FitnessPage /> },
   { label: '饮食', element: <DietPage /> },

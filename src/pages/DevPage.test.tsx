@@ -1,6 +1,7 @@
 import React from 'react';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { DevPage } from './DevPage';
 import { ToastProvider } from '../components/ui';
@@ -11,17 +12,21 @@ beforeEach(() => {
   useDevStore.setState({ projects: [], sessions: [] });
 });
 
+/** 项目卡标题是跳详情的 Link，渲染时需要 Router 上下文 */
+const renderDev = (ui: React.ReactElement = <DevPage />) =>
+  render(<MemoryRouter>{ui}</MemoryRouter>);
+
 const projectId = (name: string) =>
   useDevStore.getState().projects.find((project) => project.name === name)!.id;
 
 describe('DevPage', () => {
   it('空态引导新建项目', () => {
-    render(<DevPage />);
+    renderDev();
     expect(screen.getByText('还没有项目')).toBeInTheDocument();
   });
 
   it('新建项目后自动展开', async () => {
-    render(<DevPage />);
+    renderDev();
 
     await userEvent.click(screen.getAllByRole('button', { name: '新建项目' })[0]!);
     const dialog = screen.getByRole('dialog', { name: '新建项目' });
@@ -34,7 +39,7 @@ describe('DevPage', () => {
 
   it('展开状态可以收起和再展开', async () => {
     useDevStore.getState().addProject('写作助手', '');
-    render(<DevPage />);
+    renderDev();
 
     await userEvent.click(screen.getByRole('button', { name: '展开「写作助手」' }));
     expect(screen.getByText('这个项目还没有任务')).toBeInTheDocument();
@@ -45,7 +50,7 @@ describe('DevPage', () => {
 
   it('可以给项目添加任务', async () => {
     useDevStore.getState().addProject('写作助手', '');
-    render(<DevPage />);
+    renderDev();
 
     await userEvent.click(screen.getByRole('button', { name: '给「写作助手」添加任务' }));
     const dialog = screen.getByRole('dialog', { name: /写作助手/ });
@@ -62,7 +67,7 @@ describe('DevPage', () => {
     store.addProject('写作助手', '');
     store.addTask(projectId('写作助手'), '接上导出接口', 'high');
 
-    render(<DevPage />);
+    renderDev();
     await userEvent.click(screen.getByRole('button', { name: '展开「写作助手」' }));
     expect(screen.getByText('完成率 0%')).toBeInTheDocument();
 
@@ -81,7 +86,7 @@ describe('DevPage', () => {
     store.addProject('记账工具', '');
     store.addTask(projectId('写作助手'), '接上导出接口', 'high');
 
-    render(<DevPage />);
+    renderDev();
     await userEvent.type(screen.getByRole('textbox', { name: '搜索' }), '导出');
 
     expect(screen.getByText('写作助手')).toBeInTheDocument();
@@ -93,7 +98,7 @@ describe('DevPage', () => {
     store.addProject('写作助手', '');
     store.addTask(projectId('写作助手'), '接上导出接口', 'high');
 
-    render(<DevPage />);
+    renderDev();
     await userEvent.click(screen.getByRole('button', { name: '展开「写作助手」' }));
 
     await userEvent.click(screen.getByRole('button', { name: '删除任务「接上导出接口」' }));
@@ -116,7 +121,7 @@ describe('DevPage', () => {
     store.addTask(projectId('写作助手'), 'T1', 'low');
     store.addTask(projectId('写作助手'), 'T2', 'low');
 
-    render(<DevPage />);
+    renderDev();
 
     // StatCard 的结构是 <div class="p-4"><div>label + icon</div><div>value</div></div>
     const statCard = (label: string) => screen.getByText(label).closest('div')!.parentElement!;
@@ -128,7 +133,7 @@ describe('DevPage', () => {
 
   it('记录工时会写入流水，并把工时累加到项目上', async () => {
     useDevStore.getState().addProject('写作助手', '');
-    render(<DevPage />);
+    renderDev();
 
     await userEvent.click(screen.getByRole('button', { name: '记录工时' }));
     const dialog = screen.getByRole('dialog', { name: '记录工时' });
@@ -155,7 +160,7 @@ describe('DevPage', () => {
     store.addSession(projectId('写作助手'), todayKey(), 3, '第一章');
     store.addSession(projectId('写作助手'), todayKey(), 1.5, '');
 
-    render(<DevPage />);
+    renderDev();
 
     expect(screen.getByText('近期投入')).toBeInTheDocument();
     expect(screen.getByText(/累计 4\.5 小时 · 2 条记录/)).toBeInTheDocument();
@@ -167,7 +172,7 @@ describe('DevPage', () => {
 
   it('没有工时流水时不渲染近期投入卡片', () => {
     useDevStore.getState().addProject('写作助手', '');
-    render(<DevPage />);
+    renderDev();
     expect(screen.queryByText('近期投入')).not.toBeInTheDocument();
   });
 
@@ -176,7 +181,7 @@ describe('DevPage', () => {
     store.addProject('写作助手', '');
     store.addSession(projectId('写作助手'), todayKey(), 2, '');
 
-    render(
+    renderDev(
       <ToastProvider>
         <DevPage />
       </ToastProvider>,
@@ -202,7 +207,7 @@ describe('DevPage', () => {
 
   it('编辑项目可以保存技术栈与仓库地址', async () => {
     useDevStore.getState().addProject('写作助手', '');
-    render(<DevPage />);
+    renderDev();
 
     await userEvent.click(screen.getByRole('button', { name: '编辑「写作助手」' }));
     const dialog = screen.getByRole('dialog', { name: '编辑「写作助手」' });
@@ -223,7 +228,7 @@ describe('DevPage', () => {
 
   it('归档的项目从默认列表隐藏，可以在「已归档」里找回', async () => {
     useDevStore.getState().addProject('写作助手', '');
-    render(<DevPage />);
+    renderDev();
 
     await userEvent.click(screen.getByRole('button', { name: '归档「写作助手」' }));
     expect(useDevStore.getState().projects[0]!.archived).toBe(true);
@@ -249,7 +254,7 @@ describe('DevPage', () => {
       createdAt: new Date(Date.now() - 20 * 86_400_000).toISOString(),
     });
 
-    render(<DevPage />);
+    renderDev();
 
     expect(screen.getByText(/停滞 20 天/)).toBeInTheDocument();
     expect(screen.getAllByText(/停滞 \d+ 天/)).toHaveLength(1);

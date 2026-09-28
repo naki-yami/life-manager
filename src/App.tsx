@@ -10,6 +10,9 @@ const HomePage = lazy(() => import('./pages/HomePage').then((m) => ({ default: m
 const TasksPage = lazy(() => import('./pages/TasksPage').then((m) => ({ default: m.TasksPage })));
 const BooksPage = lazy(() => import('./pages/BooksPage').then((m) => ({ default: m.BooksPage })));
 const DevPage = lazy(() => import('./pages/DevPage').then((m) => ({ default: m.DevPage })));
+const DevProjectPage = lazy(() =>
+  import('./pages/DevProjectPage').then((m) => ({ default: m.DevProjectPage })),
+);
 const WritingPage = lazy(() =>
   import('./pages/WritingPage').then((m) => ({ default: m.WritingPage })),
 );
@@ -37,6 +40,7 @@ const App: React.FC = () => {
             <Route path="/tasks" element={<TasksPage />} />
             <Route path="/books" element={<BooksPage />} />
             <Route path="/dev" element={<DevPage />} />
+            <Route path="/dev/:id" element={<DevProjectPage />} />
             <Route path="/writing" element={<WritingPage />} />
             <Route path="/fitness" element={<FitnessPage />} />
             <Route path="/diet" element={<DietPage />} />

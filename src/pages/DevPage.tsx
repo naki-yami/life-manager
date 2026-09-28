@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
   Archive,
   ArchiveRestore,
@@ -482,7 +483,12 @@ export const DevPage: React.FC = () => {
 
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="font-semibold text-content">{project.name}</h3>
+                        <Link
+                          to={`/dev/${project.id}`}
+                          className="font-semibold text-content hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-line-focus"
+                        >
+                          {project.name}
+                        </Link>
                         <Badge tone={PROJECT_STATUS_TONE[project.status]} dot>
                           {PROJECT_STATUS_LABEL[project.status]}
                         </Badge>
