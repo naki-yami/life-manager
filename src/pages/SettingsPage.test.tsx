@@ -230,4 +230,24 @@ describe('SettingsPage', () => {
     await userEvent.click(screen.getByRole('button', { name: '打开组件预览' }));
     expect(screen.getByText('UI 预览页')).toBeInTheDocument();
   });
+  it('读取备份文件期间按钮进入加载态并禁用', () => {
+    class PendingFileReader {
+      onload: ((event: unknown) => void) | null = null;
+      onerror: ((event: unknown) => void) | null = null;
+      readAsText(): void {
+        // 故意不触发 onload：模拟文件还在读取中
+      }
+    }
+    vi.stubGlobal('FileReader', PendingFileReader);
+
+    renderSettings();
+    const input = screen.getByLabelText('选择备份文件') as HTMLInputElement;
+    fireEvent.change(input, {
+      target: { files: [new File(['{}'], 'backup.json', { type: 'application/json' })] },
+    });
+
+    expect(screen.getByRole('button', { name: /正在读取/ })).toBeDisabled();
+    expect(screen.getByRole('status', { name: '加载中' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '选择备份文件' })).not.toBeInTheDocument();
+  });
 });

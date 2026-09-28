@@ -25,6 +25,7 @@ import {
   Modal,
   RadioGroup,
   SegmentedControl,
+  Spinner,
   Switch,
   useToast,
 } from '../components/ui';
@@ -141,6 +142,7 @@ export const SettingsPage: React.FC = () => {
   const [restoreKey, setRestoreKey] = useState<string | null>(null);
   const [importMode, setImportMode] = useState<ImportMode>('merge');
   const [parsed, setParsed] = useState<{ plan: ImportPlan; warnings: ParseIssue[] } | null>(null);
+  const [importing, setImporting] = useState(false);
   const [importErrors, setImportErrors] = useState<ParseIssue[]>([]);
   const [snapshots, setSnapshots] = useState(() => listAutoSnapshots());
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -185,8 +187,11 @@ export const SettingsPage: React.FC = () => {
     if (fileInputRef.current) fileInputRef.current.value = '';
     if (!file) return;
 
+    // 备份文件可能很大，读盘期间给个进度反馈，别让按钮看起来没反应
+    setImporting(true);
     const reader = new FileReader();
     reader.onload = (loadEvent) => {
+      setImporting(false);
       const text = String(loadEvent.target?.result ?? '');
       const result = parseBackup(text);
       if (!result.ok) {
@@ -206,6 +211,7 @@ export const SettingsPage: React.FC = () => {
       });
     };
     reader.onerror = () => {
+      setImporting(false);
       setImportErrors([{ path: '(文件)', message: '读取文件失败' }]);
     };
     reader.readAsText(file);
@@ -359,10 +365,11 @@ export const SettingsPage: React.FC = () => {
             />
             <Button
               variant="secondary"
-              icon={<Upload size={16} aria-hidden />}
+              icon={importing ? <Spinner size={16} /> : <Upload size={16} aria-hidden />}
+              disabled={importing}
               onClick={() => fileInputRef.current?.click()}
             >
-              选择备份文件
+              {importing ? '正在读取…' : '选择备份文件'}
             </Button>
           </div>
 
