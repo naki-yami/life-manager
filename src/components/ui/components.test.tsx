@@ -6,6 +6,7 @@ import { renderToString } from 'react-dom/server';
 import {
   Button,
   ConfirmDialog,
+  Drawer,
   EmptyState,
   IconButton,
   Input,
@@ -259,5 +260,46 @@ describe('EmptyState / ErrorState', () => {
     );
     expect(screen.getByText('还没有书')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '添加' })).toBeInTheDocument();
+  });
+});
+
+describe('窄屏适配', () => {
+  it('Modal 在窄屏用固定外边距，回到 sm 后再跟随密度令牌', () => {
+    render(
+      <Modal isOpen onClose={() => {}} title="窄屏弹层">
+        <p>内容</p>
+      </Modal>,
+    );
+
+    const wrapper = screen.getByRole('dialog').parentElement as HTMLElement;
+    expect(wrapper.className).toContain('p-4');
+    expect(wrapper.className).toContain('sm:p-page');
+  });
+
+  it('SegmentedControl 允许选项换行，选项多时不会撑破容器', () => {
+    render(
+      <SegmentedControl
+        label="切换视图"
+        value="all"
+        onChange={() => {}}
+        options={[
+          { value: 'all', label: '全部', count: 12 },
+          { value: 'playing', label: '在玩', count: 3 },
+          { value: 'completed', label: '已通关', count: 5 },
+        ]}
+      />,
+    );
+
+    expect(screen.getByRole('group', { name: '切换视图' }).className).toContain('flex-wrap');
+  });
+
+  it('Drawer 面板不超过视口宽度，窄屏上也能看到遮罩', () => {
+    render(
+      <Drawer isOpen onClose={() => {}} title="导航">
+        <p>内容</p>
+      </Drawer>,
+    );
+
+    expect(screen.getByRole('dialog', { name: '导航' }).className).toContain('max-w-[85vw]');
   });
 });

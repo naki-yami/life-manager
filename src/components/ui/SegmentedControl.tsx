@@ -33,7 +33,7 @@ export function SegmentedControl<T extends string>({
     <div
       role="group"
       aria-label={label}
-      className={`inline-flex items-center gap-0.5 rounded border border-line-subtle bg-inset p-0.5 ${className}`}
+      className={`inline-flex flex-wrap items-center gap-0.5 rounded border border-line-subtle bg-inset p-0.5 ${className}`}
     >
       {options.map((option) => {
         const active = option.value === value;

@@ -147,6 +147,15 @@
   --lm-row-pad-y: 10px;
 }
 
+/* 窄屏收一收留白：手机上一屏能多看到一行内容。
+   放在 [data-density] 之前，紧凑密度在小屏上依旧更紧凑。 */
+@media (max-width: 640px) {
+  :root {
+    --lm-page-pad: 16px;
+    --lm-section-gap: 16px;
+  }
+}
+
 [data-density='compact'] {
   --lm-page-pad: 14px;
   --lm-section-gap: 12px;

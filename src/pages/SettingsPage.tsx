@@ -514,7 +514,7 @@ export const SettingsPage: React.FC = () => {
               )}
             </p>
 
-            <div className="max-h-56 overflow-y-auto">
+            <div className="max-h-56 overflow-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="text-xs text-content-tertiary">

@@ -45,7 +45,7 @@ const DrawerInner: React.FC<Omit<DrawerProps, 'isOpen'>> = ({
         aria-labelledby={titleId}
         tabIndex={-1}
         onKeyDown={handleKeyDown}
-        className={`${WIDTHS[width]} fixed inset-y-0 z-10 flex flex-col bg-elevated shadow-overlay outline-none motion-reduce:animate-none ${
+        className={`${WIDTHS[width]} max-w-[85vw] fixed inset-y-0 z-10 flex flex-col bg-elevated shadow-overlay outline-none motion-reduce:animate-none ${
           side === 'left'
             ? 'left-0 border-r border-line-subtle animate-slide-in-left'
             : 'right-0 border-l border-line-subtle animate-slide-in-right'

@@ -40,8 +40,9 @@ const ModalInner: React.FC<ModalInnerProps> = ({
   // 焦点移入／归还、背景滚动锁、Esc 关闭、Tab 循环，全部由 useFocusTrap 统一处理
   const handleKeyDown = useFocusTrap(dialogRef, { onClose });
 
+  // 窄屏用固定的 16px 外边距，回到 sm 后再跟随密度令牌
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-page">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-page">
       <div
         aria-hidden
         onClick={onClose}
