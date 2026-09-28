@@ -12,6 +12,7 @@ import {
   PenTool,
   Send,
   Trash2,
+  TrendingUp,
   UtensilsCrossed,
   type LucideIcon,
 } from 'lucide-react';
@@ -28,6 +29,7 @@ import {
   StatCard,
 } from '../components/ui';
 import { PageHeader } from '../components/layout';
+import { Heatmap, Sparkline } from '../components/charts';
 import { useTaskStore } from '../store/taskStore';
 import { useBookStore } from '../store/bookStore';
 import { useDevStore } from '../store/devStore';
@@ -36,7 +38,11 @@ import { useFitnessStore } from '../store/fitnessStore';
 import { useDietStore } from '../store/dietStore';
 import { useGameStore } from '../store/gameStore';
 import { formatLongDate, formatNumber, todayKey } from '../utils/date';
+import { changeRate, seriesByDay, splitWindow, sumOf, sumSeries } from '../utils/stats';
 import type { Priority } from '../types';
+
+/** 首页热力图与环比都按「近 30 天窗口、近 7 天环比」这两个口径 */
+const ACTIVITY_DAYS = 30;
 
 type ModuleTone = 'accent' | 'info' | 'success' | 'warning' | 'danger';
 
@@ -76,6 +82,40 @@ export const HomePage: React.FC = () => {
 
   const [memoInput, setMemoInput] = useState('');
   const [memoError, setMemoError] = useState<string | undefined>();
+  const today = todayKey();
+
+  /** 完成任务 / 训练 / 饮食任意一条都算一次活动，用来喂热力图与环比 */
+  const activitySeries = useMemo(
+    () =>
+      sumSeries(
+        seriesByDay(
+          tasks.filter((task) => task.status === 'completed' && task.completedAt),
+          ACTIVITY_DAYS,
+          today,
+          (task) => task.completedAt?.slice(0, 10),
+        ),
+        seriesByDay(workoutRecords, ACTIVITY_DAYS, today, (record) => record.date),
+        seriesByDay(mealRecords, ACTIVITY_DAYS, today, (record) => record.date),
+      ),
+    [tasks, workoutRecords, mealRecords, today],
+  );
+
+  const completionSeries = useMemo(
+    () =>
+      seriesByDay(
+        tasks.filter((task) => task.status === 'completed' && task.completedAt),
+        14,
+        today,
+        (task) => task.completedAt?.slice(0, 10),
+      ),
+    [tasks, today],
+  );
+
+  const activityTotal = sumOf(activitySeries.map((point) => point.value));
+  const weekActivity = splitWindow(activitySeries.slice(-14));
+  const activityChange = changeRate(weekActivity.current, weekActivity.previous);
+  const weekCompletion = splitWindow(completionSeries);
+  const completionChange = changeRate(weekCompletion.current, weekCompletion.previous);
 
   const pendingTasks = useMemo(() => tasks.filter((task) => task.status === 'pending'), [tasks]);
   const completedCount = tasks.length - pendingTasks.length;
@@ -187,9 +227,20 @@ export const HomePage: React.FC = () => {
           icon={<CheckCircle2 size={16} aria-hidden />}
         />
         <StatCard
-          label="备忘条"
-          value={memos.length}
-          icon={<NotebookPen size={16} aria-hidden />}
+          label="近 7 天完成"
+          value={weekCompletion.current}
+          unit="项"
+          tone="success"
+          icon={<TrendingUp size={16} aria-hidden />}
+          trend={{ value: completionChange, label: '较上一周' }}
+          footer={
+            <Sparkline
+              data={completionSeries.map((point) => point.value)}
+              label="近 14 天每日完成任务数趋势"
+              tone="success"
+              height={24}
+            />
+          }
         />
         <StatCard
           label="紧急任务"
@@ -198,6 +249,24 @@ export const HomePage: React.FC = () => {
           icon={<AlertTriangle size={16} aria-hidden />}
         />
       </div>
+
+      {activityTotal > 0 && (
+        <Card>
+          <CardHeader
+            title="近 30 天活动"
+            subtitle={`近 7 天 ${weekActivity.current} 次，上一周 ${weekActivity.previous} 次`}
+            action={
+              <Badge tone={activityChange >= 0 ? 'success' : 'default'}>
+                环比 {activityChange >= 0 ? '+' : ''}
+                {activityChange}%
+              </Badge>
+            }
+          />
+          <CardBody>
+            <Heatmap data={activitySeries} label="近 30 天活动热力图" />
+          </CardBody>
+        </Card>
+      )}
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
@@ -239,7 +308,7 @@ export const HomePage: React.FC = () => {
         </Card>
 
         <Card>
-          <CardHeader title="快速备忘" subtitle="回车即可保存" />
+          <CardHeader title="快速备忘" subtitle={`${memos.length} 条 · 回车即可保存`} />
           <CardBody>
             <div className="mb-3 flex items-start gap-2">
               <div className="min-w-0 flex-1">

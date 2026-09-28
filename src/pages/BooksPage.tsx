@@ -4,19 +4,25 @@ import {
   Badge,
   Button,
   Card,
+  CardBody,
   ConfirmDialog,
   EmptyState,
   IconButton,
   Input,
   Modal,
   ProgressBar,
+  ProgressRing,
   SegmentedControl,
   Slider,
 } from '../components/ui';
 import { PageHeader, Toolbar } from '../components/layout';
 import { useBookStore } from '../store/bookStore';
 import { filterByKeyword } from '../utils/search';
+import { percentOf } from '../utils/stats';
 import { Book, BookStatus } from '../types';
+
+/** 年度阅读目标：一年读完 12 本，进度环按它算 */
+const YEARLY_GOAL = 12;
 
 type Filter = 'all' | BookStatus;
 
@@ -59,6 +65,13 @@ export const BooksPage: React.FC = () => {
     const byStatus = filter === 'all' ? books : books.filter((book) => book.status === filter);
     return filterByKeyword(byStatus, keyword, (book) => [book.title, book.author, book.category]);
   }, [books, filter, keyword]);
+
+  const currentYear = new Date().getFullYear();
+  const finishedThisYear = books.filter(
+    (book) => book.finishedAt?.slice(0, 4) === String(currentYear),
+  ).length;
+  const yearlyPercent = percentOf(finishedThisYear, YEARLY_GOAL);
+  const noteTotal = books.reduce((sum, book) => sum + book.notes.length, 0);
 
   const noteBook = books.find((book) => book.id === noteBookId) ?? null;
   const deletingBook = books.find((book) => book.id === pendingDeleteId) ?? null;
@@ -108,6 +121,33 @@ export const BooksPage: React.FC = () => {
           </Button>
         }
       />
+
+      {books.length > 0 && (
+        <Card>
+          <CardBody className="flex flex-wrap items-center gap-6">
+            <ProgressRing
+              value={yearlyPercent}
+              size={88}
+              tone={yearlyPercent >= 100 ? 'success' : 'accent'}
+              label="年度阅读目标完成度"
+            >
+              {finishedThisYear}/{YEARLY_GOAL}
+            </ProgressRing>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium text-content">年度阅读目标</p>
+              <p className="mt-0.5 text-xs text-content-tertiary">
+                {currentYear} 年已读完 {finishedThisYear} 本，目标 {YEARLY_GOAL} 本
+              </p>
+              <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                <Badge tone="accent">在读 {countOf('reading')} 本</Badge>
+                <Badge tone="success">已读 {countOf('finished')} 本</Badge>
+                <Badge>想读 {countOf('want-to-read')} 本</Badge>
+                <Badge>笔记 {noteTotal} 条</Badge>
+              </div>
+            </div>
+          </CardBody>
+        </Card>
+      )}
 
       <Toolbar
         search={{ value: keyword, onChange: setKeyword, placeholder: '搜索书名、作者或分类…' }}

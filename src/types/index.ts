@@ -31,6 +31,8 @@ export interface Book {
   progress: number;
   notes: BookNote[];
   createdAt: string;
+  /** 首次标记为「已读」的时间，用来做年度阅读统计；旧数据可能没有 */
+  finishedAt?: string;
 }
 
 // Dev project types

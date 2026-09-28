@@ -46,6 +46,7 @@ export const bookSchema = z.object({
   progress: percent,
   notes: z.array(bookNoteSchema).default([]),
   createdAt: isoDateString.default(() => new Date().toISOString()),
+  finishedAt: isoDateString.optional(),
 });
 
 // ---------- 开发工作 ----------

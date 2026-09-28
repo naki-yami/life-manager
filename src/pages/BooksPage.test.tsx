@@ -120,4 +120,47 @@ describe('BooksPage', () => {
     );
     expect(useBookStore.getState().books).toHaveLength(0);
   });
+  it('书单为空时不显示年度目标环', () => {
+    render(<BooksPage />);
+
+    expect(
+      screen.queryByRole('progressbar', { name: '年度阅读目标完成度' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('年度目标环只统计今年读完的书', () => {
+    useBookStore.getState().addBook('人类简史', '赫拉利', '历史');
+    useBookStore.getState().addBook('枪炮病菌与钢铁', '戴蒙德', '历史');
+    useBookStore.getState().addBook('去年读的', '某人', '历史');
+    useBookStore.getState().addBook('待读的书', '某人', '历史');
+    const currentYear = new Date().getFullYear();
+
+    useBookStore.getState().updateBookStatus(bookId('人类简史'), 'finished');
+    // 标记已读后又改回在读，不算进年度目标
+    useBookStore.getState().updateBookStatus(bookId('枪炮病菌与钢铁'), 'finished');
+    useBookStore.getState().updateBookStatus(bookId('枪炮病菌与钢铁'), 'reading');
+    // 模拟旧数据：状态是已读，但读完时间在去年
+    useBookStore.getState().updateBookStatus(bookId('去年读的'), 'finished');
+    useBookStore.setState({
+      books: useBookStore
+        .getState()
+        .books.map((book) =>
+          book.title === '去年读的'
+            ? { ...book, finishedAt: `${currentYear - 1}-12-20T10:00:00.000Z` }
+            : book,
+        ),
+    });
+
+    render(<BooksPage />);
+
+    expect(screen.getByRole('progressbar', { name: '年度阅读目标完成度' })).toHaveAttribute(
+      'aria-valuenow',
+      '8',
+    );
+    expect(screen.getByText('1/12')).toBeInTheDocument();
+    expect(screen.getByText(`${currentYear} 年已读完 1 本，目标 12 本`)).toBeInTheDocument();
+    expect(screen.getByText('已读 2 本')).toBeInTheDocument();
+    expect(screen.getByText('在读 1 本')).toBeInTheDocument();
+    expect(screen.getByText('想读 1 本')).toBeInTheDocument();
+  });
 });

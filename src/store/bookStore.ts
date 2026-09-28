@@ -46,7 +46,17 @@ export const useBookStore = create<BookState>()(
       deleteBook: (id) => set((state) => ({ books: state.books.filter((b) => b.id !== id) })),
       updateBookStatus: (id, status) =>
         set((state) => ({
-          books: state.books.map((b) => (b.id === id ? { ...b, status } : b)),
+          books: state.books.map((b) =>
+            b.id === id
+              ? {
+                  ...b,
+                  status,
+                  // 记下第一次读完的时间，重复标记不覆盖，便于按年统计
+                  finishedAt:
+                    status === 'finished' ? (b.finishedAt ?? new Date().toISOString()) : undefined,
+                }
+              : b,
+          ),
         })),
       updateProgress: (id, progress) =>
         set((state) => ({

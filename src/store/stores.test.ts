@@ -258,3 +258,27 @@ describe('旧版数据迁移（端到端）', () => {
     expect(localStorage.getItem('tasks-storage')).not.toBeNull();
   });
 });
+describe('bookStore 读完时间', () => {
+  it('标记已读时写入 finishedAt，重复标记不覆盖', () => {
+    useBookStore.getState().addBook('人类简史', '赫拉利', '历史');
+    const id = useBookStore.getState().books[0]!.id;
+    expect(useBookStore.getState().books[0]!.finishedAt).toBeUndefined();
+
+    useBookStore.getState().updateBookStatus(id, 'finished');
+    const first = useBookStore.getState().books[0]!.finishedAt;
+    expect(first).toBeDefined();
+
+    useBookStore.getState().updateBookStatus(id, 'finished');
+    expect(useBookStore.getState().books[0]!.finishedAt).toBe(first);
+  });
+
+  it('从「已读」改回其它状态会清空 finishedAt，避免统计到没读完的书', () => {
+    useBookStore.getState().addBook('人类简史', '赫拉利', '历史');
+    const id = useBookStore.getState().books[0]!.id;
+    useBookStore.getState().updateBookStatus(id, 'finished');
+    useBookStore.getState().updateBookStatus(id, 'reading');
+
+    expect(useBookStore.getState().books[0]!.finishedAt).toBeUndefined();
+    expect(useBookStore.getState().books[0]!.status).toBe('reading');
+  });
+});

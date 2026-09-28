@@ -115,4 +115,44 @@ describe('HomePage', () => {
     await userEvent.click(screen.getByText('读书'));
     expect(screen.getByText('读书页面')).toBeInTheDocument();
   });
+  it('没有活动数据时不渲染热力图卡片', () => {
+    renderHome();
+
+    expect(screen.queryByRole('img', { name: /活动热力图/ })).not.toBeInTheDocument();
+    expect(screen.queryByText('近 30 天活动')).not.toBeInTheDocument();
+  });
+
+  it('有活动时展示近 30 天热力图与环比', () => {
+    useTaskStore.getState().addTask('写周报', '', 'high', '');
+    useTaskStore.getState().toggleTaskStatus(useTaskStore.getState().tasks[0]!.id);
+    useDietStore
+      .getState()
+      .addRecord(todayKey(), 'lunch', [{ name: '鸡胸肉', category: 'protein', calories: 300 }]);
+
+    renderHome();
+
+    expect(
+      screen.getByRole('img', { name: '近 30 天活动热力图：30 天里有 1 天有记录，合计 2' }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('近 7 天 2 次，上一周 0 次')).toBeInTheDocument();
+    expect(screen.getByText(/环比/, { selector: 'span' }).textContent).toContain('+100%');
+  });
+
+  it('近 7 天完成卡片带环比与迷你趋势，备忘数量挪到列表标题', () => {
+    useTaskStore.getState().addTask('写周报', '', 'high', '');
+    useTaskStore.getState().toggleTaskStatus(useTaskStore.getState().tasks[0]!.id);
+
+    renderHome();
+
+    const card = screen.getByText('近 7 天完成').closest('div.rounded-lg') as HTMLElement;
+    expect(within(card).getByText('1')).toBeInTheDocument();
+    expect(within(card).getByText('+100')).toBeInTheDocument();
+    expect(within(card).getByText('较上一周')).toBeInTheDocument();
+    expect(
+      within(card).getByRole('img', { name: '近 14 天每日完成任务数趋势' }),
+    ).toBeInTheDocument();
+
+    expect(screen.queryByText('备忘条')).not.toBeInTheDocument();
+    expect(screen.getByText('0 条 · 回车即可保存')).toBeInTheDocument();
+  });
 });
