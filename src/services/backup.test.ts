@@ -1,12 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import type { BackupData } from './schemas';
 import {
+  buildBackupEnvelope,
+  clearAutoSnapshots,
+  createAutoSnapshot,
+  listAutoSnapshots,
   mergeById,
   parseBackup,
   planImport,
   planTotals,
+  restoreAutoSnapshot,
   serializeBackup,
-  buildBackupEnvelope,
 } from './backup';
 
 /** 一份覆盖所有模块的完整数据，用于往返测试 */
@@ -312,5 +316,43 @@ describe('导入模式', () => {
     ].reduce((sum, list) => sum + (list?.length ?? 0), 0);
 
     expect(totals.added).toBe(actual);
+  });
+});
+
+describe('自动备份快照', () => {
+  it('创建快照后可以列出，恢复时把数据写回本应用的 key', () => {
+    localStorage.clear();
+    localStorage.setItem('lm:tasks', '{"state":{"tasks":[]},"version":3}');
+    const key = createAutoSnapshot('测试前');
+    expect(key).not.toBeNull();
+
+    localStorage.setItem('lm:tasks', '{"state":{"tasks":[{"id":"x"}]},"version":3}');
+
+    const snapshots = listAutoSnapshots();
+    expect(snapshots).toHaveLength(1);
+    expect(snapshots[0]!.reason).toBe('测试前');
+
+    expect(restoreAutoSnapshot(key!)).toBe(true);
+    expect(localStorage.getItem('lm:tasks')).toBe('{"state":{"tasks":[]},"version":3}');
+  });
+
+  it('clearAutoSnapshots 会删掉全部快照，且不动普通数据', () => {
+    localStorage.clear();
+    localStorage.setItem('lm:books', '{"state":{"books":[]},"version":3}');
+    createAutoSnapshot('一');
+    createAutoSnapshot('二');
+    expect(listAutoSnapshots()).toHaveLength(2);
+
+    const removed = clearAutoSnapshots();
+
+    expect(removed).toHaveLength(2);
+    expect(listAutoSnapshots()).toHaveLength(0);
+    expect(localStorage.getItem('lm:books')).not.toBeNull();
+  });
+
+  it('快照损坏时恢复会失败而不是抛错', () => {
+    localStorage.clear();
+    localStorage.setItem('lm:backup:auto:broken', 'not-json');
+    expect(restoreAutoSnapshot('lm:backup:auto:broken')).toBe(false);
   });
 });

@@ -1,28 +1,34 @@
 import React, { useCallback, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Download,
-  Upload,
-  Sun,
-  Moon,
-  Monitor,
-  Trash2,
-  AlertTriangle,
-  History,
-  RotateCcw,
-  CheckCircle2,
   Database,
+  Download,
+  History,
   LayoutGrid,
+  Monitor,
+  Moon,
+  RotateCcw,
+  Settings as SettingsIcon,
+  Sun,
+  Trash2,
+  Upload,
 } from 'lucide-react';
 import {
-  Card,
-  CardHeader,
-  CardBody,
+  Alert,
+  Badge,
   Button,
+  Card,
+  CardBody,
+  CardHeader,
+  ConfirmDialog,
+  EmptyState,
   Modal,
+  RadioGroup,
   SegmentedControl,
   Switch,
+  useToast,
 } from '../components/ui';
+import { PageHeader } from '../components/layout';
 import { useTheme } from '../hooks/useTheme';
 import { useTaskStore } from '../store/taskStore';
 import { useBookStore } from '../store/bookStore';
@@ -36,6 +42,7 @@ import { useUiStore } from '../store/uiStore';
 import { BACKUP_MODULES, MODULE_LABELS } from '../services/schemas';
 import type { BackupData, BackupModule } from '../services/schemas';
 import {
+  clearAutoSnapshots,
   createAutoSnapshot,
   downloadBackup,
   listAutoSnapshots,
@@ -45,7 +52,7 @@ import {
   restoreAutoSnapshot,
 } from '../services/backup';
 import type { ImportMode, ImportPlan, ParseIssue } from '../services/backup';
-import { clearAppStorage, estimateStorageBytes } from '../utils/storageKeys';
+import { MAX_AUTO_BACKUPS, clearAppStorage, estimateStorageBytes } from '../utils/storageKeys';
 
 /** 从各 store 读取当前全量数据（用 getState 读取，避免订阅与闭包过期） */
 function readAllData(): BackupData {
@@ -122,10 +129,16 @@ const MODE_OPTIONS: { value: ImportMode; label: string; hint: string }[] = [
 
 export const SettingsPage: React.FC = () => {
   const { themeMode, setThemeMode } = useTheme();
-  const { density, setDensity } = useUiStore();
+  const density = useUiStore((state) => state.density);
+  const setDensity = useUiStore((state) => state.setDensity);
+  const sidebarCollapsed = useUiStore((state) => state.sidebarCollapsed);
+  const setSidebarCollapsed = useUiStore((state) => state.setSidebarCollapsed);
   const navigate = useNavigate();
-  const [showClearModal, setShowClearModal] = useState(false);
-  const [status, setStatus] = useState<string | null>(null);
+  const { toast } = useToast();
+
+  const [showClearDialog, setShowClearDialog] = useState(false);
+  const [showClearSnapshotsDialog, setShowClearSnapshotsDialog] = useState(false);
+  const [restoreKey, setRestoreKey] = useState<string | null>(null);
   const [importMode, setImportMode] = useState<ImportMode>('merge');
   const [parsed, setParsed] = useState<{ plan: ImportPlan; warnings: ParseIssue[] } | null>(null);
   const [importErrors, setImportErrors] = useState<ParseIssue[]>([]);
@@ -133,15 +146,15 @@ export const SettingsPage: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // 用选择器订阅各模块条数：数据变化时概览会自动刷新，且不会引起无关重渲染
-  const taskCount = useTaskStore((s) => s.tasks.length);
-  const memoCount = useTaskStore((s) => s.memos.length);
-  const bookCount = useBookStore((s) => s.books.length);
-  const devCount = useDevStore((s) => s.projects.length);
-  const writingCount = useWritingStore((s) => s.projects.length);
-  const planCount = useFitnessStore((s) => s.plans.length);
-  const recordCount = useFitnessStore((s) => s.records.length);
-  const dietCount = useDietStore((s) => s.records.length);
-  const gameCount = useGameStore((s) => s.games.length);
+  const taskCount = useTaskStore((state) => state.tasks.length);
+  const memoCount = useTaskStore((state) => state.memos.length);
+  const bookCount = useBookStore((state) => state.books.length);
+  const devCount = useDevStore((state) => state.projects.length);
+  const writingCount = useWritingStore((state) => state.projects.length);
+  const planCount = useFitnessStore((state) => state.plans.length);
+  const recordCount = useFitnessStore((state) => state.records.length);
+  const dietCount = useDietStore((state) => state.records.length);
+  const gameCount = useGameStore((state) => state.games.length);
 
   const counts: { module: BackupModule; label: string; count: number }[] = [
     { module: 'tasks', label: MODULE_LABELS.tasks, count: taskCount },
@@ -155,30 +168,35 @@ export const SettingsPage: React.FC = () => {
     { module: 'games', label: MODULE_LABELS.games, count: gameCount },
   ];
 
+  const totalEntries = counts.reduce((sum, item) => sum + item.count, 0);
   const storageBytes = estimateStorageBytes();
 
-  const flash = useCallback((message: string) => {
-    setStatus(message);
-    window.setTimeout(() => setStatus(null), 4000);
-  }, []);
-
-  const handleExport = (): void => {
+  const handleExport = useCallback((): void => {
     const fileName = downloadBackup(readAllData());
-    flash(`已导出 ${fileName}`);
-  };
+    toast({
+      title: '已导出备份',
+      description: `${fileName} · 共 ${totalEntries} 条数据`,
+      tone: 'success',
+    });
+  }, [toast, totalEntries]);
 
-  const handleImportFile = (e: React.ChangeEvent<HTMLInputElement>): void => {
-    const file = e.target.files?.[0];
+  const handleImportFile = (event: React.ChangeEvent<HTMLInputElement>): void => {
+    const file = event.target.files?.[0];
     if (fileInputRef.current) fileInputRef.current.value = '';
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = (event) => {
-      const text = String(event.target?.result ?? '');
+    reader.onload = (loadEvent) => {
+      const text = String(loadEvent.target?.result ?? '');
       const result = parseBackup(text);
       if (!result.ok) {
         setImportErrors(result.errors);
         setParsed(null);
+        toast({
+          title: '备份文件无法解析',
+          description: result.errors[0]?.message,
+          tone: 'danger',
+        });
         return;
       }
       setImportErrors([]);
@@ -187,7 +205,9 @@ export const SettingsPage: React.FC = () => {
         warnings: result.backup.warnings,
       });
     };
-    reader.onerror = () => setImportErrors([{ path: '(文件)', message: '读取文件失败' }]);
+    reader.onerror = () => {
+      setImportErrors([{ path: '(文件)', message: '读取文件失败' }]);
+    };
     reader.readAsText(file);
   };
 
@@ -198,44 +218,64 @@ export const SettingsPage: React.FC = () => {
     const totals = planTotals(parsed.plan.stats);
     setParsed(null);
     setSnapshots(listAutoSnapshots());
-    flash(`导入完成：新增 ${totals.added} 条，跳过重复 ${totals.skipped} 条`);
+    toast({
+      title: '导入完成',
+      description: `新增 ${totals.added} 条，跳过重复 ${totals.skipped} 条`,
+      tone: 'success',
+    });
   };
 
   const handleClearAll = (): void => {
     createAutoSnapshot('清除所有数据前');
     clearAppStorage();
     resetStores();
-    setShowClearModal(false);
+    setShowClearDialog(false);
     setSnapshots(listAutoSnapshots());
-    flash('已清除本应用的全部数据（可通过自动备份回滚）');
+    toast({
+      title: '已清除全部数据',
+      description: '需要恢复的话，可以在「自动备份」里回滚。',
+      tone: 'info',
+    });
   };
 
-  const handleRestore = (key: string): void => {
-    if (!restoreAutoSnapshot(key)) {
-      flash('回滚失败：快照已损坏');
+  const handleClearSnapshots = (): void => {
+    const removed = clearAutoSnapshots();
+    setShowClearSnapshotsDialog(false);
+    setSnapshots(listAutoSnapshots());
+    toast({
+      title: '已删除全部快照',
+      description: `${removed.length} 份快照已清除，之后无法再回滚（当前数据不受影响）。`,
+      tone: 'warning',
+    });
+  };
+
+  const handleConfirmRestore = (): void => {
+    const key = restoreKey;
+    setRestoreKey(null);
+    if (!key || !restoreAutoSnapshot(key)) {
+      toast({ title: '回滚失败', description: '快照可能已损坏。', tone: 'danger' });
       return;
     }
     window.location.reload();
   };
 
+  const importTotals = parsed ? planTotals(parsed.plan.stats) : null;
+
   return (
-    <div className="max-w-2xl mx-auto space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">数据与设置</h1>
-        <p className="text-gray-500 dark:text-gray-400 mt-1">管理你的应用数据和偏好</p>
-      </div>
+    <div className="space-y-section">
+      <PageHeader
+        title="数据与设置"
+        description="外观、本地存储与数据备份都在这里"
+        icon={SettingsIcon}
+        meta={
+          <Badge tone="default">
+            共 {totalEntries} 条数据 · 占用 {formatBytes(storageBytes)}
+          </Badge>
+        }
+      />
 
-      {status && (
-        <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20 rounded-lg px-3 py-2">
-          <CheckCircle2 size={16} className="shrink-0" />
-          <span>{status}</span>
-        </div>
-      )}
-
-      {/* Theme */}
-      {/* 外观 */}
       <Card>
-        <CardHeader title="外观" subtitle="主题模式与界面密度，会随备份一起导出" />
+        <CardHeader title="外观" subtitle="主题模式与界面密度会随备份一起导出" />
         <CardBody>
           <div className="space-y-5">
             <div>
@@ -245,9 +285,9 @@ export const SettingsPage: React.FC = () => {
                 value={themeMode}
                 onChange={setThemeMode}
                 options={[
-                  { value: 'light', label: '亮色', icon: <Sun size={14} /> },
-                  { value: 'dark', label: '暗色', icon: <Moon size={14} /> },
-                  { value: 'system', label: '跟随系统', icon: <Monitor size={14} /> },
+                  { value: 'light', label: '亮色', icon: <Sun size={14} aria-hidden /> },
+                  { value: 'dark', label: '暗色', icon: <Moon size={14} aria-hidden /> },
+                  { value: 'system', label: '跟随系统', icon: <Monitor size={14} aria-hidden /> },
                 ]}
               />
             </div>
@@ -257,126 +297,140 @@ export const SettingsPage: React.FC = () => {
               label="紧凑密度"
               description="收紧页面留白，一屏能放下更多内容"
             />
+            <Switch
+              checked={sidebarCollapsed}
+              onChange={setSidebarCollapsed}
+              label="折叠侧边栏"
+              description="只显示图标，给内容让出宽度（大屏生效）"
+            />
           </div>
         </CardBody>
       </Card>
-      {/* Data overview */}
+
       <Card>
         <CardHeader
           title="数据概览"
           subtitle={`本应用占用本地存储约 ${formatBytes(storageBytes)}`}
         />
         <CardBody>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
             {counts.map((item) => (
-              <div
-                key={item.module}
-                className="rounded-lg bg-gray-50 dark:bg-gray-700/40 px-3 py-2"
-              >
-                <p className="text-lg font-semibold text-gray-900 dark:text-gray-100 tabular-nums">
-                  {item.count}
-                </p>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{item.label}</p>
+              <div key={item.module} className="rounded bg-inset px-3 py-2">
+                <p className="text-lg font-semibold text-content tabular">{item.count}</p>
+                <p className="mt-0.5 text-xs text-content-tertiary">{item.label}</p>
               </div>
             ))}
           </div>
         </CardBody>
       </Card>
 
-      {/* Export */}
       <Card>
-        <CardHeader title="导出数据" subtitle="将所有数据导出为 JSON 文件备份" />
+        <CardHeader title="导出数据" subtitle="导出为 JSON 文件，包含全部模块与外观设置" />
         <CardBody>
-          <Button onClick={handleExport}>
-            <Download size={16} className="mr-2" /> 导出 JSON
+          <Button icon={<Download size={16} aria-hidden />} onClick={handleExport}>
+            导出 JSON
           </Button>
         </CardBody>
       </Card>
 
-      {/* Import */}
       <Card>
         <CardHeader title="导入数据" subtitle="导入前会先校验并预览，确认后才会写入" />
         <CardBody className="space-y-4">
-          <div className="space-y-2">
-            {MODE_OPTIONS.map((option) => (
-              <button
-                key={option.value}
-                type="button"
-                onClick={() => setImportMode(option.value)}
-                className={`w-full text-left px-3 py-2 rounded-lg border transition-colors ${
-                  importMode === option.value
-                    ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20'
-                    : 'border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700/40'
-                }`}
-              >
-                <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                  {option.label}
-                </span>
-                <span className="block text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                  {option.hint}
-                </span>
-              </button>
-            ))}
+          <RadioGroup
+            name="import-mode"
+            label="导入方式"
+            value={importMode}
+            onChange={(value) => setImportMode(value as ImportMode)}
+            options={MODE_OPTIONS.map((option) => ({
+              value: option.value,
+              label: option.label,
+              description: option.hint,
+            }))}
+          />
+
+          <div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".json,application/json"
+              onChange={handleImportFile}
+              aria-label="选择备份文件"
+              className="hidden"
+            />
+            <Button
+              variant="secondary"
+              icon={<Upload size={16} aria-hidden />}
+              onClick={() => fileInputRef.current?.click()}
+            >
+              选择备份文件
+            </Button>
           </div>
 
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".json,application/json"
-            onChange={handleImportFile}
-            className="hidden"
-          />
-          <Button onClick={() => fileInputRef.current?.click()}>
-            <Upload size={16} className="mr-2" /> 选择备份文件
-          </Button>
-
           {importErrors.length > 0 && (
-            <div className="rounded-lg bg-red-50 dark:bg-red-900/20 p-3 space-y-1">
-              <p className="text-sm font-medium text-red-600 dark:text-red-400">
-                导入失败：备份文件无法解析
-              </p>
-              {importErrors.slice(0, 5).map((issue) => (
-                <p key={issue.path} className="text-xs text-red-600 dark:text-red-400">
-                  {issue.path} — {issue.message}
-                </p>
-              ))}
-            </div>
+            <Alert tone="danger" title="导入失败：备份文件无法解析">
+              <ul className="space-y-0.5">
+                {importErrors.slice(0, 5).map((issue) => (
+                  <li key={issue.path}>
+                    {issue.path} — {issue.message}
+                  </li>
+                ))}
+              </ul>
+            </Alert>
           )}
         </CardBody>
       </Card>
 
-      {/* Auto backups */}
       <Card>
         <CardHeader
           title="自动备份"
-          subtitle="每次导入或清除数据前都会自动留一份快照，最多保留 10 份"
+          subtitle={`每次导入或清除数据前都会自动留一份快照，最多保留 ${MAX_AUTO_BACKUPS} 份`}
+          action={
+            snapshots.length > 0 ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                icon={<Trash2 size={14} aria-hidden />}
+                onClick={() => setShowClearSnapshotsDialog(true)}
+              >
+                清除快照
+              </Button>
+            ) : undefined
+          }
         />
         <CardBody>
           {snapshots.length === 0 ? (
-            <p className="text-sm text-gray-400 dark:text-gray-500">
-              还没有快照。执行一次导入或清除数据后会自动生成。
-            </p>
+            <EmptyState
+              icon={<History size={20} aria-hidden />}
+              title="还没有快照"
+              description="执行一次导入或清除数据后，这里会自动出现可回滚的快照。"
+              className="py-6"
+            />
           ) : (
             <ul className="space-y-2">
               {snapshots.map((snapshot) => (
                 <li
                   key={snapshot.key}
-                  className="flex items-center justify-between gap-3 rounded-lg bg-gray-50 dark:bg-gray-700/40 px-3 py-2"
+                  className="flex items-center justify-between gap-3 rounded bg-inset px-3 py-2"
                 >
                   <div className="min-w-0">
-                    <p className="text-sm text-gray-700 dark:text-gray-200 flex items-center gap-2">
-                      <History size={14} className="shrink-0" />
+                    <p className="flex items-center gap-2 text-sm text-content">
+                      <History size={14} className="shrink-0 text-content-tertiary" aria-hidden />
                       <span className="truncate">{snapshot.reason || '快照'}</span>
                     </p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                    <p className="mt-0.5 text-xs text-content-tertiary">
                       {snapshot.createdAt
                         ? new Date(snapshot.createdAt).toLocaleString('zh-CN')
                         : '时间未知'}{' '}
                       · {formatBytes(snapshot.size)}
                     </p>
                   </div>
-                  <Button variant="secondary" size="sm" onClick={() => handleRestore(snapshot.key)}>
-                    <RotateCcw size={14} className="mr-1.5" /> 回滚
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    icon={<RotateCcw size={14} aria-hidden />}
+                    onClick={() => setRestoreKey(snapshot.key)}
+                  >
+                    回滚
                   </Button>
                 </li>
               ))}
@@ -385,63 +439,77 @@ export const SettingsPage: React.FC = () => {
         </CardBody>
       </Card>
 
-      {/* Component gallery */}
       <Card>
         <CardHeader title="组件预览" subtitle="开发用：查看设计系统里全部组件与状态" />
         <CardBody>
-          <Button variant="secondary" onClick={() => navigate('/ui')}>
-            <LayoutGrid size={16} className="mr-2" /> 打开组件预览
+          <Button
+            variant="secondary"
+            icon={<LayoutGrid size={16} aria-hidden />}
+            onClick={() => navigate('/ui')}
+          >
+            打开组件预览
           </Button>
         </CardBody>
       </Card>
 
-      {/* Clear Data */}
       <Card>
         <CardHeader title="清除数据" subtitle="删除本应用的全部本地数据，此操作不可逆" />
-        <CardBody>
-          <Button variant="danger" onClick={() => setShowClearModal(true)}>
-            <Trash2 size={16} className="mr-2" /> 清除所有数据
+        <CardBody className="space-y-4">
+          <Alert tone="warning" title="只影响本应用">
+            <span className="flex items-center gap-1.5">
+              <Database size={12} aria-hidden />
+              只会删除本应用（lm: 前缀）的数据，不会影响同一浏览器下的其他项目。
+            </span>
+          </Alert>
+          <Button
+            variant="danger"
+            icon={<Trash2 size={16} aria-hidden />}
+            onClick={() => setShowClearDialog(true)}
+          >
+            清除所有数据
           </Button>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-2 flex items-center gap-1.5">
-            <Database size={12} />
-            只会删除本应用（lm: 前缀）的数据，不会影响同一浏览器下的其他项目。
-          </p>
         </CardBody>
       </Card>
 
-      {/* Import preview modal */}
-      <Modal isOpen={parsed !== null} onClose={() => setParsed(null)} title="确认导入">
-        {parsed && (
+      <Modal
+        isOpen={parsed !== null}
+        onClose={() => setParsed(null)}
+        title="确认导入"
+        description="确认后会先自动生成一份快照，方便随时回滚"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setParsed(null)}>
+              取消
+            </Button>
+            <Button onClick={handleConfirmImport}>确认导入</Button>
+          </>
+        }
+      >
+        {parsed && importTotals && (
           <div className="space-y-4">
-            <div className="rounded-lg bg-gray-50 dark:bg-gray-700/40 p-3">
-              <p className="text-sm text-gray-700 dark:text-gray-200">
-                模式：
-                <span className="font-medium">
-                  {MODE_OPTIONS.find((o) => o.value === importMode)?.label}
-                </span>
-                ，共将新增{' '}
-                <span className="font-semibold text-primary-600">
-                  {planTotals(parsed.plan.stats).added}
-                </span>{' '}
-                条
-                {planTotals(parsed.plan.stats).skipped > 0 && (
-                  <>
-                    ，跳过重复{' '}
-                    <span className="font-semibold">{planTotals(parsed.plan.stats).skipped}</span>{' '}
-                    条
-                  </>
-                )}
-              </p>
-            </div>
+            <p className="text-sm text-content-secondary">
+              模式：
+              <span className="font-medium text-content">
+                {MODE_OPTIONS.find((option) => option.value === importMode)?.label}
+              </span>
+              ，共将新增{' '}
+              <span className="font-semibold text-accent tabular">{importTotals.added}</span> 条
+              {importTotals.skipped > 0 && (
+                <>
+                  ，跳过重复 <span className="font-semibold tabular">{importTotals.skipped}</span>{' '}
+                  条
+                </>
+              )}
+            </p>
 
             <div className="max-h-56 overflow-y-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="text-xs text-gray-500 dark:text-gray-400">
-                    <th className="text-left font-medium py-1">模块</th>
-                    <th className="text-right font-medium py-1">备份中</th>
-                    <th className="text-right font-medium py-1">新增</th>
-                    <th className="text-right font-medium py-1">跳过</th>
+                  <tr className="text-xs text-content-tertiary">
+                    <th className="py-1 text-left font-medium">模块</th>
+                    <th className="py-1 text-right font-medium">备份中</th>
+                    <th className="py-1 text-right font-medium">新增</th>
+                    <th className="py-1 text-right font-medium">跳过</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -449,17 +517,13 @@ export const SettingsPage: React.FC = () => {
                     const row = parsed.plan.stats[module];
                     if (row.incoming === 0) return null;
                     return (
-                      <tr key={module} className="border-t border-gray-100 dark:border-gray-700">
-                        <td className="py-1.5 text-gray-700 dark:text-gray-200">
-                          {MODULE_LABELS[module]}
-                        </td>
-                        <td className="py-1.5 text-right text-gray-500 dark:text-gray-400 tabular-nums">
+                      <tr key={module} className="border-t border-line-subtle">
+                        <td className="py-1.5 text-content-secondary">{MODULE_LABELS[module]}</td>
+                        <td className="py-1.5 text-right text-content-tertiary tabular">
                           {row.incoming}
                         </td>
-                        <td className="py-1.5 text-right text-green-600 dark:text-green-400 tabular-nums">
-                          {row.added}
-                        </td>
-                        <td className="py-1.5 text-right text-gray-400 tabular-nums">
+                        <td className="py-1.5 text-right text-success tabular">{row.added}</td>
+                        <td className="py-1.5 text-right text-content-tertiary tabular">
                           {row.skipped}
                         </td>
                       </tr>
@@ -470,51 +534,52 @@ export const SettingsPage: React.FC = () => {
             </div>
 
             {parsed.warnings.length > 0 && (
-              <div className="rounded-lg bg-yellow-50 dark:bg-yellow-900/20 p-3 space-y-1 max-h-32 overflow-y-auto">
-                <p className="text-xs font-medium text-yellow-700 dark:text-yellow-400">
-                  有 {parsed.warnings.length} 条数据未通过校验，已被跳过：
-                </p>
-                {parsed.warnings.slice(0, 5).map((warning) => (
-                  <p key={warning.path} className="text-xs text-yellow-700 dark:text-yellow-400">
-                    {warning.path} — {warning.message}
-                  </p>
-                ))}
-              </div>
+              <Alert
+                tone="warning"
+                title={`有 ${parsed.warnings.length} 条数据未通过校验，已被跳过`}
+              >
+                <ul className="max-h-32 space-y-0.5 overflow-y-auto">
+                  {parsed.warnings.slice(0, 5).map((warning) => (
+                    <li key={warning.path}>
+                      {warning.path} — {warning.message}
+                    </li>
+                  ))}
+                </ul>
+              </Alert>
             )}
-
-            <p className="text-xs text-gray-500 dark:text-gray-400">
-              导入前会自动生成一份快照，导入后可在「自动备份」中回滚。
-            </p>
-
-            <div className="flex justify-end gap-2">
-              <Button variant="secondary" onClick={() => setParsed(null)}>
-                取消
-              </Button>
-              <Button onClick={handleConfirmImport}>确认导入</Button>
-            </div>
           </div>
         )}
       </Modal>
 
-      {/* Confirm Clear Modal */}
-      <Modal isOpen={showClearModal} onClose={() => setShowClearModal(false)} title="确认清除数据">
-        <div className="space-y-4">
-          <div className="flex items-center gap-3 p-4 bg-red-50 dark:bg-red-900/20 rounded-lg">
-            <AlertTriangle size={24} className="text-red-500 shrink-0" />
-            <p className="text-sm text-red-600 dark:text-red-400">
-              将删除本应用的全部数据（任务、书籍、项目、训练记录等）。清除前会自动生成快照，可回滚。
-            </p>
-          </div>
-          <div className="flex justify-end gap-2">
-            <Button variant="secondary" onClick={() => setShowClearModal(false)}>
-              取消
-            </Button>
-            <Button variant="danger" onClick={handleClearAll}>
-              确认清除
-            </Button>
-          </div>
-        </div>
-      </Modal>
+      <ConfirmDialog
+        isOpen={showClearDialog}
+        onClose={() => setShowClearDialog(false)}
+        onConfirm={handleClearAll}
+        title="清除所有数据"
+        description="将删除本应用（lm: 前缀）的全部数据：任务、备忘、书籍、项目、训练与饮食记录、游戏。清除前会自动生成一份快照（快照本身不会被清除），之后可以在「自动备份」里回滚。"
+        confirmText="确认清除"
+        requireText="清除"
+        tone="danger"
+      />
+
+      <ConfirmDialog
+        isOpen={showClearSnapshotsDialog}
+        onClose={() => setShowClearSnapshotsDialog(false)}
+        onConfirm={handleClearSnapshots}
+        title="删除全部快照"
+        description={`${snapshots.length} 份快照将被删除，之后无法再回滚到之前的状态（当前数据不受影响）。`}
+        confirmText="删除快照"
+        tone="danger"
+      />
+
+      <ConfirmDialog
+        isOpen={restoreKey !== null}
+        onClose={() => setRestoreKey(null)}
+        onConfirm={handleConfirmRestore}
+        title="回滚到这份快照"
+        description="当前数据会被快照内容覆盖，页面随后会刷新。"
+        confirmText="回滚并刷新"
+      />
     </div>
   );
 };

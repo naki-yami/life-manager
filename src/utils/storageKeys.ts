@@ -86,7 +86,13 @@ export function isAppStorageKey(key: string): boolean {
   return key.startsWith(LM_PREFIX);
 }
 
-/** 只清空本应用的数据，绝不使用 localStorage.clear() */
+/**
+ * 只清空本应用的数据，绝不使用 localStorage.clear()。
+ *
+ * 自动备份快照（lm:backup:auto:）会被保留：快照是「清除之后还能回滚」的唯一依靠，
+ * 如果连它一起删掉，界面上的「可通过自动备份回滚」就是一句空话。
+ * 想连快照一起清掉，用 clearAutoSnapshots()。
+ */
 export function clearAppStorage(): string[] {
   const storage = safeLocalStorage();
   if (!storage) return [];
@@ -94,6 +100,7 @@ export function clearAppStorage(): string[] {
   for (let i = storage.length - 1; i >= 0; i -= 1) {
     const key = storage.key(i);
     if (key === null || !isAppStorageKey(key)) continue;
+    if (key.startsWith(BACKUP_KEY_PREFIX)) continue;
     storage.removeItem(key);
     removed.push(key);
   }

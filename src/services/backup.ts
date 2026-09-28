@@ -377,7 +377,8 @@ export function createAutoSnapshot(reason: string): string | null {
     if (value !== null) entries[key] = value;
   }
 
-  const key = `${BACKUP_KEY_PREFIX}${Date.now()}`;
+  // 同一毫秒内连续快照（例如批量操作）也要各自独立，所以后缀带上随机片段
+  const key = `${BACKUP_KEY_PREFIX}${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   storage.setItem(key, JSON.stringify({ createdAt: new Date().toISOString(), reason, entries }));
   pruneAutoSnapshots();
   return key;
@@ -421,6 +422,14 @@ export function pruneAutoSnapshots(max: number = MAX_AUTO_BACKUPS): string[] {
   return removed;
 }
 
+/** 删除全部自动备份快照，返回被删掉的 key（「清除数据」默认保留快照，这里是显式清空入口） */
+export function clearAutoSnapshots(): string[] {
+  const storage = safeStorage();
+  if (!storage) return [];
+  const removed = listAutoSnapshots().map((snapshot) => snapshot.key);
+  for (const key of removed) storage.removeItem(key);
+  return removed;
+}
 /** 把某个快照写回 localStorage（仅覆盖本应用的 key），调用方负责重新加载页面 */
 export function restoreAutoSnapshot(key: string): boolean {
   const storage = safeStorage();

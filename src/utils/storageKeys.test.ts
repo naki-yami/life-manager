@@ -62,10 +62,16 @@ describe('clearAppStorage', () => {
     expect(localStorage.getItem('vite-plugin-react')).toBe('工具数据');
   });
 
-  it('能清掉自动备份快照', () => {
-    localStorage.setItem('lm:backup:auto:1759000000000', '{}');
-    clearAppStorage();
-    expect(localStorage.getItem('lm:backup:auto:1759000000000')).toBeNull();
+  // 回归守卫：快照必须撑过「清除数据」，否则「清除后可回滚」直接失效
+  it('保留自动备份快照，保证清除后仍能回滚', () => {
+    localStorage.setItem(STORAGE_KEYS.tasks, 'app');
+    localStorage.setItem('lm:backup:auto:1759000000000', '{"entries":{}}');
+
+    const removed = clearAppStorage();
+
+    expect(removed).toEqual([STORAGE_KEYS.tasks]);
+    expect(localStorage.getItem(STORAGE_KEYS.tasks)).toBeNull();
+    expect(localStorage.getItem('lm:backup:auto:1759000000000')).not.toBeNull();
   });
 });
 

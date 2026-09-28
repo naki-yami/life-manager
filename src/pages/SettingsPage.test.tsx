@@ -1,0 +1,233 @@
+import React from 'react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { SettingsPage } from './SettingsPage';
+import { ToastProvider } from '../components/ui';
+import { serializeBackup } from '../services/backup';
+import type { BackupData } from '../services/schemas';
+import { useTaskStore } from '../store/taskStore';
+import { useBookStore } from '../store/bookStore';
+import { useDevStore } from '../store/devStore';
+import { useWritingStore } from '../store/writingStore';
+import { useFitnessStore } from '../store/fitnessStore';
+import { useDietStore } from '../store/dietStore';
+import { useGameStore } from '../store/gameStore';
+import { useThemeStore } from '../store/themeStore';
+import { useUiStore } from '../store/uiStore';
+
+beforeEach(() => {
+  useTaskStore.setState({ tasks: [], memos: [] });
+  useBookStore.setState({ books: [] });
+  useDevStore.setState({ projects: [] });
+  useWritingStore.setState({ projects: [] });
+  useFitnessStore.setState({ plans: [], records: [] });
+  useDietStore.setState({ records: [] });
+  useGameStore.setState({ games: [] });
+  useThemeStore.setState({ themeMode: 'system' });
+  useUiStore.setState({ density: 'comfortable', sidebarCollapsed: false });
+  localStorage.clear();
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
+const renderSettings = (): ReturnType<typeof render> =>
+  render(
+    <MemoryRouter initialEntries={['/settings']}>
+      <ToastProvider>
+        <Routes>
+          <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/ui" element={<div>UI 预览页</div>} />
+        </Routes>
+      </ToastProvider>
+    </MemoryRouter>,
+  );
+
+const emptyBackup: BackupData = {
+  tasks: [],
+  memos: [],
+  books: [],
+  devProjects: [],
+  writingProjects: [],
+  fitnessPlans: [],
+  fitnessRecords: [],
+  dietRecords: [],
+  games: [],
+  settings: { themeMode: 'system', density: 'comfortable', sidebarCollapsed: false },
+};
+
+const uploadFile = (text: string, name = 'backup.json'): void => {
+  const input = screen.getByLabelText('选择备份文件') as HTMLInputElement;
+  const file = new File([text], name, { type: 'application/json' });
+  fireEvent.change(input, { target: { files: [file] } });
+};
+
+describe('SettingsPage', () => {
+  it('外观区可以切换主题模式、密度与侧边栏折叠', async () => {
+    renderSettings();
+
+    await userEvent.click(screen.getByRole('button', { name: '暗色' }));
+    expect(useThemeStore.getState().themeMode).toBe('dark');
+    expect(document.documentElement.classList.contains('dark')).toBe(true);
+
+    const densitySwitch = screen.getByRole('switch', { name: '紧凑密度' });
+    await userEvent.click(densitySwitch);
+    expect(useUiStore.getState().density).toBe('compact');
+    expect(densitySwitch).toHaveAttribute('aria-checked', 'true');
+
+    await userEvent.click(screen.getByRole('switch', { name: '折叠侧边栏' }));
+    expect(useUiStore.getState().sidebarCollapsed).toBe(true);
+  });
+
+  it('数据概览列出各模块条数并在标题旁汇总', () => {
+    useBookStore.getState().addBook('人类简史', 'Harari', '历史');
+    useGameStore.getState().addGame('哈迪斯', 'PC');
+
+    renderSettings();
+
+    expect(screen.getByText(/共 2 条数据/)).toBeInTheDocument();
+    expect(screen.getByText('书籍')).toBeInTheDocument();
+    expect(screen.getByText('游戏')).toBeInTheDocument();
+    expect(screen.getByText('训练计划')).toBeInTheDocument();
+  });
+
+  it('导出会生成带信封结构的 JSON 备份并给出提示', async () => {
+    useBookStore.getState().addBook('人类简史', 'Harari', '历史');
+    const createObjectURL = vi.fn((_blob: Blob) => 'blob:mock');
+    const revokeObjectURL = vi.fn();
+    vi.stubGlobal('URL', { ...URL, createObjectURL, revokeObjectURL });
+    const anchorClick = vi
+      .spyOn(HTMLAnchorElement.prototype, 'click')
+      .mockImplementation(() => undefined);
+
+    renderSettings();
+    await userEvent.click(screen.getByRole('button', { name: '导出 JSON' }));
+
+    expect(createObjectURL).toHaveBeenCalledTimes(1);
+    expect(anchorClick).toHaveBeenCalledTimes(1);
+    const blob = createObjectURL.mock.calls[0]![0] as Blob;
+    const parsed = JSON.parse(await blob.text()) as {
+      app: string;
+      data: { books: Array<{ title: string }> };
+    };
+    expect(parsed.app).toBe('life-manager');
+    expect(parsed.data.books[0]!.title).toBe('人类简史');
+
+    expect(await screen.findByText('已导出备份')).toBeInTheDocument();
+    expect(screen.getByText(/life-manager-backup-\d{4}-\d{2}-\d{2}\.json/)).toBeInTheDocument();
+  });
+
+  it('导入会先预览再写入，并且模式可切换', async () => {
+    const text = serializeBackup({
+      ...emptyBackup,
+      books: [
+        {
+          id: 'book-1',
+          title: '人类简史',
+          author: 'Harari',
+          category: '历史',
+          status: 'reading',
+          progress: 30,
+          notes: [],
+          createdAt: new Date().toISOString(),
+        },
+      ],
+    });
+
+    renderSettings();
+    expect(screen.getByRole('radio', { name: /合并/ })).toBeChecked();
+
+    await userEvent.click(screen.getByRole('radio', { name: /追加/ }));
+    expect(screen.getByRole('radio', { name: /追加/ })).toBeChecked();
+
+    uploadFile(text);
+    const dialog = await screen.findByRole('dialog', { name: '确认导入' });
+    expect(within(dialog).getByText(/共将新增/)).toHaveTextContent('1');
+    expect(within(dialog).getByRole('cell', { name: '书籍' })).toBeInTheDocument();
+
+    await userEvent.click(within(dialog).getByRole('button', { name: '确认导入' }));
+
+    expect(useBookStore.getState().books).toHaveLength(1);
+    expect(useBookStore.getState().books[0]!.title).toBe('人类简史');
+    expect(await screen.findByText('导入完成')).toBeInTheDocument();
+    // 导入前自动留了一份快照
+    await waitFor(() => expect(screen.getByText('导入备份前')).toBeInTheDocument());
+  });
+
+  it('坏文件会提示解析失败，且不会写入任何数据', async () => {
+    renderSettings();
+    uploadFile('这不是 JSON', 'broken.json');
+
+    expect(await screen.findByText('导入失败：备份文件无法解析')).toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: '确认导入' })).not.toBeInTheDocument();
+    expect(useBookStore.getState().books).toHaveLength(0);
+  });
+
+  it('清除数据需要输入确认词，且只清本应用的数据', async () => {
+    useBookStore.getState().addBook('人类简史', 'Harari', '历史');
+    localStorage.setItem('other-project:token', 'must-stay');
+
+    renderSettings();
+    await userEvent.click(screen.getByRole('button', { name: '清除所有数据' }));
+
+    const dialog = screen.getByRole('dialog', { name: '清除所有数据' });
+    const confirm = within(dialog).getByRole('button', { name: '确认清除' });
+    expect(confirm).toBeDisabled();
+
+    await userEvent.type(within(dialog).getByLabelText(/请输入「清除」以确认/), '清除');
+    await userEvent.click(confirm);
+
+    expect(useBookStore.getState().books).toHaveLength(0);
+    expect(localStorage.getItem('other-project:token')).toBe('must-stay');
+    expect(await screen.findByText('已清除全部数据')).toBeInTheDocument();
+  });
+
+  it('没有快照时是空态，清除后可以回滚并刷新页面', async () => {
+    const reload = vi.fn();
+    vi.stubGlobal('location', { reload });
+    useBookStore.getState().addBook('人类简史', 'Harari', '历史');
+
+    renderSettings();
+    expect(screen.getByText('还没有快照')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: '清除所有数据' }));
+    const clearDialog = screen.getByRole('dialog', { name: '清除所有数据' });
+    await userEvent.type(within(clearDialog).getByLabelText(/请输入「清除」以确认/), '清除');
+    await userEvent.click(within(clearDialog).getByRole('button', { name: '确认清除' }));
+
+    const restoreButton = await screen.findByRole('button', { name: '回滚' });
+    await userEvent.click(restoreButton);
+    const restoreDialog = screen.getByRole('dialog', { name: '回滚到这份快照' });
+    await userEvent.click(within(restoreDialog).getByRole('button', { name: '回滚并刷新' }));
+
+    expect(reload).toHaveBeenCalledTimes(1);
+  });
+
+  it('可以显式删除全部快照', async () => {
+    useBookStore.getState().addBook('人类简史', 'Harari', '历史');
+    renderSettings();
+
+    await userEvent.click(screen.getByRole('button', { name: '清除所有数据' }));
+    const clearDialog = screen.getByRole('dialog', { name: '清除所有数据' });
+    await userEvent.type(within(clearDialog).getByLabelText(/请输入「清除」以确认/), '清除');
+    await userEvent.click(within(clearDialog).getByRole('button', { name: '确认清除' }));
+
+    await userEvent.click(await screen.findByRole('button', { name: '清除快照' }));
+    const dialog = screen.getByRole('dialog', { name: '删除全部快照' });
+    expect(within(dialog).getByText(/1 份快照将被删除/)).toBeInTheDocument();
+
+    await userEvent.click(within(dialog).getByRole('button', { name: '删除快照' }));
+
+    expect(await screen.findByText('已删除全部快照')).toBeInTheDocument();
+    expect(screen.getByText('还没有快照')).toBeInTheDocument();
+  });
+
+  it('组件预览入口可以跳到 /ui', async () => {
+    renderSettings();
+    await userEvent.click(screen.getByRole('button', { name: '打开组件预览' }));
+    expect(screen.getByText('UI 预览页')).toBeInTheDocument();
+  });
+});
