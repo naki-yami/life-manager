@@ -3,11 +3,13 @@ import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { GamesPage } from './GamesPage';
+import { ToastProvider } from '../components/ui';
 import { useGameStore } from '../store/gameStore';
+import { todayKey } from '../utils/date';
 import { GameStatus } from '../types';
 
 beforeEach(() => {
-  useGameStore.setState({ games: [] });
+  useGameStore.setState({ games: [], sessions: [] });
 });
 
 const gameOf = (name: string) => useGameStore.getState().games.find((game) => game.name === name)!;
@@ -189,5 +191,80 @@ describe('GamesPage', () => {
     );
     expect(useGameStore.getState().games).toHaveLength(0);
     expect(screen.getByText('游戏库还是空的')).toBeInTheDocument();
+  });
+
+  it('记录游玩会写入流水，并把时长累加到游戏上', async () => {
+    addGame('哈迪斯');
+    render(<GamesPage />);
+
+    await userEvent.click(screen.getAllByRole('button', { name: '记录游玩' })[0]!);
+    const dialog = screen.getByRole('dialog', { name: '记录游玩' });
+
+    fireEvent.change(within(dialog).getByRole('spinbutton', { name: '时长' }), {
+      target: { value: '2.5' },
+    });
+    await userEvent.type(within(dialog).getByLabelText('备注'), '打通第一层');
+    await userEvent.click(within(dialog).getByRole('button', { name: '保存' }));
+
+    const { sessions } = useGameStore.getState();
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0]!.gameId).toBe(gameOf('哈迪斯').id);
+    expect(sessions[0]!.date).toBe(todayKey());
+    expect(sessions[0]!.hours).toBe(2.5);
+    expect(sessions[0]!.note).toBe('打通第一层');
+    expect(gameOf('哈迪斯').hoursPlayed).toBe(2.5);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('年度卡片汇总今年游玩的小时数与天数', () => {
+    addGame('哈迪斯');
+    const gameId = gameOf('哈迪斯').id;
+    useGameStore.getState().addSession(gameId, todayKey(), 3, '第一章');
+    useGameStore.getState().addSession(gameId, todayKey(), 1.5, '');
+
+    render(<GamesPage />);
+
+    const year = todayKey().slice(0, 4);
+    expect(screen.getByText(`${year} 年游玩`)).toBeInTheDocument();
+    expect(screen.getByText(/累计 4\.5 小时 · 游玩 1 天 · 2 条记录/)).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: /年每月游玩时长：合计 4\.5 小时/ })).toBeInTheDocument();
+    expect(screen.getByText('第一章')).toBeInTheDocument();
+  });
+
+  it('删除游玩记录会把时长减回去，撤销后两边都恢复', async () => {
+    addGame('哈迪斯');
+    const gameId = gameOf('哈迪斯').id;
+    useGameStore.getState().addSession(gameId, todayKey(), 2, '');
+
+    render(
+      <ToastProvider>
+        <GamesPage />
+      </ToastProvider>,
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: /的「哈迪斯」游玩记录/ }));
+    await userEvent.click(
+      within(screen.getByRole('dialog', { name: '删除游玩记录' })).getByRole('button', {
+        name: '删除',
+      }),
+    );
+
+    expect(useGameStore.getState().sessions).toHaveLength(0);
+    expect(gameOf('哈迪斯').hoursPlayed).toBe(0);
+    expect(screen.getByText(/已删除 .* 的游玩记录/)).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: '撤销' }));
+
+    expect(useGameStore.getState().sessions).toHaveLength(1);
+    expect(gameOf('哈迪斯').hoursPlayed).toBe(2);
+    expect(screen.getByText(/累计 2 小时 · 游玩 1 天 · 1 条记录/)).toBeInTheDocument();
+  });
+
+  it('没有游玩记录时不渲染年度卡片', () => {
+    addGame('哈迪斯');
+    render(<GamesPage />);
+
+    expect(screen.queryByText(`${todayKey().slice(0, 4)} 年游玩`)).not.toBeInTheDocument();
+    expect(screen.queryByRole('img', { name: /每月游玩时长/ })).not.toBeInTheDocument();
   });
 });

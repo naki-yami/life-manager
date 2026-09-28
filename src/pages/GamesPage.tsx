@@ -4,6 +4,8 @@ import {
   Badge,
   Button,
   Card,
+  CardBody,
+  CardHeader,
   ConfirmDialog,
   EmptyState,
   IconButton,
@@ -18,11 +20,19 @@ import {
   Textarea,
 } from '../components/ui';
 import { PageHeader, Toolbar } from '../components/layout';
+import { BarChart } from '../components/charts';
 import { useGameStore } from '../store/gameStore';
 import { useUndoableRemove } from '../hooks/useUndoableRemove';
 import { filterByKeyword } from '../utils/search';
-import { formatDuration, formatNumber } from '../utils/date';
-import { Game, GamePlatform, GameStatus } from '../types';
+import {
+  formatDuration,
+  formatMonthLabel,
+  formatNumber,
+  formatShortDate,
+  todayKey,
+} from '../utils/date';
+import { seriesByMonth } from '../utils/stats';
+import { Game, GamePlatform, GameSession, GameStatus } from '../types';
 
 type Filter = 'all' | GameStatus;
 
@@ -48,6 +58,15 @@ const FILTER_OPTIONS: Array<{ value: Filter; label: string }> = [
   { value: 'backlog', label: '搁置' },
 ];
 
+/** 「最近游玩」最多列几条 */
+const SESSION_PREVIEW_COUNT = 6;
+
+/** 删一条流水会同时改动 sessions 与游戏上的总时长，撤销得把两边一起还原 */
+interface PlayLogSnapshot {
+  sessions: GameSession[];
+  games: Game[];
+}
+
 export const GamesPage: React.FC = () => {
   const {
     games,
@@ -59,7 +78,11 @@ export const GamesPage: React.FC = () => {
     addAchievement,
     toggleAchievement,
     deleteAchievement,
+    sessions,
+    addSession,
+    deleteSession,
     replaceGames,
+    replaceSessions,
   } = useGameStore();
   const undoableRemove = useUndoableRemove();
 
@@ -75,11 +98,55 @@ export const GamesPage: React.FC = () => {
   });
   const [achievementForm, setAchievementForm] = useState({ name: '', description: '' });
   const [noteInput, setNoteInput] = useState('');
+  const [showSessionModal, setShowSessionModal] = useState(false);
+  const [pendingSessionId, setPendingSessionId] = useState<string | null>(null);
+  const [sessionForm, setSessionForm] = useState<{
+    gameId: string;
+    date: string;
+    hours: number | '';
+    note: string;
+  }>({ gameId: '', date: todayKey(), hours: 1, note: '' });
 
   const countOf = (status: GameStatus): number =>
     games.filter((game) => game.status === status).length;
 
   const totalHours = games.reduce((sum, game) => sum + game.hoursPlayed, 0);
+
+  const today = todayKey();
+  const currentYear = today.slice(0, 4);
+  /** 今年已经过去的月份数，用来决定年度图表画几根柱子（1 月就是 1 根） */
+  const monthCount = Number(today.slice(5, 7));
+
+  const yearSessions = useMemo(
+    () => sessions.filter((session) => session.date.slice(0, 4) === currentYear),
+    [sessions, currentYear],
+  );
+  const monthlyHours = useMemo(
+    () =>
+      seriesByMonth(
+        yearSessions,
+        monthCount,
+        today,
+        (session) => session.date,
+        (session) => session.hours,
+      ),
+    [yearSessions, monthCount, today],
+  );
+  const yearHours =
+    Math.round(yearSessions.reduce((sum, session) => sum + session.hours, 0) * 10) / 10;
+  const yearDays = new Set(yearSessions.map((session) => session.date)).size;
+
+  /** 流水里只存 gameId，展示时换成游戏名 */
+  const gameNameOf = (gameId: string): string =>
+    games.find((game) => game.id === gameId)?.name ?? '已删除的游戏';
+
+  const recentSessions = useMemo(
+    () =>
+      [...sessions]
+        .sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt))
+        .slice(0, SESSION_PREVIEW_COUNT),
+    [sessions],
+  );
 
   const visibleGames = useMemo(() => {
     const byStatus = filter === 'all' ? games : games.filter((game) => game.status === filter);
@@ -94,6 +161,7 @@ export const GamesPage: React.FC = () => {
   const achievementGame = games.find((game) => game.id === achievementGameId) ?? null;
   const noteGame = games.find((game) => game.id === noteGameId) ?? null;
   const pendingGame = games.find((game) => game.id === pendingDeleteId) ?? null;
+  const pendingSession = sessions.find((session) => session.id === pendingSessionId) ?? null;
 
   const openNotes = (game: Game): void => {
     setNoteInput(game.notes);
@@ -115,6 +183,37 @@ export const GamesPage: React.FC = () => {
     setAchievementForm({ name: '', description: '' });
   };
 
+  const openSessionModal = (gameId?: string): void => {
+    const fallback = games.length > 0 ? games[0].id : '';
+    setSessionForm({ gameId: gameId ?? fallback, date: today, hours: 1, note: '' });
+    setShowSessionModal(true);
+  };
+
+  const sessionHours = typeof sessionForm.hours === 'number' ? sessionForm.hours : 0;
+  const canSaveSession = Boolean(sessionForm.gameId) && sessionHours > 0;
+
+  const handleAddSession = (): void => {
+    if (!canSaveSession) return;
+    addSession(
+      sessionForm.gameId,
+      sessionForm.date || today,
+      sessionHours,
+      sessionForm.note.trim(),
+    );
+    setShowSessionModal(false);
+  };
+
+  /**
+   * 删一条流水会同时改 sessions 与游戏上的总时长，
+   * 撤销时两边都要还原，所以快照里把两个数组一起带上。
+   */
+  const restorePlayLog = (snapshot: PlayLogSnapshot[]): void => {
+    const entry = snapshot[0];
+    if (!entry) return;
+    replaceSessions(entry.sessions);
+    replaceGames(entry.games);
+  };
+
   return (
     <div className="space-y-section">
       <PageHeader
@@ -122,15 +221,26 @@ export const GamesPage: React.FC = () => {
         description="游戏库、游玩时长与成就进度"
         icon={Gamepad2}
         actions={
-          <Button
-            icon={<Plus size={16} aria-hidden />}
-            onClick={() => {
-              setForm({ name: '', platform: 'PC' });
-              setShowAddModal(true);
-            }}
-          >
-            添加游戏
-          </Button>
+          <>
+            {games.length > 0 && (
+              <Button
+                variant="secondary"
+                icon={<Clock size={16} aria-hidden />}
+                onClick={() => openSessionModal()}
+              >
+                记录游玩
+              </Button>
+            )}
+            <Button
+              icon={<Plus size={16} aria-hidden />}
+              onClick={() => {
+                setForm({ name: '', platform: 'PC' });
+                setShowAddModal(true);
+              }}
+            >
+              添加游戏
+            </Button>
+          </>
         }
       />
 
@@ -162,6 +272,64 @@ export const GamesPage: React.FC = () => {
           footer={`合计 ${formatNumber(Math.round(totalHours * 10) / 10)} 小时`}
         />
       </div>
+
+      {sessions.length > 0 && (
+        <Card>
+          <CardHeader
+            title={`${currentYear} 年游玩`}
+            subtitle={
+              yearSessions.length > 0
+                ? `累计 ${formatNumber(yearHours)} 小时 · 游玩 ${yearDays} 天 · ${yearSessions.length} 条记录`
+                : '今年还没有记录，记一次就会出现在这里'
+            }
+          />
+          <CardBody className="space-y-4">
+            {yearSessions.length > 0 && (
+              <BarChart
+                data={monthlyHours}
+                label={`${currentYear} 年每月游玩时长`}
+                formatValue={(value) => `${formatNumber(value)} 小时`}
+                formatDate={formatMonthLabel}
+              />
+            )}
+
+            <ul className="divide-y divide-line-subtle rounded border border-line-subtle">
+              {recentSessions.map((session) => (
+                <li key={session.id} className="flex items-center gap-3 px-3 py-2">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-x-2">
+                      <span className="truncate text-sm text-content">
+                        {gameNameOf(session.gameId)}
+                      </span>
+                      <span className="text-xs text-content-tertiary tabular">
+                        {formatShortDate(session.date)} · {formatNumber(session.hours)} 小时
+                      </span>
+                    </div>
+                    {session.note && (
+                      <p className="mt-0.5 truncate text-xs text-content-tertiary">
+                        {session.note}
+                      </p>
+                    )}
+                  </div>
+                  <IconButton
+                    label={`删除 ${formatShortDate(session.date)} 的「${gameNameOf(session.gameId)}」游玩记录`}
+                    size="sm"
+                    icon={<Trash2 size={13} />}
+                    onClick={() => setPendingSessionId(session.id)}
+                    className="hover:text-danger"
+                  />
+                </li>
+              ))}
+            </ul>
+
+            {sessions.length > recentSessions.length && (
+              <p className="text-xs text-content-tertiary">
+                只显示最近 {recentSessions.length} 条，共 {sessions.length} 条记录。
+              </p>
+            )}
+          </CardBody>
+        </Card>
+      )}
 
       <Toolbar
         search={{ value: keyword, onChange: setKeyword, placeholder: '搜索游戏、平台或成就…' }}
@@ -306,6 +474,15 @@ export const GamesPage: React.FC = () => {
                         >
                           笔记
                         </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          icon={<Clock size={13} aria-hidden />}
+                          aria-label={`记录《${game.name}》的游玩`}
+                          onClick={() => openSessionModal(game.id)}
+                        >
+                          记录游玩
+                        </Button>
                       </div>
                     </div>
 
@@ -323,6 +500,55 @@ export const GamesPage: React.FC = () => {
           })}
         </ul>
       )}
+
+      <Modal
+        isOpen={showSessionModal}
+        onClose={() => setShowSessionModal(false)}
+        title="记录游玩"
+        description="记一次会写进流水，同时把时长累加到这款游戏上"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setShowSessionModal(false)}>
+              取消
+            </Button>
+            <Button onClick={handleAddSession} disabled={!canSaveSession}>
+              保存
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <Select
+            label="游戏"
+            value={sessionForm.gameId}
+            onChange={(value) => setSessionForm({ ...sessionForm, gameId: value })}
+            options={games.map((game) => ({ value: game.id, label: game.name }))}
+          />
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Input
+              label="日期"
+              type="date"
+              value={sessionForm.date}
+              onChange={(event) => setSessionForm({ ...sessionForm, date: event.target.value })}
+            />
+            <NumberInput
+              label="时长"
+              value={sessionForm.hours}
+              onChange={(value) => setSessionForm({ ...sessionForm, hours: value })}
+              min={0}
+              step={0.5}
+              suffix="小时"
+            />
+          </div>
+          <Textarea
+            label="备注"
+            value={sessionForm.note}
+            onChange={(event) => setSessionForm({ ...sessionForm, note: event.target.value })}
+            rows={3}
+            placeholder="打到哪一章、和谁一起玩…（可选）"
+          />
+        </div>
+      </Modal>
 
       <Modal
         isOpen={showAddModal}
@@ -517,6 +743,33 @@ export const GamesPage: React.FC = () => {
         description={
           pendingGame
             ? `确定要删除《${pendingGame.name}》吗？${pendingGame.achievements.length} 个成就记录与 ${pendingGame.hoursPlayed} 小时时长会一起删除。`
+            : ''
+        }
+        confirmText="删除"
+        tone="danger"
+      />
+
+      <ConfirmDialog
+        isOpen={pendingSession !== null}
+        onClose={() => setPendingSessionId(null)}
+        onConfirm={() => {
+          const target = pendingSession;
+          const playLog: PlayLogSnapshot = { sessions, games };
+          if (pendingSessionId) deleteSession(pendingSessionId);
+          setPendingSessionId(null);
+          if (target) {
+            undoableRemove({
+              message: `已删除 ${formatShortDate(target.date)} 的游玩记录`,
+              description: `${gameNameOf(target.gameId)} 的 ${formatNumber(target.hours)} 小时已从总时长里减回，点「撤销」可以恢复。`,
+              snapshot: [playLog],
+              restore: restorePlayLog,
+            });
+          }
+        }}
+        title="删除游玩记录"
+        description={
+          pendingSession
+            ? `确定要删除 ${formatShortDate(pendingSession.date)} 的「${gameNameOf(pendingSession.gameId)}」记录吗？删掉后这款游戏的总时长会相应减少。`
             : ''
         }
         confirmText="删除"
