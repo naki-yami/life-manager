@@ -4,6 +4,8 @@ export { Layout } from './Layout';
 export { StorageAlert } from './StorageAlert';
 export { PageHeader } from './PageHeader';
 export type { PageHeaderProps } from './PageHeader';
+export { MasterDetail, MASTER_DETAIL_QUERY } from './MasterDetail';
+export type { MasterDetailProps } from './MasterDetail';
 export { Toolbar } from './Toolbar';
 export type { ToolbarProps } from './Toolbar';
 export { PageSkeleton } from './PageSkeleton';

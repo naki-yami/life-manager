@@ -6,6 +6,8 @@ import { BooksPage } from './BooksPage';
 import { ToastProvider } from '../components/ui';
 import { useBookStore } from '../store/bookStore';
 import { requestPaletteFocus, resetPaletteFocus } from '../hooks/usePaletteFocus';
+import { MASTER_DETAIL_QUERY } from '../components/layout';
+import { mockMediaQueries } from '../test/matchMedia';
 
 beforeEach(() => {
   useBookStore.setState({ books: [], sessions: [] });
@@ -306,5 +308,77 @@ describe('BooksPage', () => {
     await userEvent.type(screen.getByRole('textbox', { name: /搜索/ }), '#经济');
     expect(screen.getByText('置身事内')).toBeInTheDocument();
     expect(screen.queryByText('人类简史')).not.toBeInTheDocument();
+  });
+});
+
+describe('BooksPage 宽屏双栏', () => {
+  afterEach(() => {
+    resetPaletteFocus();
+  });
+
+  const expectWideLayout = (): void => mockMediaQueries({ [MASTER_DETAIL_QUERY]: true });
+
+  it('宽屏右栏常驻，没选中书时是占位内容', () => {
+    useBookStore.getState().addBook('人类简史', 'Harari', '历史');
+    expectWideLayout();
+
+    render(<BooksPage />);
+
+    const panel = screen.getByRole('complementary', { name: '读书笔记' });
+    expect(within(panel).getByText('还没有选中书')).toBeInTheDocument();
+    expect(screen.getByText('人类简史')).toBeInTheDocument();
+  });
+
+  it('点「笔记」在右栏就地编辑，不再弹对话框', async () => {
+    useBookStore.getState().addBook('人类简史', 'Harari', '历史');
+    expectWideLayout();
+
+    render(<BooksPage />);
+    await userEvent.click(screen.getByRole('button', { name: /笔记（0）/ }));
+
+    // 焦点没有被搬进对话框，列表也还在
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.getByText('人类简史')).toBeInTheDocument();
+
+    const panel = screen.getByRole('complementary', { name: '《人类简史》的笔记' });
+    await userEvent.type(within(panel).getByRole('textbox', { name: '笔记内容' }), '认知革命很棒');
+    await userEvent.click(within(panel).getByRole('button', { name: '保存笔记' }));
+
+    expect(useBookStore.getState().books[0]!.notes).toHaveLength(1);
+    expect(within(panel).getByText('认知革命很棒')).toBeInTheDocument();
+
+    await userEvent.click(within(panel).getByRole('button', { name: '删除这条笔记' }));
+    expect(useBookStore.getState().books[0]!.notes).toHaveLength(0);
+  });
+
+  it('宽屏下命令面板聚焦某本书，也直接进右栏', () => {
+    useBookStore.getState().addBook('置身事内', '兰小欢', '');
+    expectWideLayout();
+
+    render(<BooksPage />);
+    act(() => {
+      requestPaletteFocus('/books', bookId('置身事内'));
+    });
+
+    expect(screen.getByRole('complementary', { name: '《置身事内》的笔记' })).toBeInTheDocument();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('再点另一本书的「笔记」，右栏换成那一本', async () => {
+    const store = useBookStore.getState();
+    store.addBook('置身事内', '兰小欢', '');
+    store.addBook('人类简史', 'Harari', '历史');
+    store.addNote(bookId('置身事内'), '地方政府的经济逻辑');
+    expectWideLayout();
+
+    render(<BooksPage />);
+    await userEvent.click(screen.getByRole('button', { name: /笔记（1）/ }));
+
+    let panel = screen.getByRole('complementary', { name: '《置身事内》的笔记' });
+    expect(within(panel).getByText('地方政府的经济逻辑')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: /笔记（0）/ }));
+    panel = screen.getByRole('complementary', { name: '《人类简史》的笔记' });
+    expect(within(panel).getByText('还没有笔记')).toBeInTheDocument();
   });
 });

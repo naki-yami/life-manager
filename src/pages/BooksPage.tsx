@@ -30,7 +30,7 @@ import {
   TagEditor,
   TagInput,
 } from '../components/ui';
-import { PageHeader, Toolbar } from '../components/layout';
+import { MasterDetail, PageHeader, Toolbar } from '../components/layout';
 import { useBookStore } from '../store/bookStore';
 import { useUndoableRemove } from '../hooks/useUndoableRemove';
 import { BarChart } from '../components/charts';
@@ -247,6 +247,91 @@ export const BooksPage: React.FC = () => {
 
   const progressTone = (book: Book) => (book.progress >= 100 ? 'success' : 'accent');
 
+  /** 宽屏右栏与窄屏抽屉共用的笔记面板 */
+  const noteDetail = noteBook ? (
+    <div className="space-y-4">
+      <p className="text-xs text-content-tertiary">回车即可保存，笔记会按时间倒序排列</p>
+
+      <div className="w-40">
+        <NumberInput
+          label="页码"
+          value={notePage}
+          onChange={(value) => setNotePage(value)}
+          min={0}
+          step={1}
+          suffix="页"
+          hint="可选"
+        />
+      </div>
+
+      <div className="flex items-start gap-2">
+        <div className="min-w-0 flex-1">
+          <Input
+            aria-label="笔记内容"
+            value={noteInput}
+            onChange={(event) => {
+              setNoteInput(event.target.value);
+              if (noteError) setNoteError(undefined);
+            }}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                event.preventDefault();
+                handleAddNote();
+              }
+            }}
+            placeholder="写下这一段的收获…"
+            error={noteError}
+          />
+        </div>
+        <IconButton
+          label="保存笔记"
+          variant="primary"
+          icon={<Plus size={16} />}
+          onClick={handleAddNote}
+        />
+      </div>
+
+      {noteBook && noteBook.notes.length === 0 ? (
+        <EmptyState
+          icon={<NotebookPen size={20} aria-hidden />}
+          title="还没有笔记"
+          description="读到有感触的地方，随手记一句。"
+          className="py-6"
+        />
+      ) : (
+        <ul className="max-h-72 space-y-2 overflow-y-auto">
+          {noteBook?.notes.map((note) => (
+            <li key={note.id} className="group rounded bg-inset p-3">
+              <p className="text-sm text-content-secondary">{note.content}</p>
+              <div className="mt-2 flex items-center justify-between">
+                <span className="text-2xs text-content-tertiary">
+                  {new Date(note.createdAt).toLocaleDateString('zh-CN')}
+                  {note.page ? ` · 第 ${note.page} 页` : ''}
+                </span>
+                <IconButton
+                  label="删除这条笔记"
+                  size="sm"
+                  icon={<Trash2 size={13} />}
+                  onClick={() => {
+                    if (!noteBook) return;
+                    const snapshot = books;
+                    deleteNote(noteBook.id, note.id);
+                    undoableRemove({
+                      message: '已删除这条笔记',
+                      description: '点「撤销」可以恢复。',
+                      snapshot,
+                      restore: replaceBooks,
+                    });
+                  }}
+                  className="hover:text-danger"
+                />
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  ) : null;
   return (
     <div className="space-y-section">
       <PageHeader
@@ -354,217 +439,232 @@ export const BooksPage: React.FC = () => {
         </Card>
       )}
 
-      <Toolbar
-        search={{
-          value: keyword,
-          onChange: setKeyword,
-          placeholder: '搜索书名、作者、分类或标签…',
-        }}
-        actions={
-          <SegmentedControl
-            label="按阅读状态筛选"
-            value={filter}
-            onChange={setFilter}
-            options={FILTER_OPTIONS.map((option) => ({
-              ...option,
-              count: option.value === 'all' ? books.length : countOf(option.value),
-            }))}
+      <MasterDetail
+        detailTitle={noteBook ? `《${noteBook.title}》的笔记` : '读书笔记'}
+        detailOpen={noteBook !== null}
+        onCloseDetail={closeNotes}
+        emptyDetail={
+          <EmptyState
+            icon={<NotebookPen size={20} aria-hidden />}
+            title="还没有选中书"
+            description="点左边任意一本书的「笔记」，就能在这里随手记。"
+            className="py-6"
           />
         }
-      />
+        detail={noteDetail}
+      >
+        <Toolbar
+          search={{
+            value: keyword,
+            onChange: setKeyword,
+            placeholder: '搜索书名、作者、分类或标签…',
+          }}
+          actions={
+            <SegmentedControl
+              label="按阅读状态筛选"
+              value={filter}
+              onChange={setFilter}
+              options={FILTER_OPTIONS.map((option) => ({
+                ...option,
+                count: option.value === 'all' ? books.length : countOf(option.value),
+              }))}
+            />
+          }
+        />
 
-      {visibleBooks.length === 0 ? (
-        <Card>
-          <EmptyState
-            icon={<BookOpen size={22} aria-hidden />}
-            title={books.length === 0 ? '书单还是空的' : '没有符合条件的书'}
-            description={
-              books.length === 0
-                ? '把想读的书加进来，之后可以记录进度和笔记。'
-                : '换个关键词，或者切换上面的状态筛选。'
-            }
-            action={
-              books.length === 0 ? (
-                <Button icon={<Plus size={16} aria-hidden />} onClick={() => setShowAddModal(true)}>
-                  添加书籍
-                </Button>
-              ) : (
-                <Button
-                  variant="secondary"
-                  onClick={() => {
-                    setKeyword('');
-                    setFilter('all');
-                  }}
-                >
-                  清除筛选
-                </Button>
-              )
-            }
-          />
-        </Card>
-      ) : (
-        <ul className="grid gap-4">
-          {visibleBooks.map((book) => (
-            <li key={book.id}>
-              <Card className="p-4">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="font-semibold text-content">{book.title}</h3>
-                      <Badge tone={STATUS_TONE[book.status]}>{STATUS_LABEL[book.status]}</Badge>
+        {visibleBooks.length === 0 ? (
+          <Card>
+            <EmptyState
+              icon={<BookOpen size={22} aria-hidden />}
+              title={books.length === 0 ? '书单还是空的' : '没有符合条件的书'}
+              description={
+                books.length === 0
+                  ? '把想读的书加进来，之后可以记录进度和笔记。'
+                  : '换个关键词，或者切换上面的状态筛选。'
+              }
+              action={
+                books.length === 0 ? (
+                  <Button icon={<Plus size={16} aria-hidden />} onClick={() => setShowAddModal(true)}>
+                    添加书籍
+                  </Button>
+                ) : (
+                  <Button
+                    variant="secondary"
+                    onClick={() => {
+                      setKeyword('');
+                      setFilter('all');
+                    }}
+                  >
+                    清除筛选
+                  </Button>
+                )
+              }
+            />
+          </Card>
+        ) : (
+          <ul className="grid gap-4">
+            {visibleBooks.map((book) => (
+              <li key={book.id}>
+                <Card className="p-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="font-semibold text-content">{book.title}</h3>
+                        <Badge tone={STATUS_TONE[book.status]}>{STATUS_LABEL[book.status]}</Badge>
+                        {(() => {
+                          const stalled = stalledDaysOf(book);
+                          return stalled !== null ? (
+                            <Badge tone="warning">开读 {stalled} 天未完</Badge>
+                          ) : null;
+                        })()}
+                      </div>
+                      <p className="mt-1 text-sm text-content-tertiary">
+                        {[book.author, book.category].filter(Boolean).join(' · ') ||
+                          '未填写作者与分类'}
+                      </p>
+
+                      <div className="mt-2">
+                        <TagEditor
+                          tags={book.tags}
+                          suggestions={tagSuggestions}
+                          onChange={(tags) => updateBook(book.id, { tags })}
+                        />
+                      </div>
+
                       {(() => {
-                        const stalled = stalledDaysOf(book);
-                        return stalled !== null ? (
-                          <Badge tone="warning">开读 {stalled} 天未完</Badge>
+                        const daysLeft = estimateDaysLeft(book);
+                        return daysLeft !== null ? (
+                          <p className="mt-1 inline-flex items-center gap-1 text-xs text-content-tertiary">
+                            <Hourglass size={11} aria-hidden />
+                            按当前速度约还需 {daysLeft} 天读完
+                          </p>
                         ) : null;
                       })()}
-                    </div>
-                    <p className="mt-1 text-sm text-content-tertiary">
-                      {[book.author, book.category].filter(Boolean).join(' · ') ||
-                        '未填写作者与分类'}
-                    </p>
 
-                    <div className="mt-2">
-                      <TagEditor
-                        tags={book.tags}
-                        suggestions={tagSuggestions}
-                        onChange={(tags) => updateBook(book.id, { tags })}
-                      />
-                    </div>
+                      {book.status === 'reading' && (
+                        <div className="mt-3 space-y-2">
+                          <ProgressBar
+                            value={book.progress}
+                            showValue
+                            label="阅读进度"
+                            tone={progressTone(book)}
+                          />
+                          {book.totalPages ? (
+                            <div className="flex flex-wrap items-end gap-3">
+                              <div className="w-32">
+                                <NumberInput
+                                  label="总页数"
+                                  value={book.totalPages}
+                                  onChange={(value) =>
+                                    updateBook(book.id, {
+                                      totalPages: typeof value === 'number' && value > 0 ? value : undefined,
+                                    })
+                                  }
+                                  min={1}
+                                  step={10}
+                                  suffix="页"
+                                />
+                              </div>
+                              <div className="w-32">
+                                <NumberInput
+                                  label="当前页码"
+                                  value={pageOf(book)}
+                                  onChange={(value) =>
+                                    handlePageChange(book, value === '' ? 0 : value)
+                                  }
+                                  min={0}
+                                  step={10}
+                                  suffix="页"
+                                />
+                              </div>
+                            </div>
+                          ) : (
+                            <>
+                              <Slider
+                                ariaLabel={`调整「${book.title}」的阅读进度`}
+                                value={book.progress}
+                                onChange={(value) => updateProgress(book.id, value)}
+                                showValue
+                                formatValue={(value) => `${value}%`}
+                              />
+                              <div className="w-32">
+                                <NumberInput
+                                  label="总页数"
+                                  value={book.totalPages ?? 0}
+                                  onChange={(value) =>
+                                    updateBook(book.id, {
+                                      totalPages: typeof value === 'number' && value > 0 ? value : undefined,
+                                    })
+                                  }
+                                  min={0}
+                                  step={10}
+                                  suffix="页"
+                                  hint="填上总页数后可以用页码记录进度"
+                                />
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      )}
 
-                    {(() => {
-                      const daysLeft = estimateDaysLeft(book);
-                      return daysLeft !== null ? (
-                        <p className="mt-1 inline-flex items-center gap-1 text-xs text-content-tertiary">
-                          <Hourglass size={11} aria-hidden />
-                          按当前速度约还需 {daysLeft} 天读完
-                        </p>
-                      ) : null;
-                    })()}
-
-                    {book.status === 'reading' && (
-                      <div className="mt-3 space-y-2">
-                        <ProgressBar
-                          value={book.progress}
-                          showValue
-                          label="阅读进度"
-                          tone={progressTone(book)}
-                        />
-                        {book.totalPages ? (
-                          <div className="flex flex-wrap items-end gap-3">
-                            <div className="w-32">
-                              <NumberInput
-                                label="总页数"
-                                value={book.totalPages}
-                                onChange={(value) =>
-                                  updateBook(book.id, {
-                                    totalPages: typeof value === 'number' && value > 0 ? value : undefined,
-                                  })
-                                }
-                                min={1}
-                                step={10}
-                                suffix="页"
-                              />
-                            </div>
-                            <div className="w-32">
-                              <NumberInput
-                                label="当前页码"
-                                value={pageOf(book)}
-                                onChange={(value) =>
-                                  handlePageChange(book, value === '' ? 0 : value)
-                                }
-                                min={0}
-                                step={10}
-                                suffix="页"
-                              />
-                            </div>
-                          </div>
-                        ) : (
-                          <>
-                            <Slider
-                              ariaLabel={`调整「${book.title}」的阅读进度`}
-                              value={book.progress}
-                              onChange={(value) => updateProgress(book.id, value)}
-                              showValue
-                              formatValue={(value) => `${value}%`}
-                            />
-                            <div className="w-32">
-                              <NumberInput
-                                label="总页数"
-                                value={book.totalPages ?? 0}
-                                onChange={(value) =>
-                                  updateBook(book.id, {
-                                    totalPages: typeof value === 'number' && value > 0 ? value : undefined,
-                                  })
-                                }
-                                min={0}
-                                step={10}
-                                suffix="页"
-                                hint="填上总页数后可以用页码记录进度"
-                              />
-                            </div>
-                          </>
+                      <div className="mt-3 flex flex-wrap items-center gap-2">
+                        {book.status !== 'reading' && (
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            icon={<Play size={13} aria-hidden />}
+                            onClick={() => updateBookStatus(book.id, 'reading')}
+                          >
+                            开始阅读
+                          </Button>
                         )}
+                        {book.status !== 'finished' && (
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            icon={<CheckCircle2 size={13} aria-hidden />}
+                            onClick={() => {
+                              updateBookStatus(book.id, 'finished');
+                              updateProgress(book.id, 100);
+                            }}
+                          >
+                            标记已读
+                          </Button>
+                        )}
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          icon={<Clock size={13} aria-hidden />}
+                          aria-label={`记录《${book.title}》的阅读`}
+                          onClick={() => openSessionModal(book.id)}
+                        >
+                          记阅读
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          icon={<StickyNote size={13} aria-hidden />}
+                          onClick={() => openNotes(book.id)}
+                        >
+                          笔记（{book.notes.length}）
+                        </Button>
                       </div>
-                    )}
-
-                    <div className="mt-3 flex flex-wrap items-center gap-2">
-                      {book.status !== 'reading' && (
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          icon={<Play size={13} aria-hidden />}
-                          onClick={() => updateBookStatus(book.id, 'reading')}
-                        >
-                          开始阅读
-                        </Button>
-                      )}
-                      {book.status !== 'finished' && (
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          icon={<CheckCircle2 size={13} aria-hidden />}
-                          onClick={() => {
-                            updateBookStatus(book.id, 'finished');
-                            updateProgress(book.id, 100);
-                          }}
-                        >
-                          标记已读
-                        </Button>
-                      )}
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        icon={<Clock size={13} aria-hidden />}
-                        aria-label={`记录《${book.title}》的阅读`}
-                        onClick={() => openSessionModal(book.id)}
-                      >
-                        记阅读
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        icon={<StickyNote size={13} aria-hidden />}
-                        onClick={() => openNotes(book.id)}
-                      >
-                        笔记（{book.notes.length}）
-                      </Button>
                     </div>
-                  </div>
 
-                  <IconButton
-                    label={`删除《${book.title}》`}
-                    size="sm"
-                    icon={<Trash2 size={15} />}
-                    onClick={() => setPendingDeleteId(book.id)}
-                    className="hover:text-danger"
-                  />
-                </div>
-              </Card>
-            </li>
-          ))}
-        </ul>
-      )}
+                    <IconButton
+                      label={`删除《${book.title}》`}
+                      size="sm"
+                      icon={<Trash2 size={15} />}
+                      onClick={() => setPendingDeleteId(book.id)}
+                      className="hover:text-danger"
+                    />
+                  </div>
+                </Card>
+              </li>
+            ))}
+          </ul>
+        )}
+      </MasterDetail>
 
       <Modal
         isOpen={showAddModal}
@@ -609,94 +709,6 @@ export const BooksPage: React.FC = () => {
             suggestions={tagSuggestions}
             onChange={(tags) => setForm({ ...form, tags })}
           />
-        </div>
-      </Modal>
-
-      <Modal
-        isOpen={noteBook !== null}
-        onClose={closeNotes}
-        title={noteBook ? `《${noteBook.title}》的笔记` : '读书笔记'}
-        description="回车即可保存，笔记会按时间倒序排列"
-      >
-        <div className="space-y-4">
-          <div className="w-40">
-            <NumberInput
-              label="页码"
-              value={notePage}
-              onChange={(value) => setNotePage(value)}
-              min={0}
-              step={1}
-              suffix="页"
-              hint="可选"
-            />
-          </div>
-
-          <div className="flex items-start gap-2">
-            <div className="min-w-0 flex-1">
-              <Input
-                aria-label="笔记内容"
-                value={noteInput}
-                onChange={(event) => {
-                  setNoteInput(event.target.value);
-                  if (noteError) setNoteError(undefined);
-                }}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') {
-                    event.preventDefault();
-                    handleAddNote();
-                  }
-                }}
-                placeholder="写下这一段的收获…"
-                error={noteError}
-              />
-            </div>
-            <IconButton
-              label="保存笔记"
-              variant="primary"
-              icon={<Plus size={16} />}
-              onClick={handleAddNote}
-            />
-          </div>
-
-          {noteBook && noteBook.notes.length === 0 ? (
-            <EmptyState
-              icon={<NotebookPen size={20} aria-hidden />}
-              title="还没有笔记"
-              description="读到有感触的地方，随手记一句。"
-              className="py-6"
-            />
-          ) : (
-            <ul className="max-h-72 space-y-2 overflow-y-auto">
-              {noteBook?.notes.map((note) => (
-                <li key={note.id} className="group rounded bg-inset p-3">
-                  <p className="text-sm text-content-secondary">{note.content}</p>
-                  <div className="mt-2 flex items-center justify-between">
-                    <span className="text-2xs text-content-tertiary">
-                      {new Date(note.createdAt).toLocaleDateString('zh-CN')}
-                      {note.page ? ` · 第 ${note.page} 页` : ''}
-                    </span>
-                    <IconButton
-                      label="删除这条笔记"
-                      size="sm"
-                      icon={<Trash2 size={13} />}
-                      onClick={() => {
-                        if (!noteBook) return;
-                        const snapshot = books;
-                        deleteNote(noteBook.id, note.id);
-                        undoableRemove({
-                          message: '已删除这条笔记',
-                          description: '点「撤销」可以恢复。',
-                          snapshot,
-                          restore: replaceBooks,
-                        });
-                      }}
-                      className="hover:text-danger"
-                    />
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
         </div>
       </Modal>
 

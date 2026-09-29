@@ -8,7 +8,11 @@ export interface PageSkeletonProps {
 
 /** 路由懒加载时的占位，形状贴近真实页面，避免骨架屏跳动。 */
 export const PageSkeleton: React.FC<PageSkeletonProps> = ({ cards = 3 }) => (
-  <div className="mx-auto max-w-5xl space-y-section" aria-busy="true" aria-live="polite">
+  <div
+    className="mx-auto max-w-5xl space-y-section xl:max-w-6xl 2xl:max-w-7xl"
+    aria-busy="true"
+    aria-live="polite"
+  >
     <span className="sr-only">页面加载中</span>
     <div className="space-y-3">
       <Skeleton className="h-7 w-48" />

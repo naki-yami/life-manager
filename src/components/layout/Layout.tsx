@@ -82,7 +82,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
             tabIndex={-1}
             className="min-w-0 flex-1 overflow-y-auto p-page focus:outline-none"
           >
-            <div className="mx-auto w-full max-w-5xl">
+            <div className="mx-auto w-full max-w-5xl xl:max-w-6xl 2xl:max-w-7xl">
               {/* 只在写入失败时渲染，正常情况下不占位 */}
               <StorageAlert />
               {children}
