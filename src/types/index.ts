@@ -28,6 +28,8 @@ export interface Task {
   subtasks: SubTask[];
   /** 重复规则；null 表示不重复。旧数据可能没有 */
   repeat: RepeatRule | null;
+  /** 统一标签（不带 #）；旧数据由归一化补 []，所以这里不是可选的 */
+  tags: string[];
   createdAt: string;
   completedAt?: string;
 }
@@ -51,6 +53,8 @@ export interface Book {
   status: BookStatus;
   progress: number;
   notes: BookNote[];
+  /** 统一标签（不带 #）；旧数据由归一化补 [] */
+  tags: string[];
   /** 总页数；填了之后可以用页码换算进度。旧数据可能没有 */
   totalPages?: number;
   /** 首次标记为「已读」的时间，用来做年度阅读统计；旧数据可能没有 */
@@ -115,6 +119,8 @@ export interface DevProject {
   description: string;
   status: DevProjectStatus;
   tasks: DevTask[];
+  /** 统一标签（不带 #）；与 techStack 不同，它跨模块、可用于筛选 */
+  tags: string[];
   /** 累计投入工时，由工时流水累加而来 */
   hoursSpent: number;
   /** 技术栈标签；旧数据可能没有 */
@@ -163,6 +169,8 @@ export interface WritingProject {
   status: WritingStatus;
   wordCount: number;
   notes: string;
+  /** 统一标签（不带 #）；旧数据由归一化补 [] */
+  tags: string[];
   /** 正文；编辑器保存时更新，字数随之自动同步。旧数据可能没有 */
   content: string;
   /** 目标字数；0 表示未设置。旧数据可能没有 */
@@ -187,6 +195,8 @@ export interface WorkoutRecord {
   planName: string;
   exercises: Exercise[];
   notes: string;
+  /** 统一标签（不带 #），例如部位「胸 / 背 / 腿」 */
+  tags: string[];
   createdAt: string;
 }
 
@@ -217,6 +227,8 @@ export interface MealRecord {
   type: MealType;
   items: FoodItem[];
   totalCalories: number;
+  /** 统一标签（不带 #），例如「外食 / 加班餐」 */
+  tags: string[];
   /**
    * 三大营养素合计（克），由条目累加而来。
    * 旧数据缺省时由归一化补 0，所以这里不是可选的 —— 读取处不必再写 `?? 0`。
@@ -264,6 +276,8 @@ export interface Game {
   progress: number;
   achievements: GameAchievement[];
   notes: string;
+  /** 统一标签（不带 #）；旧数据由归一化补 [] */
+  tags: string[];
   createdAt: string;
 }
 

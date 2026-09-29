@@ -18,6 +18,8 @@ beforeEach(async () => {
   useDietStore.setState({ records: [] });
   useFitnessStore.setState({ plans: [], records: [] });
   useDevStore.setState({ projects: [], sessions: [] });
+  // writingStore 之前漏了重置：两条写作用例共用 projects[0]，其实是同一条记录被反复改
+  useWritingStore.setState({ projects: [] });
   useThemeStore.setState({ themeMode: 'light' });
 });
 
@@ -64,6 +66,7 @@ describe('taskStore', () => {
         dueDate: '2026-09-28',
         subtasks: [],
         repeat: null,
+        tags: [],
         createdAt: '2026-09-01T00:00:00.000Z',
         completedAt: '2026-09-02T00:00:00.000Z',
       },
@@ -620,5 +623,48 @@ describe('devStore 工时流水', () => {
 
     useDevStore.getState().replaceSessions([]);
     expect(useDevStore.getState().sessions).toHaveLength(0);
+  });
+});
+
+describe('统一标签', () => {
+  /** 七个模块的 add* 都接受可选的 tags，并且写进 store 之前会做一次清洗 */
+  const DIRTY = ['#工作', '工作', '   ', 'Work', 'work'];
+  const CLEAN = ['工作', 'Work'];
+
+  it('addTask 写入并清洗标签', () => {
+    useTaskStore.getState().addTask('写周报', '', 'medium', '', null, DIRTY);
+    expect(useTaskStore.getState().tasks[0]!.tags).toEqual(CLEAN);
+  });
+
+  it('不传标签时默认空数组', () => {
+    useTaskStore.getState().addTask('写周报', '', 'medium', '');
+    expect(useTaskStore.getState().tasks[0]!.tags).toEqual([]);
+  });
+
+  it('读书 / 开发 / 写作 / 游戏 / 训练 / 饮食都支持标签', () => {
+    useBookStore.getState().addBook('置身事内', '兰小欢', '经济', DIRTY);
+    expect(useBookStore.getState().books[0]!.tags).toEqual(CLEAN);
+
+    useDevStore.getState().addProject('记账 App', '', DIRTY);
+    expect(useDevStore.getState().projects[0]!.tags).toEqual(CLEAN);
+
+    useWritingStore.getState().addProject('周报模板', 'article', DIRTY);
+    expect(useWritingStore.getState().projects[0]!.tags).toEqual(CLEAN);
+
+    useGameStore.getState().addGame('星露谷', 'PC', DIRTY);
+    expect(useGameStore.getState().games[0]!.tags).toEqual(CLEAN);
+
+    useFitnessStore.getState().addRecord('胸肌日', '2026-09-28', [], '', DIRTY);
+    expect(useFitnessStore.getState().records[0]!.tags).toEqual(CLEAN);
+
+    useDietStore.getState().addRecord('2026-09-28', 'lunch', [], DIRTY);
+    expect(useDietStore.getState().records[0]!.tags).toEqual(CLEAN);
+  });
+
+  it('updateX 可以单独改标签（表单与快速捕获共用这条路径）', () => {
+    useTaskStore.getState().addTask('写周报', '', 'medium', '');
+    const id = useTaskStore.getState().tasks[0]!.id;
+    useTaskStore.getState().updateTask(id, { tags: ['工作'] });
+    expect(useTaskStore.getState().tasks[0]!.tags).toEqual(['工作']);
   });
 });

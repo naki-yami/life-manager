@@ -8,6 +8,7 @@ const record = (date: string, exercises: Array<{ name: string; sets: number; rep
   planName: '',
   exercises: exercises.map((exercise) => ({ id: `${date}-${exercise.name}`, ...exercise })),
   notes: '',
+  tags: [],
   createdAt: `${date}T10:00:00.000Z`,
 });
 

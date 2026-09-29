@@ -6,10 +6,11 @@ import { STORAGE_KEYS } from '../utils/storageKeys';
 import { persistOptions } from './persist';
 import { asRecord, normalizeArray } from './normalize';
 import { writingProjectSchema } from '../services/schemas';
+import { normalizeTags } from '../utils/tags';
 
 interface WritingState {
   projects: WritingProject[];
-  addProject: (title: string, type: WritingType) => void;
+  addProject: (title: string, type: WritingType, tags?: string[]) => void;
   updateProject: (id: string, updates: Partial<WritingProject>) => void;
   deleteProject: (id: string) => void;
   updateStatus: (id: string, status: WritingStatus) => void;
@@ -30,7 +31,7 @@ export const useWritingStore = create<WritingState>()(
   persist(
     (set) => ({
       ...defaultState,
-      addProject: (title, type) =>
+      addProject: (title, type, tags = []) =>
         set((state) => ({
           projects: [
             ...state.projects,
@@ -41,6 +42,7 @@ export const useWritingStore = create<WritingState>()(
               status: 'draft' as WritingStatus,
               wordCount: 0,
               notes: '',
+              tags: normalizeTags(tags),
               content: '',
               targetWords: 0,
               snapshots: [],

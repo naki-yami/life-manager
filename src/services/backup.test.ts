@@ -27,6 +27,7 @@ function sampleData(): BackupData {
         priority: 'high',
         status: 'completed',
         dueDate: '2026-09-28',
+        tags: ['工作', '紧急'],
         subtasks: [
           { id: 'sub-1', title: '收集数据', done: true },
           { id: 'sub-2', title: '写结论', done: false },
@@ -46,6 +47,7 @@ function sampleData(): BackupData {
         status: 'reading',
         progress: 42,
         notes: [{ id: 'note-1', content: '不二法门', createdAt: '2026-09-27T03:00:00.000Z' }],
+        tags: ['佛学'],
         createdAt: '2026-09-20T00:00:00.000Z',
       },
     ],
@@ -84,6 +86,7 @@ function sampleData(): BackupData {
         ],
         hoursSpent: 12,
         techStack: ['React', 'TypeScript'],
+        tags: ['副业'],
         repoUrl: 'https://github.com/example/life-manager',
         startDate: '2026-09-01',
         archived: false,
@@ -108,6 +111,7 @@ function sampleData(): BackupData {
         status: 'in-progress',
         wordCount: 3200,
         notes: '第三章需要重写',
+        tags: ['长文'],
         content: '第一章 良质……',
         targetWords: 50000,
         snapshots: [
@@ -137,6 +141,7 @@ function sampleData(): BackupData {
         planName: '胸肌日',
         exercises: [{ id: 'ex-1', name: '卧推', sets: 4, reps: 8, weight: 60 }],
         notes: '状态不错',
+        tags: ['胸'],
         createdAt: '2026-09-27T06:00:00.000Z',
       },
     ],
@@ -160,6 +165,7 @@ function sampleData(): BackupData {
         totalProtein: 40,
         totalCarbs: 0,
         totalFat: 5,
+        tags: ['外食'],
       },
     ],
     games: [
@@ -172,6 +178,7 @@ function sampleData(): BackupData {
         progress: 60,
         achievements: [{ id: 'ach-1', name: '初始的艾尔登之王', description: '', unlocked: true }],
         notes: '卡在女武神',
+        tags: ['单机'],
         createdAt: '2026-08-01T00:00:00.000Z',
       },
     ],
@@ -265,7 +272,7 @@ describe('导出 / 导入 往返', () => {
   it('信封结构包含 schemaVersion 与 exportedAt', () => {
     const envelope = buildBackupEnvelope(emptyData(), new Date('2026-09-28T00:00:00.000Z'));
     expect(envelope.app).toBe('life-manager');
-    expect(envelope.schemaVersion).toBe(10);
+    expect(envelope.schemaVersion).toBe(11);
     expect(envelope.exportedAt).toBe('2026-09-28T00:00:00.000Z');
   });
 });
@@ -352,6 +359,7 @@ describe('覆盖模式下的数据安全', () => {
         status: 'reading',
         progress: 10,
         notes: [],
+        tags: [],
         createdAt: '2026-01-01T00:00:00.000Z',
       },
     ];
@@ -498,6 +506,69 @@ describe('开发项目 v10 字段的导入兼容', () => {
     expect(plan.data.devProjects?.[0]?.milestones).toEqual([]);
     expect(plan.data.devProjects?.[0]?.logs).toEqual([]);
     expect(plan.data.devProjects?.[0]?.tasks?.[0]?.type).toBe('feature'); // 缺省按「功能」处理
+  });
+});
+
+describe('统一标签的导入兼容', () => {
+  /** 所有带标签的模块；改数据模型时要一起维护 */
+  const TAGGED_MODULES = [
+    'tasks',
+    'books',
+    'devProjects',
+    'writingProjects',
+    'fitnessRecords',
+    'dietRecords',
+    'games',
+  ] as const;
+
+  it('往返后标签原样保留', () => {
+    const original = sampleData();
+    const parsed = parseBackup(serializeBackup(original));
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+
+    const plan = planImport(emptyData(), parsed.backup.modules, 'merge');
+    expect(plan.data.tasks?.[0]?.tags).toEqual(['工作', '紧急']);
+    expect(plan.data.books?.[0]?.tags).toEqual(['佛学']);
+    expect(plan.data.devProjects?.[0]?.tags).toEqual(['副业']);
+    expect(plan.data.writingProjects?.[0]?.tags).toEqual(['长文']);
+    expect(plan.data.fitnessRecords?.[0]?.tags).toEqual(['胸']);
+    expect(plan.data.dietRecords?.[0]?.tags).toEqual(['外食']);
+    expect(plan.data.games?.[0]?.tags).toEqual(['单机']);
+  });
+
+  it('旧备份里没有 tags 的实体，导入时补空数组', () => {
+    const legacy = sampleData() as Record<string, unknown>;
+    for (const module of TAGGED_MODULES) {
+      const items = legacy[module] as Array<Record<string, unknown>>;
+      delete items[0]!.tags;
+    }
+
+    const parsed = parseBackup(JSON.stringify(legacy));
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+
+    const plan = planImport(emptyData(), parsed.backup.modules, 'overwrite');
+    expect(plan.data.tasks?.[0]?.tags).toEqual([]);
+    expect(plan.data.books?.[0]?.tags).toEqual([]);
+    expect(plan.data.devProjects?.[0]?.tags).toEqual([]);
+    expect(plan.data.writingProjects?.[0]?.tags).toEqual([]);
+    expect(plan.data.fitnessRecords?.[0]?.tags).toEqual([]);
+    expect(plan.data.dietRecords?.[0]?.tags).toEqual([]);
+    expect(plan.data.games?.[0]?.tags).toEqual([]);
+  });
+
+  it('标签进 store 之前会被清洗：去 # 前缀、忽略大小写去重、丢弃空值', () => {
+    const legacy = sampleData() as Record<string, unknown>;
+    const tasks = legacy.tasks as Array<Record<string, unknown>>;
+    tasks[0]!.tags = ['#工作', '工作', '   ', 'Work', 'work', '工作'];
+
+    const parsed = parseBackup(JSON.stringify(legacy));
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+
+    const plan = planImport(emptyData(), parsed.backup.modules, 'overwrite');
+    expect(plan.data.tasks?.[0]?.tags).toEqual(['工作', 'Work']);
   });
 });
 

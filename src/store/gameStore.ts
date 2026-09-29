@@ -6,12 +6,13 @@ import { STORAGE_KEYS } from '../utils/storageKeys';
 import { persistOptions } from './persist';
 import { asRecord, normalizeArray } from './normalize';
 import { gameSchema, gameSessionSchema } from '../services/schemas';
+import { normalizeTags } from '../utils/tags';
 
 interface GameState {
   games: Game[];
   /** 游玩流水，用来做「今年玩了多少小时」这类按时间的统计 */
   sessions: GameSession[];
-  addGame: (name: string, platform: GamePlatform) => void;
+  addGame: (name: string, platform: GamePlatform, tags?: string[]) => void;
   updateGame: (id: string, updates: Partial<Game>) => void;
   deleteGame: (id: string) => void;
   updateGameStatus: (id: string, status: GameStatus) => void;
@@ -35,7 +36,7 @@ export const useGameStore = create<GameState>()(
   persist(
     (set) => ({
       ...defaultState,
-      addGame: (name, platform) =>
+      addGame: (name, platform, tags = []) =>
         set((state) => ({
           games: [
             ...state.games,
@@ -48,6 +49,7 @@ export const useGameStore = create<GameState>()(
               progress: 0,
               achievements: [],
               notes: '',
+              tags: normalizeTags(tags),
               createdAt: new Date().toISOString(),
             },
           ],

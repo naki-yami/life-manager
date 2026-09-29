@@ -149,6 +149,7 @@ describe('SettingsPage', () => {
           status: 'reading',
           progress: 30,
           notes: [],
+          tags: [],
           createdAt: new Date().toISOString(),
         },
       ],

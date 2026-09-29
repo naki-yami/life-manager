@@ -145,6 +145,45 @@ describe('parseCapture 信号推断', () => {
   });
 });
 
+describe('parseCapture 标签', () => {
+  const today = '2026-09-28';
+
+  it('摘出 #标签，并从正文里去掉', () => {
+    expect(parseCapture('交周报 #工作 #紧急 明天', today)).toMatchObject({
+      kind: 'task',
+      text: '交周报',
+      dueDate: '2026-09-29',
+      tags: ['工作', '紧急'],
+    });
+  });
+
+  it('标签与书名号、数值共存', () => {
+    const parsed = parseCapture('读书《置身事内》#经济 读到 120 页', today);
+    expect(parsed).toMatchObject({ kind: 'book', text: '置身事内', tags: ['经济'] });
+    expect(parsed.amount).toEqual({ value: 120, unit: 'page' });
+  });
+
+  it('没有标签时是空数组', () => {
+    expect(parseCapture('买牛奶', today).tags).toEqual([]);
+  });
+
+  it('C# 这类不算标签', () => {
+    expect(parseCapture('学 C# 语言', today).tags).toEqual([]);
+    expect(parseCapture('学 C# 语言', today).text).toBe('学 C# 语言');
+  });
+
+  it('备忘是自由文本，标签原样留在内容里', () => {
+    const parsed = parseCapture('备忘 交周报 #工作', today);
+    expect(parsed.tags).toEqual([]);
+    expect(parsed.text).toBe('交周报 #工作');
+    expect(parsed.body).toBe('交周报 #工作');
+  });
+
+  it('body 保留含标签的原文，兜底存备忘时标签不会丢', () => {
+    expect(parseCapture('交周报 #工作', today).body).toBe('交周报 #工作');
+  });
+});
+
 describe('parseCapture 日期', () => {
   const today = '2026-09-28'; // 周一
 

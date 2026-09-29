@@ -32,7 +32,12 @@ import { useThemeStore } from '../../store/themeStore';
 import { useUiStore } from '../../store/uiStore';
 import { buildCaptureCandidates, runCapture, type CaptureTarget } from '../../services/capture';
 import { todayKey } from '../../utils/date';
-import type { EntityKind, SearchableEntity } from '../../utils/entityIndex';
+import {
+  matchEntitiesByTag,
+  parseTagQuery,
+  type EntityKind,
+  type SearchableEntity,
+} from '../../utils/entityIndex';
 import { fuzzyFilter } from '../../utils/fuzzy';
 import { parseCapture } from '../../utils/quickParse';
 import { NAV_ITEMS } from './navItems';
@@ -81,6 +86,8 @@ const ENTITY_ICON: Record<EntityKind, LucideIcon> = {
   dev: Code2,
   writing: PenTool,
   game: Gamepad2,
+  workout: Dumbbell,
+  meal: UtensilsCrossed,
 };
 
 interface QuickAction {
@@ -162,6 +169,31 @@ const matchesCommandExactly = (query: string, item: CommandItem): boolean => {
   if (normalizeTitle(item.label) === key) return true;
   return (item.keywords ?? []).some((keyword) => normalizeTitle(keyword) === key);
 };
+
+/** 实体行的说明文字：模块 · 副标题 · #标签 */
+function entityHint(entity: SearchableEntity): string {
+  const base = entity.subtitle ? `${entity.kindLabel} · ${entity.subtitle}` : entity.kindLabel;
+  if (entity.tags.length === 0) return base;
+  return `${base} · ${entity.tags.map((tag) => `#${tag}`).join(' ')}`;
+}
+
+/** 把一条实体转成面板里的一行；`open` 由调用方注入跳转逻辑 */
+function toEntityEntry(entity: SearchableEntity, open: (path: string) => void): PaletteEntry {
+  return {
+    item: {
+      id: entity.id,
+      label: entity.title,
+      hint: entityHint(entity),
+      icon: ENTITY_ICON[entity.kind],
+      group: GROUP.entity,
+      run: () => {
+        if (entity.focusable) requestPaletteFocus(entity.path, entity.entityId);
+        open(entity.path);
+      },
+    },
+    matched: [],
+  };
+}
 
 const CommandPaletteInner: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const panelRef = useRef<HTMLDivElement>(null);
@@ -320,9 +352,26 @@ const CommandPaletteInner: React.FC<{ onClose: () => void }> = ({ onClose }) => 
   }>(() => {
     if (!trimmedQuery) return { entityEntries: [], hasExactEntity: false };
 
+    // `#标签` 是明确的「按标签找」意图：不做模糊匹配，直接列出带这个标签的记录
+    const tagQuery = parseTagQuery(trimmedQuery);
+    if (tagQuery !== null) {
+      return {
+        hasExactEntity: false,
+        entityEntries: matchEntitiesByTag(entities, tagQuery)
+          .slice(0, 12)
+          .map((entity) => toEntityEntry(entity, navigate)),
+      };
+    }
+
     const matches = fuzzyFilter(trimmedQuery, entities, {
       getText: (entity) => entity.title,
-      getKeywords: (entity) => [entity.subtitle, entity.kindLabel, ...entity.keywords],
+      // 标签也参与匹配：搜「健身」时，打了 #健身 标签的任务 / 书 / 项目都会命中
+      getKeywords: (entity) => [
+        entity.subtitle,
+        entity.kindLabel,
+        ...entity.tags,
+        ...entity.keywords,
+      ],
       limit: 8,
     });
 
@@ -336,20 +385,7 @@ const CommandPaletteInner: React.FC<{ onClose: () => void }> = ({ onClose }) => 
 
     return {
       hasExactEntity: exact !== undefined,
-      entityEntries: ordered.slice(0, 10).map((entity) => ({
-        item: {
-          id: entity.id,
-          label: entity.title,
-          hint: entity.subtitle ? `${entity.kindLabel} · ${entity.subtitle}` : entity.kindLabel,
-          icon: ENTITY_ICON[entity.kind],
-          group: GROUP.entity,
-          run: () => {
-            if (entity.focusable) requestPaletteFocus(entity.path, entity.entityId);
-            navigate(entity.path);
-          },
-        },
-        matched: [],
-      })),
+      entityEntries: ordered.slice(0, 10).map((entity) => toEntityEntry(entity, navigate)),
     };
   }, [trimmedQuery, entities, navigate]);
 
@@ -450,7 +486,7 @@ const CommandPaletteInner: React.FC<{ onClose: () => void }> = ({ onClose }) => 
             aria-label="搜索功能与命令"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="输入一句话快速记录，或搜索任务、书、项目…"
+            placeholder="输入一句话快速记录，或搜索任务、书、项目…（#标签 可筛选）"
             className="min-w-0 flex-1 bg-transparent text-sm text-content outline-none placeholder:text-content-tertiary"
           />
           <Kbd>Esc</Kbd>

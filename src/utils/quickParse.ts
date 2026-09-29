@@ -1,5 +1,6 @@
 import { addDays } from './date';
 import type { Priority } from '../types';
+import { extractTags } from './tags';
 
 export interface ParsedQuickTask {
   title: string;
@@ -32,6 +33,8 @@ export interface ParsedCapture {
   priority: Priority;
   dueDate: string;
   amount: CaptureAmount | null;
+  /** 从正文里摘出来的 `#标签`（已去 `#`、去重、限长） */
+  tags: string[];
 }
 
 const PRIORITY_FLAGS: Record<string, Priority> = {
@@ -285,6 +288,7 @@ export function parseCapture(raw: string, today: string): ParsedCapture {
   const body = prefix ? prefix.rest : raw.trim();
 
   if (kind === 'memo') {
+    // 备忘是自由文本：连 `#标签` 也原样保留，避免把用户想记的内容吞掉
     return {
       kind: 'memo',
       explicit: true,
@@ -294,10 +298,13 @@ export function parseCapture(raw: string, today: string): ParsedCapture {
       priority: 'medium',
       dueDate: '',
       amount: null,
+      tags: [],
     };
   }
 
-  const scanned = scanTokens(body, today, true);
+  // 标签先摘掉再扫描：`《置身事内》#读书 明天` 里的标签不该混进书名解析
+  const { text: withoutTags, tags } = extractTags(body);
+  const scanned = scanTokens(withoutTags, today, true);
   let resolved: CaptureKind = kind;
 
   if (!prefix) {
@@ -331,5 +338,6 @@ export function parseCapture(raw: string, today: string): ParsedCapture {
     priority: scanned.priority,
     dueDate: scanned.dueDate,
     amount: scanned.amount,
+    tags,
   };
 }

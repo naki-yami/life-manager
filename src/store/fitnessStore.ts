@@ -6,13 +6,20 @@ import { STORAGE_KEYS } from '../utils/storageKeys';
 import { persistOptions } from './persist';
 import { asRecord, normalizeArray } from './normalize';
 import { fitnessPlanSchema, workoutRecordSchema } from '../services/schemas';
+import { normalizeTags } from '../utils/tags';
 
 interface FitnessState {
   plans: FitnessPlan[];
   records: WorkoutRecord[];
   addPlan: (name: string, description: string) => void;
   deletePlan: (id: string) => void;
-  addRecord: (planName: string, date: string, exercises: Exercise[], notes: string) => void;
+  addRecord: (
+    planName: string,
+    date: string,
+    exercises: Exercise[],
+    notes: string,
+    tags?: string[],
+  ) => void;
   deleteRecord: (id: string) => void;
   replacePlans: (plans: FitnessPlan[]) => void;
   replaceRecords: (records: WorkoutRecord[]) => void;
@@ -32,7 +39,7 @@ export const useFitnessStore = create<FitnessState>()(
           ],
         })),
       deletePlan: (id) => set((state) => ({ plans: state.plans.filter((p) => p.id !== id) })),
-      addRecord: (planName, date, exercises, notes) =>
+      addRecord: (planName, date, exercises, notes, tags = []) =>
         set((state) => ({
           records: [
             {
@@ -41,6 +48,7 @@ export const useFitnessStore = create<FitnessState>()(
               date,
               exercises: exercises.map((ex) => ({ ...ex, id: ex.id || createId() })),
               notes,
+              tags: normalizeTags(tags),
               createdAt: new Date().toISOString(),
             },
             ...state.records,

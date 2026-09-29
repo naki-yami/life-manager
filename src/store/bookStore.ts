@@ -6,12 +6,13 @@ import { STORAGE_KEYS } from '../utils/storageKeys';
 import { persistOptions } from './persist';
 import { asRecord, normalizeArray } from './normalize';
 import { bookSchema, readingSessionSchema } from '../services/schemas';
+import { normalizeTags } from '../utils/tags';
 
 interface BookState {
   books: Book[];
   /** 阅读流水，用来做每周阅读时长这类按时间的统计 */
   sessions: ReadingSession[];
-  addBook: (title: string, author: string, category: string) => void;
+  addBook: (title: string, author: string, category: string, tags?: string[]) => void;
   updateBook: (id: string, updates: Partial<Book>) => void;
   deleteBook: (id: string) => void;
   updateBookStatus: (id: string, status: BookStatus) => void;
@@ -30,7 +31,7 @@ export const useBookStore = create<BookState>()(
   persist(
     (set) => ({
       ...defaultState,
-      addBook: (title, author, category) =>
+      addBook: (title, author, category, tags = []) =>
         set((state) => ({
           books: [
             ...state.books,
@@ -42,6 +43,7 @@ export const useBookStore = create<BookState>()(
               status: 'want-to-read' as BookStatus,
               progress: 0,
               notes: [],
+              tags: normalizeTags(tags),
               createdAt: new Date().toISOString(),
             },
           ],

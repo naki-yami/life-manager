@@ -66,6 +66,22 @@ describe('normalizeArray', () => {
     expect(getDroppedRecordCount()).toBe(0);
   });
 
+  it('旧记录没有 tags 时补空数组，tags 被写成脏值时也只修这个字段', () => {
+    const [legacy] = normalizeArray(taskSchema, [legacyTask]);
+    expect(legacy!.tags).toEqual([]);
+
+    const [dirty] = normalizeArray(taskSchema, [{ ...legacyTask, tags: '工作' }]);
+    expect(dirty!.tags).toEqual([]);
+    expect(getDroppedRecordCount()).toBe(0);
+  });
+
+  it('tags 会被清洗：去 # 前缀、忽略大小写去重、丢弃空值', () => {
+    const [task] = normalizeArray(taskSchema, [
+      { ...legacyTask, tags: ['#工作', '工作', '   ', 'Work', 'work'] },
+    ]);
+    expect(task!.tags).toEqual(['工作', 'Work']);
+  });
+
   it('丢了 id 的记录会补一个新 id，而不是整条丢掉', () => {
     const items = normalizeArray(taskSchema, [{ title: '没有 id 的任务' }]);
 

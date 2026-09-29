@@ -6,6 +6,7 @@ import { STORAGE_KEYS } from '../utils/storageKeys';
 import { persistOptions } from './persist';
 import { asRecord, normalizeArray, pickNumber, pickNumberMap } from './normalize';
 import { mealRecordSchema } from '../services/schemas';
+import { normalizeTags } from '../utils/tags';
 
 interface DietState {
   records: MealRecord[];
@@ -13,7 +14,7 @@ interface DietState {
   goals: DietGoals;
   /** 饮水打卡：日期键 -> 杯数 */
   water: Record<string, number>;
-  addRecord: (date: string, type: MealType, items: FoodItem[]) => void;
+  addRecord: (date: string, type: MealType, items: FoodItem[], tags?: string[]) => void;
   deleteRecord: (id: string) => void;
   setGoals: (goals: DietGoals) => void;
   setWater: (date: string, glasses: number) => void;
@@ -42,7 +43,7 @@ export const useDietStore = create<DietState>()(
   persist(
     (set, get) => ({
       ...defaultState,
-      addRecord: (date, type, items) => {
+      addRecord: (date, type, items, tags = []) => {
         const itemsWithIds = items.map((item) => ({ ...item, id: item.id || createId() }));
         const totalCalories = itemsWithIds.reduce((sum, item) => sum + item.calories, 0);
         const totalProtein = itemsWithIds.reduce((sum, item) => sum + (item.protein ?? 0), 0);
@@ -60,6 +61,7 @@ export const useDietStore = create<DietState>()(
               totalProtein,
               totalCarbs,
               totalFat,
+              tags: normalizeTags(tags),
             },
           ],
         }));

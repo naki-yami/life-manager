@@ -8,6 +8,7 @@ import { asRecord, normalizeArray } from './normalize';
 import { memoSchema, taskSchema } from '../services/schemas';
 import { nextDueDate } from '../utils/repeat';
 import { todayKey } from '../utils/date';
+import { normalizeTags } from '../utils/tags';
 
 interface TaskState {
   tasks: Task[];
@@ -18,6 +19,7 @@ interface TaskState {
     priority: Priority,
     dueDate: string,
     repeat?: RepeatRule | null,
+    tags?: string[],
   ) => void;
   updateTask: (id: string, updates: Partial<Task>) => void;
   deleteTask: (id: string) => void;
@@ -37,7 +39,7 @@ export const useTaskStore = create<TaskState>()(
   persist(
     (set) => ({
       ...defaultState,
-      addTask: (title, description, priority, dueDate, repeat = null) =>
+      addTask: (title, description, priority, dueDate, repeat = null, tags = []) =>
         set((state) => ({
           tasks: [
             ...state.tasks,
@@ -50,6 +52,7 @@ export const useTaskStore = create<TaskState>()(
               dueDate,
               subtasks: [] as SubTask[],
               repeat: repeat ?? null,
+              tags: normalizeTags(tags),
               createdAt: new Date().toISOString(),
             },
           ],

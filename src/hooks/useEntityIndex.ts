@@ -1,6 +1,8 @@
 import { useMemo } from 'react';
 import { useBookStore } from '../store/bookStore';
 import { useDevStore } from '../store/devStore';
+import { useDietStore } from '../store/dietStore';
+import { useFitnessStore } from '../store/fitnessStore';
 import { useGameStore } from '../store/gameStore';
 import { useTaskStore } from '../store/taskStore';
 import { useWritingStore } from '../store/writingStore';
@@ -17,9 +19,21 @@ export function useEntityIndex(): SearchableEntity[] {
   const devProjects = useDevStore((state) => state.projects);
   const writingProjects = useWritingStore((state) => state.projects);
   const games = useGameStore((state) => state.games);
+  const workoutRecords = useFitnessStore((state) => state.records);
+  const mealRecords = useDietStore((state) => state.records);
 
   return useMemo(
-    () => buildEntityIndex({ tasks, memos, books, devProjects, writingProjects, games }),
-    [tasks, memos, books, devProjects, writingProjects, games],
+    () =>
+      buildEntityIndex({
+        tasks,
+        memos,
+        books,
+        devProjects,
+        writingProjects,
+        games,
+        workoutRecords,
+        mealRecords,
+      }),
+    [tasks, memos, books, devProjects, writingProjects, games, workoutRecords, mealRecords],
   );
 }

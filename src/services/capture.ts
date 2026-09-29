@@ -7,6 +7,7 @@ import { useGameStore } from '../store/gameStore';
 import { useTaskStore } from '../store/taskStore';
 import { useWritingStore } from '../store/writingStore';
 import type { CaptureAmount, CaptureKind, ParsedCapture } from '../utils/quickParse';
+import { normalizeTags } from '../utils/tags';
 
 export type CaptureTarget = CaptureKind;
 
@@ -108,7 +109,12 @@ function primaryLabel(parsed: ParsedCapture): string {
   }
 }
 
-function primaryHint(parsed: ParsedCapture): string {
+/** 结果提示里统一展示标签：`#工作 #紧急` */
+function tagLabel(parsed: ParsedCapture): string {
+  return parsed.tags.map((tag) => `#${tag}`).join(' ');
+}
+
+function baseHint(parsed: ParsedCapture): string {
   switch (parsed.kind) {
     case 'task':
       return [
@@ -139,6 +145,13 @@ function primaryHint(parsed: ParsedCapture): string {
     case 'game':
       return parsed.amount ? `游玩 ${formatAmount(parsed.amount)}` : '平台默认 PC，可到游戏页修改';
   }
+}
+
+/** 提示文案的末尾统一追加标签，让用户按回车之前就知道会打上什么 */
+function primaryHint(parsed: ParsedCapture): string {
+  const label = tagLabel(parsed);
+  const base = baseHint(parsed);
+  return label === '' ? base : `${base} · ${label}`;
 }
 
 /**
@@ -180,7 +193,9 @@ function captureTask(parsed: ParsedCapture): CaptureResult {
   const id = findNewId(
     () => useTaskStore.getState().tasks,
     () =>
-      useTaskStore.getState().addTask(parsed.text, parsed.extra, parsed.priority, parsed.dueDate),
+      useTaskStore
+        .getState()
+        .addTask(parsed.text, parsed.extra, parsed.priority, parsed.dueDate, null, parsed.tags),
   );
   return {
     tone: 'success',
@@ -188,6 +203,7 @@ function captureTask(parsed: ParsedCapture): CaptureResult {
     description: [
       parsed.dueDate ? `截止 ${parsed.dueDate}` : '无截止日期',
       PRIORITY_LABEL[parsed.priority],
+      tagLabel(parsed),
     ].join(' · '),
     undo: id ? () => useTaskStore.getState().deleteTask(id) : undefined,
   };
@@ -236,6 +252,14 @@ function captureBook(parsed: ParsedCapture, today: string): CaptureResult {
   };
 
   if (existing) {
+    // 书已经在了，就把标签补到这本书上（撤销时还原原来的标签）
+    const previousTags = existing.tags;
+    const merged = normalizeTags([...previousTags, ...parsed.tags]);
+    if (merged.length !== previousTags.length) {
+      useBookStore.getState().updateBook(existing.id, { tags: merged });
+      undos.push(() => useBookStore.getState().updateBook(existing.id, { tags: previousTags }));
+      parts.push('补上标签');
+    }
     addProgress(existing.id);
     if (parts.length === 0) {
       const noteId = findNewId(
@@ -248,14 +272,14 @@ function captureBook(parsed: ParsedCapture, today: string): CaptureResult {
     return {
       tone: 'success',
       title: `已记到《${truncate(existing.title, 20)}》`,
-      description: parts.join(' · '),
+      description: [parts.join(' · '), tagLabel(parsed)].filter(Boolean).join(' · '),
       undo: undos.length > 0 ? () => undos.forEach((undo) => undo()) : undefined,
     };
   }
 
   const bookId = findNewId(
     () => useBookStore.getState().books,
-    () => useBookStore.getState().addBook(title, parsed.extra, ''),
+    () => useBookStore.getState().addBook(title, parsed.extra, '', parsed.tags),
   );
   if (!bookId) {
     return { tone: 'warning', title: '没能加入书库', description: '请到读书页手动添加这本书' };
@@ -267,7 +291,7 @@ function captureBook(parsed: ParsedCapture, today: string): CaptureResult {
   return {
     tone: 'success',
     title: `已加入书库《${truncate(title, 20)}》`,
-    description: parts.join(' · '),
+    description: [parts.join(' · '), tagLabel(parsed)].filter(Boolean).join(' · '),
     undo: () => {
       undos.forEach((undo) => undo());
       useBookStore.getState().deleteBook(bookId);
@@ -276,14 +300,19 @@ function captureBook(parsed: ParsedCapture, today: string): CaptureResult {
 }
 
 function captureDev(parsed: ParsedCapture): CaptureResult {
-  const id = useDevStore.getState().addProject(parsed.text, parsed.extra);
+  const id = useDevStore.getState().addProject(parsed.text, parsed.extra, parsed.tags);
   if (!id) {
     return { tone: 'warning', title: '没能新建开发项目', description: '项目名不能为空' };
   }
   return {
     tone: 'success',
     title: `已新建开发项目「${truncate(parsed.text, 24)}」`,
-    description: parsed.extra || '状态默认「规划中」，可到开发页补充技术栈与仓库',
+    description: [
+      parsed.extra || '状态默认「规划中」，可到开发页补充技术栈与仓库',
+      tagLabel(parsed),
+    ]
+      .filter(Boolean)
+      .join(' · '),
     undo: () => useDevStore.getState().deleteProject(id),
   };
 }
@@ -291,12 +320,14 @@ function captureDev(parsed: ParsedCapture): CaptureResult {
 function captureWriting(parsed: ParsedCapture): CaptureResult {
   const id = findNewId(
     () => useWritingStore.getState().projects,
-    () => useWritingStore.getState().addProject(parsed.text, 'article'),
+    () => useWritingStore.getState().addProject(parsed.text, 'article', parsed.tags),
   );
   return {
     tone: 'success',
     title: `已新建写作项目「${truncate(parsed.text, 24)}」`,
-    description: parsed.extra || '类型默认「文章」，可到写作页调整',
+    description: [parsed.extra || '类型默认「文章」，可到写作页调整', tagLabel(parsed)]
+      .filter(Boolean)
+      .join(' · '),
     undo: id ? () => useWritingStore.getState().deleteProject(id) : undefined,
   };
 }
@@ -308,7 +339,7 @@ function captureFitness(parsed: ParsedCapture, today: string): CaptureResult {
     .join(' · ');
   const id = findNewId(
     () => useFitnessStore.getState().records,
-    () => useFitnessStore.getState().addRecord(parsed.text, today, [], notes),
+    () => useFitnessStore.getState().addRecord(parsed.text, today, [], notes, parsed.tags),
   );
   return {
     tone: 'success',
@@ -317,6 +348,7 @@ function captureFitness(parsed: ParsedCapture, today: string): CaptureResult {
       today,
       minutes !== null ? `${minutes} 分钟` : '时长待补充',
       '可到健身页补充动作',
+      tagLabel(parsed),
     ].join(' · '),
     undo: id ? () => useFitnessStore.getState().deleteRecord(id) : undefined,
   };
@@ -328,12 +360,17 @@ function captureDiet(parsed: ParsedCapture, today: string, now: Date): CaptureRe
   const item: FoodItem = { name: parsed.text, category: '', calories };
   const id = findNewId(
     () => useDietStore.getState().records,
-    () => useDietStore.getState().addRecord(today, mealType, [item]),
+    () => useDietStore.getState().addRecord(today, mealType, [item], parsed.tags),
   );
   return {
     tone: 'success',
     title: `已记入${MEAL_LABEL[mealType]}「${truncate(parsed.text, 24)}」`,
-    description: calories > 0 ? `${calories} 千卡` : '热量待补充，可到饮食页编辑',
+    description: [
+      calories > 0 ? `${calories} 千卡` : '热量待补充，可到饮食页编辑',
+      tagLabel(parsed),
+    ]
+      .filter(Boolean)
+      .join(' · '),
     undo: id ? () => useDietStore.getState().deleteRecord(id) : undefined,
   };
 }
@@ -344,11 +381,25 @@ function captureGame(parsed: ParsedCapture, today: string): CaptureResult {
   const existing = useGameStore.getState().games.find((game) => game.name.trim() === name);
 
   if (existing) {
+    const previousTags = existing.tags;
+    const merged = normalizeTags([...previousTags, ...parsed.tags]);
+    const tagUndo =
+      merged.length !== previousTags.length
+        ? () => useGameStore.getState().updateGame(existing.id, { tags: previousTags })
+        : null;
+    if (tagUndo) useGameStore.getState().updateGame(existing.id, { tags: merged });
+
     if (hours === null) {
       return {
         tone: 'warning',
         title: `《${truncate(existing.name, 20)}》已经在游戏库里`,
-        description: '补一个时长（例如「游戏 星露谷 2h」）就能直接记一局',
+        description: [
+          '补一个时长（例如「游戏 星露谷 2h」）就能直接记一局',
+          tagUndo ? '标签已更新' : '',
+        ]
+          .filter(Boolean)
+          .join(' · '),
+        undo: tagUndo ?? undefined,
       };
     }
     const sessionId = findNewId(
@@ -358,14 +409,20 @@ function captureGame(parsed: ParsedCapture, today: string): CaptureResult {
     return {
       tone: 'success',
       title: `已记一局《${truncate(existing.name, 20)}》`,
-      description: `${today} · ${hours} 小时`,
-      undo: sessionId ? () => useGameStore.getState().deleteSession(sessionId) : undefined,
+      description: [`${today} · ${hours} 小时`, tagLabel(parsed)].filter(Boolean).join(' · '),
+      undo:
+        sessionId || tagUndo
+          ? () => {
+              if (sessionId) useGameStore.getState().deleteSession(sessionId);
+              tagUndo?.();
+            }
+          : undefined,
     };
   }
 
   const gameId = findNewId(
     () => useGameStore.getState().games,
-    () => useGameStore.getState().addGame(name, 'PC'),
+    () => useGameStore.getState().addGame(name, 'PC', parsed.tags),
   );
   if (!gameId) {
     return { tone: 'warning', title: '没能加入游戏库', description: '请到游戏页手动添加' };
@@ -379,7 +436,9 @@ function captureGame(parsed: ParsedCapture, today: string): CaptureResult {
     return {
       tone: 'success',
       title: `已加入游戏库《${truncate(name, 20)}》`,
-      description: `并记下 ${hours} 小时（平台默认 PC）`,
+      description: [`并记下 ${hours} 小时（平台默认 PC）`, tagLabel(parsed)]
+        .filter(Boolean)
+        .join(' · '),
       undo: () => {
         if (sessionId) useGameStore.getState().deleteSession(sessionId);
         useGameStore.getState().deleteGame(gameId);
@@ -390,7 +449,7 @@ function captureGame(parsed: ParsedCapture, today: string): CaptureResult {
   return {
     tone: 'success',
     title: `已加入游戏库《${truncate(name, 20)}》`,
-    description: '平台默认 PC，可到游戏页修改',
+    description: ['平台默认 PC，可到游戏页修改', tagLabel(parsed)].filter(Boolean).join(' · '),
     undo: () => useGameStore.getState().deleteGame(gameId),
   };
 }

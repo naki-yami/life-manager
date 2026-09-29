@@ -14,13 +14,14 @@ import { STORAGE_KEYS } from '../utils/storageKeys';
 import { persistOptions } from './persist';
 import { asRecord, normalizeArray } from './normalize';
 import { devProjectSchema, workSessionSchema } from '../services/schemas';
+import { normalizeTags } from '../utils/tags';
 
 interface DevState {
   projects: DevProject[];
   /** 工时流水，用来做「最近 30 天投入」这类按时间的统计 */
   sessions: WorkSession[];
   /** 返回新项目的 id，方便调用方立刻展开它 */
-  addProject: (name: string, description: string) => string;
+  addProject: (name: string, description: string, tags?: string[]) => string;
   updateProject: (id: string, updates: Partial<DevProject>) => void;
   deleteProject: (id: string) => void;
   updateProjectStatus: (id: string, status: DevProjectStatus) => void;
@@ -50,13 +51,14 @@ export const useDevStore = create<DevState>()(
   persist(
     (set) => ({
       ...defaultState,
-      addProject: (name, description) => {
+      addProject: (name, description, tags = []) => {
         const project: DevProject = {
           id: createId(),
           name,
           description,
           status: 'planning',
           tasks: [],
+          tags: normalizeTags(tags),
           hoursSpent: 0,
           techStack: [],
           repoUrl: '',

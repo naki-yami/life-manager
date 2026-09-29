@@ -13,6 +13,10 @@ import { Header } from './Header';
 import { CommandPaletteProvider } from './CommandPalette';
 import { ToastProvider } from '../ui';
 import { useTaskStore } from '../../store/taskStore';
+import { useBookStore } from '../../store/bookStore';
+import { useDevStore } from '../../store/devStore';
+import { useDietStore } from '../../store/dietStore';
+import { useFitnessStore } from '../../store/fitnessStore';
 import { resetPaletteFocus } from '../../hooks/usePaletteFocus';
 
 beforeEach(() => {
@@ -272,6 +276,96 @@ describe('命令面板快速捕获', () => {
 
     expect(screen.getByText('任务内容')).toBeInTheDocument();
     expect(useTaskStore.getState().tasks).toHaveLength(1);
+  });
+});
+
+describe('命令面板标签', () => {
+  beforeEach(() => {
+    useTaskStore.setState({ tasks: [], memos: [] });
+    useBookStore.setState({ books: [], sessions: [] });
+    useDevStore.setState({ projects: [], sessions: [] });
+    useFitnessStore.setState({ plans: [], records: [] });
+    useDietStore.setState({ records: [] });
+    resetPaletteFocus();
+  });
+
+  const openPalette = async (): Promise<HTMLElement> => {
+    fireEvent.keyDown(window, { key: 'k', metaKey: true });
+    return screen.findByRole('dialog', { name: '命令面板' });
+  };
+
+  it('输入 #标签 列出跨模块的记录', async () => {
+    useTaskStore.getState().addTask('交周报', '', 'high', '', null, ['工作']);
+    useBookStore.getState().addBook('置身事内', '兰小欢', '经济', ['工作']);
+    renderLayoutWithToasts('/');
+
+    const palette = await openPalette();
+    await userEvent.type(within(palette).getByRole('combobox'), '#工作');
+
+    expect(within(palette).getByRole('option', { name: /交周报/ })).toBeInTheDocument();
+    expect(within(palette).getByRole('option', { name: /置身事内/ })).toBeInTheDocument();
+  });
+
+  it('按标签找到的记录回车可以直接跳过去', async () => {
+    useTaskStore.getState().addTask('交周报', '', 'high', '', null, ['工作']);
+    renderLayoutWithToasts('/');
+
+    const palette = await openPalette();
+    await userEvent.type(within(palette).getByRole('combobox'), '#工作');
+    await userEvent.keyboard('{Enter}');
+
+    expect(screen.getByText('任务内容')).toBeInTheDocument();
+  });
+
+  it('普通输入也能靠标签命中多个模块', async () => {
+    useTaskStore.getState().addTask('拉伸 10 分钟', '', 'medium', '', null, ['健身']);
+    useBookStore.getState().addBook('运动解剖学', '', '', ['健身']);
+    useDevStore.getState().addProject('健身 App', '', ['健身']);
+    renderLayoutWithToasts('/');
+
+    const palette = await openPalette();
+    await userEvent.type(within(palette).getByRole('combobox'), '健身');
+
+    expect(within(palette).getByRole('option', { name: /拉伸 10 分钟/ })).toBeInTheDocument();
+    expect(within(palette).getByRole('option', { name: /运动解剖学/ })).toBeInTheDocument();
+    expect(within(palette).getByRole('option', { name: /健身 App/ })).toBeInTheDocument();
+  });
+
+  it('训练与饮食记录也能按标签搜到', async () => {
+    useFitnessStore
+      .getState()
+      .addRecord('胸肌日', '2026-09-28', [{ name: '卧推', sets: 4, reps: 8, weight: 60 }], '', [
+        '胸',
+      ]);
+    useDietStore
+      .getState()
+      .addRecord(
+        '2026-09-28',
+        'lunch',
+        [{ name: '鸡胸肉', category: '蛋白质', calories: 220 }],
+        ['减脂'],
+      );
+    renderLayoutWithToasts('/');
+
+    const palette = await openPalette();
+    const input = within(palette).getByRole('combobox');
+
+    await userEvent.type(input, '#胸');
+    expect(within(palette).getByRole('option', { name: /胸肌日/ })).toBeInTheDocument();
+
+    await userEvent.clear(input);
+    await userEvent.type(input, '#减脂');
+    expect(within(palette).getByRole('option', { name: /鸡胸肉/ })).toBeInTheDocument();
+  });
+
+  it('实体行会带上 #标签，方便确认命中的是哪一条', async () => {
+    useTaskStore.getState().addTask('交周报', '', 'high', '', null, ['工作', '重要']);
+    renderLayoutWithToasts('/');
+
+    const palette = await openPalette();
+    await userEvent.type(within(palette).getByRole('combobox'), '交周报');
+
+    expect(within(palette).getByRole('option', { name: /#工作 #重要/ })).toBeInTheDocument();
   });
 });
 

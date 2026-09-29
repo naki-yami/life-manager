@@ -83,6 +83,61 @@ describe('runCapture 任务与备忘', () => {
   });
 });
 
+describe('runCapture 标签', () => {
+  it('任务带上标签，结果提示里也会显示', () => {
+    const { result } = capture('交周报 #工作 #紧急 明天');
+    expect(useTaskStore.getState().tasks[0]!.tags).toEqual(['工作', '紧急']);
+    expect(result.description).toContain('#工作 #紧急');
+  });
+
+  it('标签跟着各模块的记录一起落库', () => {
+    capture('《置身事内》#经济');
+    expect(useBookStore.getState().books[0]!.tags).toEqual(['经济']);
+
+    capture('记账 App #副业', 'dev');
+    expect(useDevStore.getState().projects[0]!.tags).toEqual(['副业']);
+
+    capture('写作 周报模板 #模板');
+    expect(useWritingStore.getState().projects[0]!.tags).toEqual(['模板']);
+
+    capture('跑步 30min #有氧');
+    expect(useFitnessStore.getState().records[0]!.tags).toEqual(['有氧']);
+
+    capture('鸡胸肉 200kcal #减脂');
+    expect(useDietStore.getState().records[0]!.tags).toEqual(['减脂']);
+
+    capture('游戏 星露谷 #休闲');
+    expect(useGameStore.getState().games[0]!.tags).toEqual(['休闲']);
+  });
+
+  it('书已经在库里时补标签，撤销只还原标签不删书', () => {
+    capture('《置身事内》#经济');
+    const bookId = useBookStore.getState().books[0]!.id;
+
+    const { result } = capture('《置身事内》#历史');
+    expect(useBookStore.getState().books[0]!.tags).toEqual(['经济', '历史']);
+
+    result.undo?.();
+    expect(useBookStore.getState().books[0]!.tags).toEqual(['经济']);
+    expect(useBookStore.getState().books[0]!.id).toBe(bookId);
+  });
+
+  it('游戏已经在库里时也能补标签', () => {
+    capture('游戏 星露谷');
+    const { result } = capture('游戏 星露谷 2h #休闲');
+    expect(useGameStore.getState().games[0]!.tags).toEqual(['休闲']);
+    // 撤销记一局时标签也一起还原
+    result.undo?.();
+    expect(useGameStore.getState().games[0]!.tags).toEqual([]);
+    expect(useGameStore.getState().sessions).toHaveLength(0);
+  });
+
+  it('备忘不解析标签，原文一字不差', () => {
+    capture('备忘 交周报 #工作');
+    expect(useTaskStore.getState().memos[0]!.content).toBe('交周报 #工作');
+  });
+});
+
 describe('runCapture 读书', () => {
   it('新书带上进度笔记', () => {
     const { result } = capture('《置身事内》读到 120 页');

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { normalizeTags } from '../utils/tags';
 
 /**
  * 备份文件的 schema 定义。
@@ -7,10 +8,27 @@ import { z } from 'zod';
  */
 
 export const APP_ID = 'life-manager';
-export const BACKUP_SCHEMA_VERSION = 10;
+/**
+ * 备份文件的 schema 版本。
+ * 11：7 类实体（任务 / 书 / 开发项目 / 写作 / 游戏 / 训练记录 / 饮食记录）新增
+ *     `tags` 字段；旧文件里没有它，导入时补空数组。
+ */
+export const BACKUP_SCHEMA_VERSION = 11;
 
 const isoDateString = z.string();
 const percent = z.number().min(0).max(100).catch(0);
+
+/**
+ * 统一标签字段。
+ *
+ * `.default([])` 保证旧备份 / 旧 localStorage 里没有 tags 的记录被读出来时补上空数组；
+ * `.transform()` 顺手归一化（去 `#`、去空、忽略大小写去重、限长），于是
+ * 「脏数据不会进 store」这条规则对标签同样成立，读取处不用再自己清洗。
+ */
+const tags = z
+  .array(z.string())
+  .default([])
+  .transform((list) => normalizeTags(list));
 
 // ---------- 今日计划 ----------
 export const subTaskSchema = z.object({
@@ -32,6 +50,7 @@ export const taskSchema = z.object({
   priority: z.enum(['high', 'medium', 'low']).default('medium'),
   status: z.enum(['pending', 'completed']).default('pending'),
   dueDate: z.string().default(''),
+  tags,
   /** v7：子任务与重复规则；旧备份缺省时补默认值 */
   subtasks: z.array(subTaskSchema).default([]),
   repeat: repeatRuleSchema.nullable().default(null),
@@ -62,6 +81,7 @@ export const bookSchema = z.object({
   status: z.enum(['want-to-read', 'reading', 'finished']).default('want-to-read'),
   progress: percent,
   notes: z.array(bookNoteSchema).default([]),
+  tags,
   /** v7：总页数与开始阅读时间；旧备份缺省时按注释处理 */
   totalPages: z.number().min(0).optional(),
   startedAt: isoDateString.optional(),
@@ -111,6 +131,7 @@ export const devProjectSchema = z.object({
   description: z.string().default(''),
   status: z.enum(['planning', 'in-progress', 'completed', 'paused']).default('planning'),
   tasks: z.array(devTaskSchema).default([]),
+  tags,
   /** 累计工时；旧备份里没有这个字段，导入时补 0 */
   hoursSpent: z.number().min(0).catch(0),
   /** v5：技术栈标签、仓库地址、起止日期与归档标记；旧备份缺省时按注释补齐 */
@@ -150,6 +171,7 @@ export const writingProjectSchema = z.object({
   status: z.enum(['draft', 'in-progress', 'completed']).default('draft'),
   wordCount: z.number().min(0).catch(0),
   notes: z.string().default(''),
+  tags,
   /** v9：正文、目标字数与版本快照；旧备份缺省补齐（目标字数补 0） */
   content: z.string().default(''),
   targetWords: z.number().min(0).catch(0),
@@ -173,6 +195,7 @@ export const workoutRecordSchema = z.object({
   planName: z.string().default(''),
   exercises: z.array(exerciseSchema).default([]),
   notes: z.string().default(''),
+  tags,
   createdAt: isoDateString.default(() => new Date().toISOString()),
 });
 
@@ -201,6 +224,7 @@ export const mealRecordSchema = z.object({
   type: z.enum(['breakfast', 'lunch', 'dinner', 'snack']).default('breakfast'),
   items: z.array(foodItemSchema).default([]),
   totalCalories: z.number().min(0).catch(0),
+  tags,
   /**
    * v8：营养素合计。这三项是「由条目累加而来」的派生值，不是用户填的原始信息，
    * 所以旧数据缺省时统一补 0（表示这餐没记营养素），而不是留成 undefined ——
@@ -228,6 +252,7 @@ export const gameSchema = z.object({
   progress: percent,
   achievements: z.array(gameAchievementSchema).default([]),
   notes: z.string().default(''),
+  tags,
   createdAt: isoDateString.default(() => new Date().toISOString()),
 });
 
