@@ -11,7 +11,7 @@ export type { CardProps, CardHeaderProps, StatCardProps, StatTone } from './Card
 export { Modal, ConfirmDialog } from './Modal';
 export type { ModalProps, ModalSize, ConfirmDialogProps } from './Modal';
 export { Drawer } from './Drawer';
-export type { DrawerProps, DrawerSide } from './Drawer';
+export type { DrawerProps, DrawerSide, DrawerWidth } from './Drawer';
 export { Badge, Divider, Kbd } from './Badge';
 export { BADGE_TONES } from './badgeTones';
 export type { BadgeProps, BadgeTone, DividerProps, KbdProps } from './Badge';

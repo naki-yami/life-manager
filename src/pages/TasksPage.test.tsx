@@ -7,6 +7,8 @@ import { ToastProvider } from '../components/ui';
 import { useTaskStore } from '../store/taskStore';
 import { addDays, todayKey } from '../utils/date';
 import { requestPaletteFocus, resetPaletteFocus } from '../hooks/usePaletteFocus';
+import { MASTER_DETAIL_QUERY } from '../components/layout';
+import { mockMediaQueries } from '../test/matchMedia';
 
 beforeEach(() => {
   useTaskStore.setState({ tasks: [], memos: [] });
@@ -377,5 +379,90 @@ describe('TasksPage 标签', () => {
 
     expect(screen.getByText('整理发票')).toBeInTheDocument();
     expect(screen.queryByText('写周报')).not.toBeInTheDocument();
+  });
+});
+describe('TasksPage 宽屏双栏', () => {
+  afterEach(() => {
+    resetPaletteFocus();
+  });
+
+  const expectWideLayout = (): void => mockMediaQueries({ [MASTER_DETAIL_QUERY]: true });
+  const panel = (): HTMLElement => screen.getByRole('complementary', { name: '编辑任务' });
+
+  it('宽屏右栏常驻，没选中任务时是占位内容', () => {
+    seed();
+    expectWideLayout();
+
+    render(<TasksPage />);
+
+    expect(within(panel()).getByText('还没有选中任务')).toBeInTheDocument();
+    expect(screen.getByText('中等任务')).toBeInTheDocument();
+  });
+
+  it('点「编辑」在右栏就地改，不再弹对话框，列表也还在', async () => {
+    seed();
+    expectWideLayout();
+
+    render(<TasksPage />);
+    await userEvent.click(screen.getByRole('button', { name: '编辑「中等任务」' }));
+
+    // 焦点没被搬进对话框，列表也没被遮住
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.getByText('紧急任务')).toBeInTheDocument();
+
+    const titleInput = within(panel()).getByLabelText(/^标题/);
+    expect(titleInput).toHaveValue('中等任务');
+
+    await userEvent.clear(titleInput);
+    await userEvent.type(titleInput, '改名后的任务');
+    await userEvent.click(within(panel()).getByRole('button', { name: '保存' }));
+
+    expect(useTaskStore.getState().tasks.some((task) => task.title === '改名后的任务')).toBe(true);
+    // 存完右栏回到占位，不留上一条的残影
+    expect(within(panel()).getByText('还没有选中任务')).toBeInTheDocument();
+  });
+
+  it('宽屏下命令面板聚焦某条任务，也直接进右栏', () => {
+    seed();
+    expectWideLayout();
+
+    render(<TasksPage />);
+    const task = useTaskStore.getState().tasks.find((item) => item.title === '紧急任务')!;
+
+    act(() => {
+      requestPaletteFocus('/tasks', task.id);
+    });
+
+    expect(within(panel()).getByLabelText(/^标题/)).toHaveValue('紧急任务');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('「取消」只关右栏，不写回 store', async () => {
+    seed();
+    expectWideLayout();
+
+    render(<TasksPage />);
+    await userEvent.click(screen.getByRole('button', { name: '编辑「中等任务」' }));
+
+    const titleInput = within(panel()).getByLabelText(/^标题/);
+    await userEvent.clear(titleInput);
+    await userEvent.type(titleInput, '不该被保存');
+    await userEvent.click(within(panel()).getByRole('button', { name: '取消' }));
+
+    expect(within(panel()).getByText('还没有选中任务')).toBeInTheDocument();
+    expect(useTaskStore.getState().tasks).toHaveLength(3);
+    expect(useTaskStore.getState().tasks.some((task) => task.title === '不该被保存')).toBe(false);
+  });
+
+  it('再点另一条任务的「编辑」，右栏换成那一条', async () => {
+    seed();
+    expectWideLayout();
+
+    render(<TasksPage />);
+    await userEvent.click(screen.getByRole('button', { name: '编辑「中等任务」' }));
+    expect(within(panel()).getByLabelText(/^标题/)).toHaveValue('中等任务');
+
+    await userEvent.click(screen.getByRole('button', { name: '编辑「紧急任务」' }));
+    expect(within(panel()).getByLabelText(/^标题/)).toHaveValue('紧急任务');
   });
 });

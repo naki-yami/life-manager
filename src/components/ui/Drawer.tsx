@@ -6,18 +6,21 @@ import { IconButton } from './Button';
 
 export type DrawerSide = 'left' | 'right';
 
+/** 抽屉宽度（tailwind 间距刻度）：sm = 16rem、md = 20rem、lg = 24rem */
+export type DrawerWidth = 'sm' | 'md' | 'lg';
+
 export interface DrawerProps {
   isOpen: boolean;
   onClose: () => void;
   title: string;
   /** 从哪一侧滑出，导航抽屉用 left */
   side?: DrawerSide;
-  width?: 'sm' | 'md';
+  width?: DrawerWidth;
   footer?: React.ReactNode;
   children: React.ReactNode;
 }
 
-const WIDTHS = { sm: 'w-64', md: 'w-80' } as const;
+const WIDTHS: Record<DrawerWidth, string> = { sm: 'w-64', md: 'w-80', lg: 'w-96' };
 
 const DrawerInner: React.FC<Omit<DrawerProps, 'isOpen'>> = ({
   onClose,

@@ -1,5 +1,6 @@
 import React from 'react';
 import { Card, CardBody, CardHeader, Drawer } from '../ui';
+import type { DrawerWidth } from '../ui';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 
 /**
@@ -22,6 +23,8 @@ export interface MasterDetailProps {
   emptyDetail: React.ReactNode;
   /** 宽屏详情栏宽度，默认 24rem */
   detailWidth?: string;
+  /** 窄屏抽屉宽度，默认 20rem。表单类详情塞在 20rem 里会发挤，可以调到 lg */
+  drawerWidth?: DrawerWidth;
   className?: string;
 }
 
@@ -47,6 +50,7 @@ export const MasterDetail: React.FC<MasterDetailProps> = ({
   onCloseDetail,
   emptyDetail,
   detailWidth = 'w-96',
+  drawerWidth = 'md',
   className = '',
 }) => {
   const wide = useMediaQuery(MASTER_DETAIL_QUERY);
@@ -55,7 +59,13 @@ export const MasterDetail: React.FC<MasterDetailProps> = ({
     return (
       <>
         {children}
-        <Drawer isOpen={detailOpen} onClose={onCloseDetail} title={detailTitle} side="right">
+        <Drawer
+          isOpen={detailOpen}
+          onClose={onCloseDetail}
+          title={detailTitle}
+          side="right"
+          width={drawerWidth}
+        >
           {detail}
         </Drawer>
       </>

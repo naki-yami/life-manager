@@ -29,7 +29,7 @@ import {
   type KanbanColumnData,
   type KanbanMoveResult,
 } from '../components/ui';
-import { PageHeader, Toolbar } from '../components/layout';
+import { MasterDetail, PageHeader, Toolbar } from '../components/layout';
 import { BarChart } from '../components/charts';
 import { useTaskStore } from '../store/taskStore';
 import { useUndoableRemove } from '../hooks/useUndoableRemove';
@@ -425,6 +425,10 @@ export const TasksPage: React.FC = () => {
     setEditingTaskId(null);
   };
 
+  const closeEdit = (): void => {
+    setEditingTaskId(null);
+  };
+
   const openEdit = (task: Task): void => {
     setEditingTaskId(task.id);
     setForm({
@@ -529,284 +533,314 @@ export const TasksPage: React.FC = () => {
         </Card>
       )}
 
-      <Toolbar
-        search={{ value: keyword, onChange: setKeyword, placeholder: '搜索标题、描述或标签…' }}
-        actions={
-          <div className="flex flex-wrap items-center gap-2">
-            <Select
-              aria-label="按优先级筛选"
-              className="w-32"
-              value={priorityFilter}
-              onChange={(value) => setPriorityFilter(value as 'all' | Priority)}
-              options={PRIORITY_FILTER_OPTIONS}
-            />
-            <SegmentedControl
-              label="任务视图"
-              size="sm"
-              value={view}
-              onChange={setView}
-              options={VIEW_OPTIONS}
-            />
-            <SegmentedControl
-              label="任务筛选"
-              size="sm"
-              value={filter}
-              onChange={setFilter}
-              options={[
-                { value: 'all', label: '全部', count: tasks.length },
-                { value: 'pending', label: '待办', count: pendingCount },
-                { value: 'completed', label: '已完成', count: completedCount },
-              ]}
-            />
-          </div>
-        }
-      />
-
-      {visibleTasks.length === 0 ? (
-        <Card>
+      <MasterDetail
+        detailTitle="编辑任务"
+        detailOpen={editingTask !== null}
+        onCloseDetail={closeEdit}
+        drawerWidth="lg"
+        emptyDetail={
           <EmptyState
-            icon={<ListTodo size={22} aria-hidden />}
-            title={tasks.length === 0 ? '还没有任务' : '没有符合条件的任务'}
-            description={
-              tasks.length === 0
-                ? '从「添加任务」开始，把今天要做的事记下来。'
-                : '换个关键词，或者切换上面的筛选条件。'
-            }
-            action={
-              tasks.length === 0 ? (
-                <Button
-                  icon={<Plus size={16} aria-hidden />}
-                  onClick={() => {
-                    setForm(EMPTY_FORM);
-                    setShowAddModal(true);
-                  }}
-                >
-                  添加任务
-                </Button>
-              ) : (
-                <Button
-                  variant="secondary"
-                  onClick={() => {
-                    setKeyword('');
-                    setFilter('all');
-                    setPriorityFilter('all');
-                  }}
-                >
-                  清除筛选
-                </Button>
-              )
-            }
+            icon={<Edit3 size={20} aria-hidden />}
+            title="还没有选中任务"
+            description="点左边任意一条任务的「编辑」，就能在这里改标题、优先级和重复规则。"
+            className="py-6"
           />
-        </Card>
-      ) : view === 'kanban' ? (
-        <KanbanBoard
-          label="任务看板"
-          columns={kanbanColumns}
-          onMove={handleKanbanMove}
+        }
+        detail={
+          editingTask ? (
+            <div className="space-y-4">
+              <TaskFormFields form={form} onChange={setForm} tagSuggestions={tagSuggestions} />
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                <Button variant="secondary" onClick={closeEdit}>
+                  取消
+                </Button>
+                <Button onClick={handleEdit} disabled={!form.title.trim()}>
+                  保存
+                </Button>
+              </div>
+            </div>
+          ) : null
+        }
+      >
+        <Toolbar
+          search={{ value: keyword, onChange: setKeyword, placeholder: '搜索标题、描述或标签…' }}
+          actions={
+            <div className="flex flex-wrap items-center gap-2">
+              <Select
+                aria-label="按优先级筛选"
+                className="w-32"
+                value={priorityFilter}
+                onChange={(value) => setPriorityFilter(value as 'all' | Priority)}
+                options={PRIORITY_FILTER_OPTIONS}
+              />
+              <SegmentedControl
+                label="任务视图"
+                size="sm"
+                value={view}
+                onChange={setView}
+                options={VIEW_OPTIONS}
+              />
+              <SegmentedControl
+                label="任务筛选"
+                size="sm"
+                value={filter}
+                onChange={setFilter}
+                options={[
+                  { value: 'all', label: '全部', count: tasks.length },
+                  { value: 'pending', label: '待办', count: pendingCount },
+                  { value: 'completed', label: '已完成', count: completedCount },
+                ]}
+              />
+            </div>
+          }
         />
-      ) : view === 'quadrant' ? (
-        <div className="grid gap-4 md:grid-cols-2">
-          {QUADRANTS.map((quadrant) => {
-            const items = visibleTasks.filter(
-              (task) =>
-                task.status === 'pending' &&
-                (task.priority === 'high') === quadrant.important &&
-                isUrgent(task, today) === quadrant.urgent,
-            );
-            return (
-              <Card key={quadrant.id}>
-                <CardHeader
-                  title={quadrant.title}
-                  subtitle={`${quadrant.hint} · ${items.length} 件`}
-                />
-                <CardBody>
-                  {items.length === 0 ? (
-                    <p className="py-3 text-center text-xs text-content-tertiary">
-                      这一格没有任务
-                    </p>
-                  ) : (
-                    <ul className="space-y-2">
-                      {items.map((task) => (
-                        <li key={task.id} className="rounded bg-inset px-3 py-2">
-                          <TaskMiniCard task={task} onToggle={toggleWithUndo} />
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </CardBody>
-              </Card>
-            );
-          })}
-        </div>
-      ) : (
-        <ul className="space-y-2">
-          {visibleTasks.map((task) => {
-            const priority = PRIORITY_BADGE[task.priority];
-            const done = task.status === 'completed';
 
-            return (
-              <li key={task.id}>
-                <Card className="p-3.5">
-                  <div className="flex items-start gap-3">
-                    <input
-                      type="checkbox"
-                      checked={done}
-                      aria-label={done ? `标记「${task.title}」为待办` : `完成「${task.title}」`}
-                      onChange={() => toggleWithUndo(task)}
-                      style={{ accentColor: 'var(--lm-accent)' }}
-                      className="mt-1 h-4 w-4 shrink-0 cursor-pointer rounded-sm border-line transition-transform duration-fast active:scale-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-line-focus"
-                    />
-
-                    <div className="min-w-0 flex-1">
-                      <p
-                        className={`font-medium transition-colors duration-fast ${
-                          done ? 'text-content-tertiary line-through' : 'text-content'
-                        }`}
-                      >
-                        {task.title}
+        {visibleTasks.length === 0 ? (
+          <Card>
+            <EmptyState
+              icon={<ListTodo size={22} aria-hidden />}
+              title={tasks.length === 0 ? '还没有任务' : '没有符合条件的任务'}
+              description={
+                tasks.length === 0
+                  ? '从「添加任务」开始，把今天要做的事记下来。'
+                  : '换个关键词，或者切换上面的筛选条件。'
+              }
+              action={
+                tasks.length === 0 ? (
+                  <Button
+                    icon={<Plus size={16} aria-hidden />}
+                    onClick={() => {
+                      setForm(EMPTY_FORM);
+                      setShowAddModal(true);
+                    }}
+                  >
+                    添加任务
+                  </Button>
+                ) : (
+                  <Button
+                    variant="secondary"
+                    onClick={() => {
+                      setKeyword('');
+                      setFilter('all');
+                      setPriorityFilter('all');
+                    }}
+                  >
+                    清除筛选
+                  </Button>
+                )
+              }
+            />
+          </Card>
+        ) : view === 'kanban' ? (
+          <KanbanBoard
+            label="任务看板"
+            columns={kanbanColumns}
+            onMove={handleKanbanMove}
+          />
+        ) : view === 'quadrant' ? (
+          <div className="grid gap-4 md:grid-cols-2">
+            {QUADRANTS.map((quadrant) => {
+              const items = visibleTasks.filter(
+                (task) =>
+                  task.status === 'pending' &&
+                  (task.priority === 'high') === quadrant.important &&
+                  isUrgent(task, today) === quadrant.urgent,
+              );
+              return (
+                <Card key={quadrant.id}>
+                  <CardHeader
+                    title={quadrant.title}
+                    subtitle={`${quadrant.hint} · ${items.length} 件`}
+                  />
+                  <CardBody>
+                    {items.length === 0 ? (
+                      <p className="py-3 text-center text-xs text-content-tertiary">
+                        这一格没有任务
                       </p>
-                      {task.description && (
-                        <p className="mt-0.5 truncate text-sm text-content-tertiary">
-                          {task.description}
+                    ) : (
+                      <ul className="space-y-2">
+                        {items.map((task) => (
+                          <li key={task.id} className="rounded bg-inset px-3 py-2">
+                            <TaskMiniCard task={task} onToggle={toggleWithUndo} />
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </CardBody>
+                </Card>
+              );
+            })}
+          </div>
+        ) : (
+          <ul className="space-y-2">
+            {visibleTasks.map((task) => {
+              const priority = PRIORITY_BADGE[task.priority];
+              const done = task.status === 'completed';
+
+              return (
+                <li key={task.id}>
+                  <Card className="p-3.5">
+                    <div className="flex items-start gap-3">
+                      <input
+                        type="checkbox"
+                        checked={done}
+                        aria-label={done ? `标记「${task.title}」为待办` : `完成「${task.title}」`}
+                        onChange={() => toggleWithUndo(task)}
+                        style={{ accentColor: 'var(--lm-accent)' }}
+                        className="mt-1 h-4 w-4 shrink-0 cursor-pointer rounded-sm border-line transition-transform duration-fast active:scale-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-line-focus"
+                      />
+
+                      <div className="min-w-0 flex-1">
+                        <p
+                          className={`font-medium transition-colors duration-fast ${
+                            done ? 'text-content-tertiary line-through' : 'text-content'
+                          }`}
+                        >
+                          {task.title}
                         </p>
-                      )}
-                      <div className="mt-1.5">
-                        <TagEditor
-                          tags={task.tags}
-                          suggestions={tagSuggestions}
-                          onChange={(tags) => updateTask(task.id, { tags })}
+                        {task.description && (
+                          <p className="mt-0.5 truncate text-sm text-content-tertiary">
+                            {task.description}
+                          </p>
+                        )}
+                        <div className="mt-1.5">
+                          <TagEditor
+                            tags={task.tags}
+                            suggestions={tagSuggestions}
+                            onChange={(tags) => updateTask(task.id, { tags })}
+                          />
+                        </div>
+                        <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                          <Badge tone={priority.tone} dot>
+                            {priority.label}
+                          </Badge>
+                          <DueBadge task={task} />
+                          {task.repeat && (
+                            <span className="inline-flex items-center gap-1 text-xs text-content-tertiary">
+                              <Repeat size={11} aria-hidden />
+                              {repeatLabel(task.repeat)}
+                            </span>
+                          )}
+                        </div>
+
+                        {(() => {
+                          const subOpen = expandedSubtasks.has(task.id);
+                          const subDone = task.subtasks.filter((item) => item.done).length;
+                          return (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => toggleSubExpand(task.id)}
+                                aria-expanded={subOpen}
+                                className="mt-2 inline-flex items-center gap-1 rounded text-xs text-content-tertiary transition-colors duration-fast hover:text-content-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-line-focus"
+                              >
+                                {subOpen ? (
+                                  <ChevronDown size={12} aria-hidden />
+                                ) : (
+                                  <ChevronRight size={12} aria-hidden />
+                                )}
+                                <ListTodo size={11} aria-hidden />
+                                {task.subtasks.length > 0
+                                  ? `子任务 ${subDone}/${task.subtasks.length}`
+                                  : '添加子任务'}
+                              </button>
+
+                              {subOpen && (
+                                <div className="mt-2 space-y-2 rounded bg-inset p-2.5">
+                                  {task.subtasks.length > 0 && (
+                                    <ul className="space-y-1">
+                                      {task.subtasks.map((subtask) => (
+                                        <li
+                                          key={subtask.id}
+                                          className="flex items-center gap-2"
+                                        >
+                                          <input
+                                            type="checkbox"
+                                            checked={subtask.done}
+                                            onChange={() => toggleSubtask(task.id, subtask.id)}
+                                            aria-label={`完成子任务「${subtask.title}」`}
+                                            style={{ accentColor: 'var(--lm-accent)' }}
+                                            className="h-3.5 w-3.5 shrink-0 cursor-pointer rounded-sm border-line focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-line-focus"
+                                          />
+                                          <span
+                                            className={`min-w-0 flex-1 truncate text-xs ${
+                                              subtask.done
+                                                ? 'text-content-tertiary line-through'
+                                                : 'text-content-secondary'
+                                            }`}
+                                          >
+                                            {subtask.title}
+                                          </span>
+                                          <IconButton
+                                            label={`删除子任务「${subtask.title}」`}
+                                            size="sm"
+                                            icon={<Trash2 size={12} />}
+                                            onClick={() => deleteSubtask(task.id, subtask.id)}
+                                            className="hover:text-danger"
+                                          />
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  )}
+                                  <div className="flex items-end gap-1.5">
+                                    <div className="min-w-0 flex-1">
+                                      <Input
+                                        aria-label={`为「${task.title}」添加子任务`}
+                                        value={subtaskDraft[task.id] ?? ''}
+                                        onChange={(event) =>
+                                          setSubtaskDraft({
+                                            ...subtaskDraft,
+                                            [task.id]: event.target.value,
+                                          })
+                                        }
+                                        onKeyDown={(event) => {
+                                          if (event.key === 'Enter') {
+                                            event.preventDefault();
+                                            handleAddSubtask(task.id);
+                                          }
+                                        }}
+                                        placeholder="新子任务，回车添加"
+                                      />
+                                    </div>
+                                    <Button
+                                      size="sm"
+                                      variant="secondary"
+                                      onClick={() => handleAddSubtask(task.id)}
+                                      disabled={!(subtaskDraft[task.id] ?? '').trim()}
+                                    >
+                                      添加
+                                    </Button>
+                                  </div>
+                                </div>
+                              )}
+                            </>
+                          );
+                        })()}
+                      </div>
+
+                      <div className="flex shrink-0 gap-0.5">
+                        <IconButton
+                          label={`编辑「${task.title}」`}
+                          size="sm"
+                          icon={<Edit3 size={15} />}
+                          onClick={() => openEdit(task)}
+                        />
+                        <IconButton
+                          label={`删除「${task.title}」`}
+                          size="sm"
+                          icon={<Trash2 size={15} />}
+                          onClick={() => setPendingDeleteId(task.id)}
+                          className="hover:text-danger"
                         />
                       </div>
-                      <div className="mt-1.5 flex flex-wrap items-center gap-2">
-                        <Badge tone={priority.tone} dot>
-                          {priority.label}
-                        </Badge>
-                        <DueBadge task={task} />
-                        {task.repeat && (
-                          <span className="inline-flex items-center gap-1 text-xs text-content-tertiary">
-                            <Repeat size={11} aria-hidden />
-                            {repeatLabel(task.repeat)}
-                          </span>
-                        )}
-                      </div>
-
-                      {(() => {
-                        const subOpen = expandedSubtasks.has(task.id);
-                        const subDone = task.subtasks.filter((item) => item.done).length;
-                        return (
-                          <>
-                            <button
-                              type="button"
-                              onClick={() => toggleSubExpand(task.id)}
-                              aria-expanded={subOpen}
-                              className="mt-2 inline-flex items-center gap-1 rounded text-xs text-content-tertiary transition-colors duration-fast hover:text-content-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-line-focus"
-                            >
-                              {subOpen ? (
-                                <ChevronDown size={12} aria-hidden />
-                              ) : (
-                                <ChevronRight size={12} aria-hidden />
-                              )}
-                              <ListTodo size={11} aria-hidden />
-                              {task.subtasks.length > 0
-                                ? `子任务 ${subDone}/${task.subtasks.length}`
-                                : '添加子任务'}
-                            </button>
-
-                            {subOpen && (
-                              <div className="mt-2 space-y-2 rounded bg-inset p-2.5">
-                                {task.subtasks.length > 0 && (
-                                  <ul className="space-y-1">
-                                    {task.subtasks.map((subtask) => (
-                                      <li
-                                        key={subtask.id}
-                                        className="flex items-center gap-2"
-                                      >
-                                        <input
-                                          type="checkbox"
-                                          checked={subtask.done}
-                                          onChange={() => toggleSubtask(task.id, subtask.id)}
-                                          aria-label={`完成子任务「${subtask.title}」`}
-                                          style={{ accentColor: 'var(--lm-accent)' }}
-                                          className="h-3.5 w-3.5 shrink-0 cursor-pointer rounded-sm border-line focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-line-focus"
-                                        />
-                                        <span
-                                          className={`min-w-0 flex-1 truncate text-xs ${
-                                            subtask.done
-                                              ? 'text-content-tertiary line-through'
-                                              : 'text-content-secondary'
-                                          }`}
-                                        >
-                                          {subtask.title}
-                                        </span>
-                                        <IconButton
-                                          label={`删除子任务「${subtask.title}」`}
-                                          size="sm"
-                                          icon={<Trash2 size={12} />}
-                                          onClick={() => deleteSubtask(task.id, subtask.id)}
-                                          className="hover:text-danger"
-                                        />
-                                      </li>
-                                    ))}
-                                  </ul>
-                                )}
-                                <div className="flex items-end gap-1.5">
-                                  <div className="min-w-0 flex-1">
-                                    <Input
-                                      aria-label={`为「${task.title}」添加子任务`}
-                                      value={subtaskDraft[task.id] ?? ''}
-                                      onChange={(event) =>
-                                        setSubtaskDraft({
-                                          ...subtaskDraft,
-                                          [task.id]: event.target.value,
-                                        })
-                                      }
-                                      onKeyDown={(event) => {
-                                        if (event.key === 'Enter') {
-                                          event.preventDefault();
-                                          handleAddSubtask(task.id);
-                                        }
-                                      }}
-                                      placeholder="新子任务，回车添加"
-                                    />
-                                  </div>
-                                  <Button
-                                    size="sm"
-                                    variant="secondary"
-                                    onClick={() => handleAddSubtask(task.id)}
-                                    disabled={!(subtaskDraft[task.id] ?? '').trim()}
-                                  >
-                                    添加
-                                  </Button>
-                                </div>
-                              </div>
-                            )}
-                          </>
-                        );
-                      })()}
                     </div>
-
-                    <div className="flex shrink-0 gap-0.5">
-                      <IconButton
-                        label={`编辑「${task.title}」`}
-                        size="sm"
-                        icon={<Edit3 size={15} />}
-                        onClick={() => openEdit(task)}
-                      />
-                      <IconButton
-                        label={`删除「${task.title}」`}
-                        size="sm"
-                        icon={<Trash2 size={15} />}
-                        onClick={() => setPendingDeleteId(task.id)}
-                        className="hover:text-danger"
-                      />
-                    </div>
-                  </div>
-                </Card>
-              </li>
-            );
-          })}
-        </ul>
-      )}
+                  </Card>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </MasterDetail>
 
       <Modal
         isOpen={showAddModal}
@@ -820,24 +854,6 @@ export const TasksPage: React.FC = () => {
             </Button>
             <Button onClick={handleAdd} disabled={!form.title.trim()}>
               添加
-            </Button>
-          </>
-        }
-      >
-        <TaskFormFields form={form} onChange={setForm} tagSuggestions={tagSuggestions} />
-      </Modal>
-
-      <Modal
-        isOpen={editingTask !== null}
-        onClose={() => setEditingTaskId(null)}
-        title="编辑任务"
-        footer={
-          <>
-            <Button variant="secondary" onClick={() => setEditingTaskId(null)}>
-              取消
-            </Button>
-            <Button onClick={handleEdit} disabled={!form.title.trim()}>
-              保存
             </Button>
           </>
         }
