@@ -1,7 +1,8 @@
 import React from 'react';
 import { useLocation } from 'react-router-dom';
-import { Menu, Monitor, Moon, Rows3, Rows4, Search, Sun } from 'lucide-react';
+import { Menu, Monitor, Moon, Rows3, Rows4, Save, Search, Sun } from 'lucide-react';
 import { IconButton, Kbd } from '../ui';
+import { ToastContext } from '../ui/toastContext';
 import { useTheme } from '../../hooks/useTheme';
 import { useUiStore } from '../../store/uiStore';
 import { findNavItem } from './navItems';
@@ -31,6 +32,38 @@ export const Header: React.FC<HeaderProps> = ({ onOpenNav }) => {
   const density = useUiStore((state) => state.density);
   const toggleDensity = useUiStore((state) => state.toggleDensity);
   const { open: openPalette } = useCommandPalette();
+  // 单测可能没有 ToastProvider，这里用可选上下文，没 Provider 时静默
+  const { toast } = React.useContext(ToastContext) ?? { toast: () => '' };
+  const [saving, setSaving] = React.useState(false);
+
+  /**
+   * 手动保存：所有数据本来就随每次改动自动写入 localStorage，
+   * 这里额外留一份带说明的快照（可在设置页回滚），并给出明确反馈。
+   * 备份模块按需加载，不进首屏包。
+   */
+  const handleManualSave = async (): Promise<void> => {
+    if (saving) return;
+    setSaving(true);
+    try {
+      const { createAutoSnapshot } = await import('../../services/backup');
+      const key = createAutoSnapshot('手动保存');
+      toast({
+        tone: 'success',
+        title: '已保存到本地',
+        description: key
+          ? '数据已写入本地存储，并留了一份快照（可在「数据与设置」里回滚）。'
+          : '数据已写入本地存储（快照空间已满，本次未新建快照）。',
+      });
+    } catch {
+      toast({
+        tone: 'danger',
+        title: '保存失败',
+        description: '快照没有创建成功，请稍后重试；数据本身不受影响。',
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const current = findNavItem(pathname);
   const ThemeIcon = THEME_ICON[themeMode];
@@ -74,6 +107,12 @@ export const Header: React.FC<HeaderProps> = ({ onOpenNav }) => {
           <span className="hidden lg:inline">搜索或跳转</span>
           <Kbd className="hidden lg:inline-flex">⌘K</Kbd>
         </button>
+
+        <IconButton
+          label={saving ? '正在保存…' : '保存到本地'}
+          icon={<Save size={18} />}
+          onClick={handleManualSave}
+        />
 
         <IconButton
           label={`密度：${density === 'compact' ? '紧凑' : '宽松'}（点击切换）`}

@@ -9,6 +9,9 @@ import { PageHeader } from './PageHeader';
 import { Toolbar } from './Toolbar';
 import { NAV_ITEMS, findNavItem, isNavItemActive } from './navItems';
 import { useUiStore } from '../../store/uiStore';
+import { Header } from './Header';
+import { CommandPaletteProvider } from './CommandPalette';
+import { ToastProvider } from '../ui';
 
 beforeEach(() => {
   useUiStore.setState({ sidebarCollapsed: false, density: 'comfortable' });
@@ -267,5 +270,31 @@ describe('Toolbar', () => {
     await userEvent.type(screen.getByRole('textbox', { name: '搜索' }), '书');
     expect(onChange).toHaveBeenCalledWith('书');
     expect(screen.getByRole('button', { name: '新建' })).toBeInTheDocument();
+  });
+});
+
+describe('Header 手动保存', () => {
+  it('点保存按钮会留快照并弹确认提示', async () => {
+    localStorage.clear();
+    localStorage.setItem('lm:tasks', '{"state":{"tasks":[]},"version":11}');
+
+    render(
+      <MemoryRouter initialEntries={['/']}>
+        <CommandPaletteProvider>
+          <ToastProvider>
+            <Header onOpenNav={() => {}} />
+          </ToastProvider>
+        </CommandPaletteProvider>
+      </MemoryRouter>,
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: '保存到本地' }));
+
+    // 保存是异步的（按需加载备份模块），等 Toast 出现
+    expect(await screen.findByText('已保存到本地')).toBeInTheDocument();
+    const reasons = Object.keys(localStorage)
+      .filter((key) => key.startsWith('lm:backup:auto:'))
+      .map((key) => (JSON.parse(localStorage.getItem(key) ?? '{}') as { reason?: string }).reason);
+    expect(reasons).toContain('手动保存');
   });
 });
