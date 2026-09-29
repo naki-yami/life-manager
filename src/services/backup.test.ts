@@ -114,8 +114,21 @@ function sampleData(): BackupData {
         id: 'meal-1',
         date: '2026-09-27',
         type: 'lunch',
-        items: [{ id: 'food-1', name: '鸡胸肉', category: '蛋白质', calories: 220 }],
+        items: [
+          {
+            id: 'food-1',
+            name: '鸡胸肉',
+            category: '蛋白质',
+            calories: 220,
+            protein: 40,
+            carbs: 0,
+            fat: 5,
+          },
+        ],
         totalCalories: 220,
+        totalProtein: 40,
+        totalCarbs: 0,
+        totalFat: 5,
       },
     ],
     games: [
@@ -221,7 +234,7 @@ describe('导出 / 导入 往返', () => {
   it('信封结构包含 schemaVersion 与 exportedAt', () => {
     const envelope = buildBackupEnvelope(emptyData(), new Date('2026-09-28T00:00:00.000Z'));
     expect(envelope.app).toBe('life-manager');
-    expect(envelope.schemaVersion).toBe(7);
+    expect(envelope.schemaVersion).toBe(8);
     expect(envelope.exportedAt).toBe('2026-09-28T00:00:00.000Z');
   });
 });

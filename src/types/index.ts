@@ -164,6 +164,10 @@ export interface FoodItem {
   name: string;
   category: string;
   calories: number;
+  /** 三大营养素（克）；旧数据可能没有 */
+  protein?: number;
+  carbs?: number;
+  fat?: number;
 }
 
 export interface MealRecord {
@@ -172,6 +176,16 @@ export interface MealRecord {
   type: MealType;
   items: FoodItem[];
   totalCalories: number;
+  /** 三大营养素合计（克），由条目累加而来；旧数据可能没有 */
+  totalProtein?: number;
+  totalCarbs?: number;
+  totalFat?: number;
+}
+
+/** 每日饮食目标；0 表示未设置 */
+export interface DietGoals {
+  calories: number;
+  protein: number;
 }
 
 // Game types

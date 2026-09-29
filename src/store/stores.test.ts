@@ -196,8 +196,8 @@ describe('版本迁移', () => {
     expect(result).toEqual({ tasks: [], futureField: 'keep' });
   });
 
-  it('当前版本号是 8', () => {
-    expect(STORE_VERSION).toBe(8);
+  it('当前版本号是 9', () => {
+    expect(STORE_VERSION).toBe(9);
   });
 
   it('旧项目数据没有 hoursSpent，重新水合时补 0', async () => {
@@ -287,6 +287,31 @@ describe('其它 store', () => {
     store.updateBook(id, { totalPages: 200, status: 'reading' });
     store.updateProgress(id, 50);
     expect(useBookStore.getState().books[0]!.progress).toBe(50);
+  });
+
+  it('dietStore：营养素合计、每日目标与饮水打卡', () => {
+    const store = useDietStore.getState();
+    store.addRecord('2026-09-28', 'lunch', [
+      { name: '鸡胸肉', category: '蛋白质', calories: 220, protein: 40, carbs: 0, fat: 5 },
+      { name: '米饭', category: '主食', calories: 200, protein: 4, carbs: 45, fat: 1 },
+    ]);
+
+    const record = useDietStore.getState().records[0]!;
+    expect(record.totalCalories).toBe(420);
+    expect(record.totalProtein).toBe(44);
+    expect(record.totalCarbs).toBe(45);
+    expect(record.totalFat).toBe(6);
+
+    useDietStore.getState().setGoals({ calories: 1800, protein: 100 });
+    expect(useDietStore.getState().goals).toEqual({ calories: 1800, protein: 100 });
+
+    useDietStore.getState().setWater('2026-09-28', 3);
+    expect(useDietStore.getState().water['2026-09-28']).toBe(3);
+    // 边界：最多 99 杯，最少 0 杯
+    useDietStore.getState().setWater('2026-09-28', 120);
+    expect(useDietStore.getState().water['2026-09-28']).toBe(99);
+    useDietStore.getState().setWater('2026-09-28', -2);
+    expect(useDietStore.getState().water['2026-09-28']).toBe(0);
   });
 
   it('gameStore：成就解锁切换', () => {

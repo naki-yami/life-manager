@@ -8,7 +8,7 @@ import { addDays, formatDayLabel, todayKey } from '../utils/date';
 import { FoodItem, MealType } from '../types';
 
 beforeEach(() => {
-  useDietStore.setState({ records: [] });
+  useDietStore.setState({ records: [], goals: { calories: 2000, protein: 80 }, water: {} });
 });
 
 const today = todayKey();
@@ -213,5 +213,52 @@ describe('DietPage', () => {
     render(<DietPage />);
 
     expect(screen.getByRole('img', { name: '近 7 天每日摄入热量趋势' })).toBeInTheDocument();
+  });
+
+  it('营养目标卡显示剩余额度，超过目标提示已超出', () => {
+    addMeal(today, 'lunch', [{ name: '牛肉面', category: '主食', calories: 1600 }]);
+
+    render(<DietPage />);
+    expect(screen.getByText('还剩 400 kcal 额度')).toBeInTheDocument();
+
+    addMeal(today, 'dinner', [{ name: '炸鸡', category: '零食', calories: 800 }]);
+    render(<DietPage />);
+    expect(screen.getAllByText(/已超出 400 kcal/).length).toBeGreaterThan(0);
+  });
+
+  it('记录行与卡片汇总显示三大营养素', () => {
+    addMeal(today, 'lunch', [
+      { name: '鸡胸肉', category: '蛋白质', calories: 220, protein: 40, carbs: 0, fat: 5 },
+    ]);
+
+    render(<DietPage />);
+
+    expect(screen.getByText(/共 220 kcal · 蛋白 40g · 脂肪 5g/)).toBeInTheDocument();
+    expect(screen.getByText('蛋白 40g')).toBeInTheDocument();
+    expect(screen.getByText('碳水 0g')).toBeInTheDocument();
+  });
+
+  it('饮水打卡可以点选与取消', async () => {
+    render(<DietPage />);
+
+    await userEvent.click(screen.getByRole('button', { name: '第 3 杯水' }));
+    expect(useDietStore.getState().water[today]).toBe(3);
+    expect(screen.getByText('饮水 3/8 杯')).toBeInTheDocument();
+
+    // 再点一次第 3 杯回到 2 杯
+    await userEvent.click(screen.getByRole('button', { name: '第 3 杯水' }));
+    expect(useDietStore.getState().water[today]).toBe(2);
+  });
+
+  it('复制昨天把昨天的记录搬到今天', async () => {
+    addMeal(yesterday, 'breakfast', [{ name: '燕麦', category: '主食', calories: 300 }]);
+
+    render(<DietPage />);
+    await userEvent.click(screen.getByRole('button', { name: '复制昨天' }));
+
+    const todays = useDietStore.getState().records.filter((record) => record.date === today);
+    expect(todays).toHaveLength(1);
+    expect(todays[0]!.type).toBe('breakfast');
+    expect(todays[0]!.items[0]!.name).toBe('燕麦');
   });
 });

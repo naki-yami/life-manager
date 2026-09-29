@@ -4,6 +4,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Coffee,
+  Copy,
+  Droplet,
   Flame,
   Moon,
   Plus,
@@ -28,6 +30,8 @@ import {
   Input,
   Modal,
   NumberInput,
+  ProgressBar,
+  ProgressRing,
   SegmentedControl,
   Select,
   StatCard,
@@ -62,6 +66,9 @@ interface FoodDraft {
   name: string;
   category: string;
   calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
 }
 
 const MEAL_ORDER: MealType[] = ['breakfast', 'lunch', 'dinner', 'snack'];
@@ -89,10 +96,18 @@ const CATEGORY_OPTIONS = FOOD_CATEGORIES.map((category) => ({
 
 const MEAL_OPTIONS = MEAL_ORDER.map((type) => ({ value: type, label: MEAL_LABEL[type] }));
 
-const emptyItem = (): FoodDraft => ({ name: '', category: '主食', calories: 0 });
+const emptyItem = (): FoodDraft => ({
+  name: '',
+  category: '主食',
+  calories: 0,
+  protein: 0,
+  carbs: 0,
+  fat: 0,
+});
 
 export const DietPage: React.FC = () => {
-  const { records, addRecord, deleteRecord, replaceRecords } = useDietStore();
+  const { records, addRecord, deleteRecord, replaceRecords, goals, water, setGoals, setWater } =
+    useDietStore();
   const undoableRemove = useUndoableRemove();
 
   const [view, setView] = useState<View>('day');
@@ -140,6 +155,25 @@ export const DietPage: React.FC = () => {
   }, [visibleAllRecords]);
 
   const dayCalories = dayRecords.reduce((sum, record) => sum + record.totalCalories, 0);
+  const dayProtein = dayRecords.reduce((sum, record) => sum + (record.totalProtein ?? 0), 0);
+  const dayCarbs = dayRecords.reduce((sum, record) => sum + (record.totalCarbs ?? 0), 0);
+  const dayFat = dayRecords.reduce((sum, record) => sum + (record.totalFat ?? 0), 0);
+
+  const caloriesGoal = goals.calories > 0 ? goals.calories : 0;
+  const caloriesLeft = caloriesGoal > 0 ? caloriesGoal - dayCalories : null;
+  const proteinGoal = goals.protein > 0 ? goals.protein : 0;
+  const waterGlasses = water[selectedDate] ?? 0;
+  const WATER_GOAL = 8;
+
+  const yesterday = addDays(selectedDate, -1);
+  const yesterdayRecords = records.filter((record) => record.date === yesterday);
+  const canCopyYesterday = yesterdayRecords.length > 0;
+
+  const handleCopyYesterday = (): void => {
+    for (const record of yesterdayRecords) {
+      addRecord(selectedDate, record.type, record.items);
+    }
+  };
 
   /** 当天有没有记录（不受搜索影响），用于空态提示 */
   const dayIsEmpty = !records.some((record) => record.date === selectedDate);
@@ -195,7 +229,13 @@ export const DietPage: React.FC = () => {
   const handleAdd = (): void => {
     const validItems: FoodItem[] = form.items
       .filter((item) => item.name.trim())
-      .map((item) => ({ ...item, name: item.name.trim() }));
+      .map((item) => ({
+        ...item,
+        name: item.name.trim(),
+        protein: item.protein > 0 ? item.protein : undefined,
+        carbs: item.carbs > 0 ? item.carbs : undefined,
+        fat: item.fat > 0 ? item.fat : undefined,
+      }));
     if (validItems.length === 0) return;
     addRecord(form.date, form.type, validItems);
     setSelectedDate(form.date);
@@ -224,6 +264,9 @@ export const DietPage: React.FC = () => {
           </div>
           <p className="mt-1.5 text-2xs text-content-tertiary">
             共 {formatNumber(record.totalCalories)} kcal
+            {(record.totalProtein ?? 0) > 0 && ` · 蛋白 ${Math.round(record.totalProtein ?? 0)}g`}
+            {(record.totalCarbs ?? 0) > 0 && ` · 碳水 ${Math.round(record.totalCarbs ?? 0)}g`}
+            {(record.totalFat ?? 0) > 0 && ` · 脂肪 ${Math.round(record.totalFat ?? 0)}g`}
             {view === 'all' ? ` · ${MEAL_LABEL[mealType]} · ${recordDate}` : ''}
           </p>
         </div>
@@ -294,6 +337,111 @@ export const DietPage: React.FC = () => {
           icon={<CalendarDays size={16} aria-hidden />}
         />
       </div>
+
+      <Card>
+        <CardHeader
+          title="营养目标与饮水"
+          subtitle={
+            caloriesGoal > 0
+              ? caloriesLeft !== null && caloriesLeft >= 0
+                ? `还剩 ${formatNumber(caloriesLeft)} kcal 额度`
+                : `已超出 ${formatNumber(Math.abs(caloriesLeft ?? 0))} kcal`
+              : '设置每日目标后可以看剩余额度'
+          }
+          action={
+            selectedDate === today && canCopyYesterday ? (
+              <Button
+                size="sm"
+                variant="secondary"
+                icon={<Copy size={14} aria-hidden />}
+                onClick={handleCopyYesterday}
+              >
+                复制昨天
+              </Button>
+            ) : null
+          }
+        />
+        <CardBody className="space-y-5">
+          <div className="flex flex-wrap items-center gap-6">
+            <ProgressRing
+              value={dayCalories}
+              max={caloriesGoal > 0 ? caloriesGoal : 1}
+              size={88}
+              tone={caloriesLeft !== null && caloriesLeft < 0 ? 'danger' : 'accent'}
+              label={`${formatDayLabel(selectedDate)}热量目标完成度`}
+            >
+              {caloriesGoal > 0
+                ? `${Math.min(999, Math.round((dayCalories / caloriesGoal) * 100))}%`
+                : '—'}
+            </ProgressRing>
+            <div className="min-w-0 flex-1 space-y-2">
+              <div className="flex flex-wrap gap-2 text-xs text-content-tertiary">
+                <Badge tone="info">蛋白 {Math.round(dayProtein)}g</Badge>
+                <Badge tone="warning">碳水 {Math.round(dayCarbs)}g</Badge>
+                <Badge tone="danger">脂肪 {Math.round(dayFat)}g</Badge>
+              </div>
+              {proteinGoal > 0 && (
+                <ProgressBar
+                  value={dayProtein}
+                  max={proteinGoal}
+                  showValue
+                  label={`蛋白质目标 ${Math.round(dayProtein)}/${proteinGoal}g`}
+                  tone={dayProtein >= proteinGoal ? 'success' : 'accent'}
+                />
+              )}
+              <div className="flex flex-wrap items-end gap-3">
+                <div className="w-36">
+                  <NumberInput
+                    label="热量目标"
+                    value={goals.calories}
+                    onChange={(value) => setGoals({ ...goals, calories: value === '' ? 0 : value })}
+                    min={0}
+                    step={100}
+                    suffix="kcal"
+                  />
+                </div>
+                <div className="w-36">
+                  <NumberInput
+                    label="蛋白质目标"
+                    value={goals.protein}
+                    onChange={(value) => setGoals({ ...goals, protein: value === '' ? 0 : value })}
+                    min={0}
+                    step={10}
+                    suffix="g"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <p className="mb-1.5 text-sm font-medium text-content-secondary">
+              饮水 {waterGlasses}/{WATER_GOAL} 杯
+            </p>
+            <div role="group" aria-label="饮水打卡" className="flex flex-wrap gap-1.5">
+              {Array.from({ length: WATER_GOAL }, (_, index) => {
+                const filled = index < waterGlasses;
+                return (
+                  <button
+                    key={index}
+                    type="button"
+                    aria-pressed={filled}
+                    aria-label={`第 ${index + 1} 杯水`}
+                    onClick={() => setWater(selectedDate, filled ? index : index + 1)}
+                    className={`h-8 w-8 rounded-full border transition-colors duration-fast ease-standard focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-line-focus ${
+                      filled
+                        ? 'border-info bg-info-soft text-info'
+                        : 'border-line-subtle bg-inset text-content-tertiary hover:text-content-secondary'
+                    }`}
+                  >
+                    <Droplet size={14} aria-hidden className="mx-auto" />
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </CardBody>
+      </Card>
 
       {records.length > 0 && (
         <Card>
@@ -551,6 +699,32 @@ export const DietPage: React.FC = () => {
                     min={0}
                     step={10}
                     suffix="kcal"
+                  />
+                </div>
+                <div className="mt-2 grid grid-cols-3 gap-2">
+                  <NumberInput
+                    ariaLabel={`第 ${index + 1} 个食物的蛋白质`}
+                    value={item.protein}
+                    onChange={(value) => updateItem(index, { protein: value === '' ? 0 : value })}
+                    min={0}
+                    step={1}
+                    suffix="g 蛋白"
+                  />
+                  <NumberInput
+                    ariaLabel={`第 ${index + 1} 个食物的碳水`}
+                    value={item.carbs}
+                    onChange={(value) => updateItem(index, { carbs: value === '' ? 0 : value })}
+                    min={0}
+                    step={1}
+                    suffix="g 碳水"
+                  />
+                  <NumberInput
+                    ariaLabel={`第 ${index + 1} 个食物的脂肪`}
+                    value={item.fat}
+                    onChange={(value) => updateItem(index, { fat: value === '' ? 0 : value })}
+                    min={0}
+                    step={1}
+                    suffix="g 脂肪"
                   />
                 </div>
               </div>

@@ -7,7 +7,7 @@ import { z } from 'zod';
  */
 
 export const APP_ID = 'life-manager';
-export const BACKUP_SCHEMA_VERSION = 7;
+export const BACKUP_SCHEMA_VERSION = 8;
 
 const isoDateString = z.string();
 const percent = z.number().min(0).max(100).catch(0);
@@ -158,6 +158,10 @@ export const foodItemSchema = z.object({
   name: z.string(),
   category: z.string().default(''),
   calories: z.number().min(0).catch(0),
+  /** v8：三大营养素（克）；旧备份没有就保持缺省 */
+  protein: z.number().min(0).optional(),
+  carbs: z.number().min(0).optional(),
+  fat: z.number().min(0).optional(),
 });
 
 export const mealRecordSchema = z.object({
@@ -166,6 +170,10 @@ export const mealRecordSchema = z.object({
   type: z.enum(['breakfast', 'lunch', 'dinner', 'snack']).default('breakfast'),
   items: z.array(foodItemSchema).default([]),
   totalCalories: z.number().min(0).catch(0),
+  /** v8：营养素合计；旧备份没有就保持缺省 */
+  totalProtein: z.number().min(0).optional(),
+  totalCarbs: z.number().min(0).optional(),
+  totalFat: z.number().min(0).optional(),
 });
 
 // ---------- 游戏 ----------
