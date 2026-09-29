@@ -1,5 +1,15 @@
 import React, { useMemo, useState } from 'react';
-import { CalendarDays, Dumbbell, ListChecks, Plus, Trash2, TrendingUp, X } from 'lucide-react';
+import {
+  CalendarDays,
+  Copy,
+  Dumbbell,
+  ListChecks,
+  Plus,
+  Trash2,
+  TrendingUp,
+  Trophy,
+  X,
+} from 'lucide-react';
 import {
   Badge,
   Button,
@@ -24,6 +34,8 @@ import { useUndoableRemove } from '../hooks/useUndoableRemove';
 import { filterByKeyword } from '../utils/search';
 import { formatNumber, todayKey } from '../utils/date';
 import { activeDays, seriesByDay, seriesByWeek } from '../utils/stats';
+import { epley1RM, personalBests } from '../utils/fitness';
+import { ToastContext } from '../components/ui/toastContext';
 import { useNewEntryShortcut } from '../hooks/useShortcuts';
 
 type View = 'plans' | 'records';
@@ -86,8 +98,10 @@ export const FitnessPage: React.FC = () => {
   const [pendingRecordId, setPendingRecordId] = useState<string | null>(null);
   const [planForm, setPlanForm] = useState({ name: '', description: '' });
   const [workoutForm, setWorkoutForm] = useState(emptyWorkoutForm);
+  const toastContext = React.useContext(ToastContext);
 
   const totalVolume = records.reduce((sum, record) => sum + volumeOf(record.exercises), 0);
+  const bests = useMemo(() => personalBests(records), [records]);
   const weekStart = weekStartKey();
   const today = todayKey();
   const thisWeekCount = records.filter(
@@ -155,6 +169,24 @@ export const FitnessPage: React.FC = () => {
 
   useNewEntryShortcut(() => openWorkoutModal());
 
+  /** 复制最近一次训练：带出计划名与全部动作，日期改为今天 */
+  const copyLastWorkout = (): void => {
+    const last = [...records].sort((a, b) => b.date.localeCompare(a.date))[0];
+    if (!last) return;
+    setWorkoutForm({
+      planName: last.planName,
+      date: todayKey(),
+      exercises: last.exercises.map((exercise) => ({
+        name: exercise.name,
+        sets: exercise.sets,
+        reps: exercise.reps,
+        weight: exercise.weight,
+      })),
+      notes: '',
+    });
+    setShowWorkoutModal(true);
+  };
+
   const handleAddPlan = (): void => {
     const name = planForm.name.trim();
     if (!name) return;
@@ -174,12 +206,36 @@ export const FitnessPage: React.FC = () => {
   const handleLogWorkout = (): void => {
     const validExercises = workoutForm.exercises.filter((exercise) => exercise.name.trim());
     if (validExercises.length === 0) return;
+    const trimmed = validExercises.map((exercise) => ({ ...exercise, name: exercise.name.trim() }));
+
+    // 破纪录检测：这次的动作 1RM 超过历史最佳才算（第一次录入不算破纪录）
+    const previousBests = new Map(personalBests(records).map((pr) => [pr.exercise, pr.oneRm]));
+    const brokenRecords = trimmed
+      .map((exercise) => ({
+        name: exercise.name,
+        oneRm: epley1RM(exercise.weight, exercise.reps),
+      }))
+      .filter((entry) => {
+        const previous = previousBests.get(entry.name);
+        return previous !== undefined && entry.oneRm > previous;
+      });
+
     addRecord(
       workoutForm.planName,
       workoutForm.date,
-      validExercises.map((exercise) => ({ ...exercise, name: exercise.name.trim() })),
+      trimmed,
       workoutForm.notes.trim(),
     );
+
+    const topBroken = brokenRecords[0];
+    if (topBroken) {
+      toastContext?.toast({
+        tone: 'success',
+        title: `🎉 新纪录！「${topBroken.name}」`,
+        description: `预计 1RM 达到 ${formatNumber(topBroken.oneRm)} kg，超过了之前的最佳成绩。`,
+      });
+    }
+
     setShowWorkoutModal(false);
   };
 
@@ -193,6 +249,15 @@ export const FitnessPage: React.FC = () => {
         icon={Dumbbell}
         actions={
           <>
+            {records.length > 0 && (
+              <Button
+                variant="secondary"
+                icon={<Copy size={16} aria-hidden />}
+                onClick={copyLastWorkout}
+              >
+                复制上次训练
+              </Button>
+            )}
             <Button
               variant="secondary"
               icon={<Plus size={16} aria-hidden />}
@@ -263,6 +328,32 @@ export const FitnessPage: React.FC = () => {
             </CardBody>
           </Card>
         </div>
+      )}
+
+      {records.length > 0 && bests.length > 0 && (
+        <Card>
+          <CardHeader
+            title="个人最佳"
+            subtitle="按 Epley 公式估算的 1RM，破纪录时会弹提示"
+          />
+          <CardBody>
+            <ul className="divide-y divide-line-subtle rounded border border-line-subtle">
+              {bests.slice(0, 5).map((pr) => (
+                <li key={pr.exercise} className="flex items-center gap-3 px-3 py-2">
+                  <Trophy size={14} className="shrink-0 text-warning" aria-hidden />
+                  <span className="min-w-0 flex-1 truncate text-sm text-content">{pr.exercise}</span>
+                  <span className="text-xs text-content-tertiary tabular">{pr.date}</span>
+                  <Badge tone="warning">1RM {formatNumber(pr.oneRm)} kg</Badge>
+                </li>
+              ))}
+            </ul>
+            {bests.length > 5 && (
+              <p className="mt-2 text-xs text-content-tertiary">
+                只显示前 5 个动作，共 {bests.length} 个动作有记录。
+              </p>
+            )}
+          </CardBody>
+        </Card>
       )}
 
       <Toolbar
@@ -393,6 +484,9 @@ export const FitnessPage: React.FC = () => {
                                 <span className="shrink-0 text-xs text-content-tertiary tabular">
                                   {exercise.sets} 组 × {exercise.reps} 次
                                   {exercise.weight > 0 ? ` · ${exercise.weight} kg` : ''}
+                                  {epley1RM(exercise.weight, exercise.reps) > 0
+                                    ? ` · 1RM ${formatNumber(epley1RM(exercise.weight, exercise.reps))} kg`
+                                    : ''}
                                 </span>
                               </li>
                             ))}
@@ -479,6 +573,10 @@ export const FitnessPage: React.FC = () => {
               onChange={(value) => setWorkoutForm({ ...workoutForm, planName: value })}
               options={[
                 { value: '', label: '自由训练' },
+                // 复制上次训练时可能带出一个已被删除的计划名，保底让它仍可选
+                ...(workoutForm.planName && !plans.some((plan) => plan.name === workoutForm.planName)
+                  ? [{ value: workoutForm.planName, label: workoutForm.planName }]
+                  : []),
                 ...plans.map((plan) => ({ value: plan.name, label: plan.name })),
               ]}
             />

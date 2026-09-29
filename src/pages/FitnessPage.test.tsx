@@ -1,8 +1,9 @@
 import React from 'react';
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { FitnessPage } from './FitnessPage';
+import { ToastProvider } from '../components/ui';
 import { useFitnessStore } from '../store/fitnessStore';
 import { addDays, todayKey } from '../utils/date';
 
@@ -140,7 +141,8 @@ describe('FitnessPage', () => {
 
     expect(screen.getByText('推日')).toBeInTheDocument();
     expect(screen.getByText('腿日')).toBeInTheDocument();
-    expect(screen.getAllByText('杠铃卧推')).toHaveLength(2);
+    // 两条记录的动作行 + 「个人最佳」卡里的一行
+    expect(screen.getAllByText('杠铃卧推')).toHaveLength(3);
 
     await userEvent.type(screen.getByRole('textbox', { name: '搜索' }), '推日');
     expect(screen.getByText('推日')).toBeInTheDocument();
@@ -215,5 +217,45 @@ describe('FitnessPage', () => {
     render(<FitnessPage />);
 
     expect(statText('本周训练')).toContain('近 14 天有 1 天练过');
+  });
+
+  it('复制上次训练会带出计划与动作，日期为今天', async () => {
+    addRecord('推日', '2026-09-20', 60);
+    render(<FitnessPage />);
+
+    await userEvent.click(screen.getByRole('button', { name: '复制上次训练' }));
+    const dialog = screen.getByRole('dialog', { name: '记录训练' });
+
+    expect(within(dialog).getByRole('combobox', { name: '训练计划' })).toHaveValue('推日');
+    expect(within(dialog).getByLabelText('第 1 个动作名称')).toHaveValue('杠铃卧推');
+    expect(within(dialog).getByLabelText('第 1 个动作的重量')).toHaveValue(60);
+  });
+
+  it('个人最佳卡按估算 1RM 列出动作', () => {
+    addRecord('推日', '2026-09-20', 60);
+    render(<FitnessPage />);
+
+    expect(screen.getByText('个人最佳')).toBeInTheDocument();
+    const row = screen.getByText('杠铃卧推').closest('li')!;
+    expect(within(row).getByText('1RM 70 kg')).toBeInTheDocument();
+  });
+
+  it('超过历史最佳时弹出破纪录庆祝', async () => {
+    addRecord('推日', '2026-09-20', 60); // 1RM 70
+    render(
+      <ToastProvider>
+        <FitnessPage />
+      </ToastProvider>,
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: '复制上次训练' }));
+    const dialog = screen.getByRole('dialog', { name: '记录训练' });
+    fireEvent.change(within(dialog).getByLabelText('第 1 个动作的重量'), {
+      target: { value: '75' },
+    });
+    await userEvent.click(within(dialog).getByRole('button', { name: '保存记录' }));
+
+    // 75×5 → 1RM 87.5 > 70，破纪录
+    expect(screen.getByText(/新纪录！「杠铃卧推」/)).toBeInTheDocument();
   });
 });
