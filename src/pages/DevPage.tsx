@@ -40,7 +40,7 @@ import { BarChart } from '../components/charts';
 import { useDevStore } from '../store/devStore';
 import { useUndoableRemove } from '../hooks/useUndoableRemove';
 import { filterByKeyword } from '../utils/search';
-import { formatNumber, formatShortDate, daysBetween, todayKey } from '../utils/date';
+import { dayKeyOf, formatNumber, formatShortDate, daysBetween, todayKey } from '../utils/date';
 import { seriesByWeek } from '../utils/stats';
 import {
   DevItemType,
@@ -245,7 +245,7 @@ export const DevPage: React.FC = () => {
 
   /** 项目最近一次有动静的日期：最近的工时流水，一条都没有就用创建日期 */
   const lastActivityOf = (project: DevProject): string => {
-    let last = project.createdAt.slice(0, 10);
+    let last = dayKeyOf(project.createdAt) ?? project.createdAt;
     for (const session of sessions) {
       if (session.projectId === project.id && session.date > last) last = session.date;
     }

@@ -33,7 +33,7 @@ import { PageHeader, Toolbar } from '../components/layout';
 import { BarChart } from '../components/charts';
 import { useTaskStore } from '../store/taskStore';
 import { useUndoableRemove } from '../hooks/useUndoableRemove';
-import { daysBetween, formatShortDate, todayKey } from '../utils/date';
+import { dayKeyOf, daysBetween, formatShortDate, todayKey } from '../utils/date';
 import { seriesByWeek } from '../utils/stats';
 import { matchesKeyword } from '../utils/search';
 import { Priority, RepeatKind, RepeatRule, Task, TaskStatus } from '../types';
@@ -319,7 +319,7 @@ export const TasksPage: React.FC = () => {
         tasks.filter((task) => task.status === 'completed'),
         8,
         today,
-        (task) => task.completedAt?.slice(0, 10),
+        (task) => dayKeyOf(task.completedAt),
         () => 1,
       ),
     [tasks, today],

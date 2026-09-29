@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   addDays,
+  dayKeyOf,
   daysBetween,
   formatDayLabel,
   formatDuration,
@@ -14,6 +15,15 @@ import {
 describe('date utils', () => {
   it('todayKey 输出 YYYY-MM-DD', () => {
     expect(todayKey(new Date('2026-09-28T10:00:00Z'))).toBe('2026-09-28');
+  });
+
+  it('todayKey 用本地日历，不用 UTC 日期', () => {
+    // 用本地字段构造，避免测试结果随运行环境的时区变化
+    expect(todayKey(new Date(2026, 8, 28, 0, 30))).toBe('2026-09-28');
+    expect(todayKey(new Date(2026, 8, 28, 23, 30))).toBe('2026-09-28');
+    // 旧实现走 toISOString()，在东八区（UTC+8）凌晨这两个时刻都会算成 9-27
+    expect(todayKey(new Date(2026, 0, 5, 9, 0))).toBe('2026-01-05');
+    expect(todayKey(new Date(2026, 11, 31, 23, 59))).toBe('2026-12-31');
   });
 
   it('addDays 按本地日历加减，跨月与跨年都正确', () => {
@@ -70,6 +80,29 @@ describe('daysBetween', () => {
   it('非法输入返回 null，由调用方决定怎么展示', () => {
     expect(daysBetween('bad', '2026-09-28')).toBeNull();
     expect(daysBetween('2026-09-28', '')).toBeNull();
+  });
+});
+
+describe('dayKeyOf', () => {
+  it('时间戳换算成本地日期键', () => {
+    const iso = '2026-09-28T17:30:00.000Z';
+    expect(dayKeyOf(iso)).toBe(todayKey(new Date(iso)));
+  });
+
+  it('本来就是日期键的原样返回，不受时区影响', () => {
+    expect(dayKeyOf('2026-09-28')).toBe('2026-09-28');
+    expect(dayKeyOf('2026-01-01')).toBe('2026-01-01');
+  });
+
+  it('Date 也能直接转', () => {
+    expect(dayKeyOf(new Date(2026, 8, 28, 0, 30))).toBe('2026-09-28');
+  });
+
+  it('空值与坏时间戳返回 undefined，由调用方兜底', () => {
+    expect(dayKeyOf(undefined)).toBeUndefined();
+    expect(dayKeyOf(null)).toBeUndefined();
+    expect(dayKeyOf('')).toBeUndefined();
+    expect(dayKeyOf('不是时间')).toBeUndefined();
   });
 });
 

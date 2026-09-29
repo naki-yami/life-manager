@@ -36,7 +36,14 @@ import { useUndoableRemove } from '../hooks/useUndoableRemove';
 import { BarChart } from '../components/charts';
 import { filterByKeyword } from '../utils/search';
 import { percentOf, seriesByWeek } from '../utils/stats';
-import { daysBetween, formatDuration, formatNumber, formatShortDate, todayKey } from '../utils/date';
+import {
+  dayKeyOf,
+  daysBetween,
+  formatDuration,
+  formatNumber,
+  formatShortDate,
+  todayKey,
+} from '../utils/date';
 import { Book, BookStatus, ReadingSession } from '../types';
 import { useNewEntryShortcut } from '../hooks/useShortcuts';
 import { usePaletteFocus } from '../hooks/usePaletteFocus';
@@ -147,7 +154,7 @@ export const BooksPage: React.FC = () => {
   const estimateDaysLeft = (book: Book): number | null => {
     if (book.status !== 'reading' || !book.startedAt) return null;
     if (book.progress <= 0 || book.progress >= 100) return null;
-    const startDay = book.startedAt.slice(0, 10);
+    const startDay = dayKeyOf(book.startedAt) ?? book.startedAt;
     const days = Math.max(1, daysBetween(startDay, today) ?? 1);
     const ratePerDay = book.progress / days;
     return Math.min(999, Math.ceil((100 - book.progress) / ratePerDay));
@@ -156,7 +163,7 @@ export const BooksPage: React.FC = () => {
   /** 开读超过阈值还没读完的提醒 */
   const stalledDaysOf = (book: Book): number | null => {
     if (book.status !== 'reading' || !book.startedAt) return null;
-    const days = daysBetween(book.startedAt.slice(0, 10), today);
+    const days = daysBetween(dayKeyOf(book.startedAt) ?? book.startedAt, today);
     return days !== null && days >= STALLED_AFTER_DAYS ? days : null;
   };
 

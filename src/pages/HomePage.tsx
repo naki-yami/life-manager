@@ -44,7 +44,14 @@ import { useFitnessStore } from '../store/fitnessStore';
 import { useDietStore } from '../store/dietStore';
 import { useGameStore } from '../store/gameStore';
 import { useUiStore } from '../store/uiStore';
-import { daysBetween, formatLongDate, formatNumber, greeting, todayKey } from '../utils/date';
+import {
+  dayKeyOf,
+  daysBetween,
+  formatLongDate,
+  formatNumber,
+  greeting,
+  todayKey,
+} from '../utils/date';
 import {
   changeRate,
   currentStreak,
@@ -145,7 +152,7 @@ export const HomePage: React.FC = () => {
           tasks.filter((task) => task.status === 'completed' && task.completedAt),
           ACTIVITY_DAYS,
           today,
-          (task) => task.completedAt?.slice(0, 10),
+          (task) => dayKeyOf(task.completedAt),
         ),
         seriesByDay(workoutRecords, ACTIVITY_DAYS, today, (record) => record.date),
         seriesByDay(mealRecords, ACTIVITY_DAYS, today, (record) => record.date),
@@ -159,7 +166,7 @@ export const HomePage: React.FC = () => {
         tasks.filter((task) => task.status === 'completed' && task.completedAt),
         14,
         today,
-        (task) => task.completedAt?.slice(0, 10),
+        (task) => dayKeyOf(task.completedAt),
       ),
     [tasks, today],
   );
@@ -180,7 +187,7 @@ export const HomePage: React.FC = () => {
   const dueTodayTasks = tasks.filter((task) => task.dueDate === today);
   const dueTodayDone = dueTodayTasks.filter((task) => task.status === 'completed').length;
   const completedToday = tasks.filter(
-    (task) => task.status === 'completed' && task.completedAt?.slice(0, 10) === today,
+    (task) => task.status === 'completed' && dayKeyOf(task.completedAt) === today,
   ).length;
 
   const streak = currentStreak(activitySeries, today);

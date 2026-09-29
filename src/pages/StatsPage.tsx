@@ -31,7 +31,7 @@ import {
   sumOf,
   sumSeries,
 } from '../utils/stats';
-import { formatNumber, formatShortDate, todayKey } from '../utils/date';
+import { dayKeyOf, formatNumber, formatShortDate, todayKey } from '../utils/date';
 
 const WINDOW_DAYS = 30;
 const CHART_DAYS = 14;
@@ -57,7 +57,7 @@ export const StatsPage: React.FC = () => {
         tasks.filter((task) => task.status === 'completed' && task.completedAt),
         WINDOW_DAYS,
         today,
-        (task) => task.completedAt?.slice(0, 10),
+        (task) => dayKeyOf(task.completedAt),
       ),
     [tasks, today],
   );

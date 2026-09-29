@@ -1,6 +1,38 @@
-/** 与各页面持久化时一致的本地日期键（YYYY-MM-DD） */
+/**
+ * 本地日期键（YYYY-MM-DD）。
+ *
+ * 这里用的是**本地日历字段**，不是 `toISOString()`：后者取的是 UTC 日期，
+ * 在东八区凌晨 0–8 点会把「今天」算成昨天 —— 今日计划、饮食、打卡、热力图
+ * 会集体错位一天。项目从一开始就按本地日期存数据（`addDays` / `daysBetween`
+ * 也都按本地日历算），这里必须对齐。
+ */
 export function todayKey(date: Date = new Date()): string {
-  return date.toISOString().split('T')[0];
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${date.getFullYear()}-${month}-${day}`;
+}
+
+const DATE_KEY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * 时间戳 → 本地日期键。
+ *
+ * 记录上的 `createdAt` / `completedAt` / `startedAt` 存的是完整 ISO 时间（UTC），
+ * 要按天分组（热力图、今日完成、连续打卡）就得换算成本地日期键；
+ * 直接 `slice(0, 10)` 拿到的是 UTC 那一天，凌晨记的事会被算到前一天。
+ *
+ * 本来就是日期键的输入原样返回，不经过 `Date` 解析 ——
+ * 否则 `new Date('2026-09-28')` 被当成 UTC 零点，在负时区又会错一天。
+ * 认不出来的时间戳返回 undefined，由调用方决定怎么兜底。
+ */
+export function dayKeyOf(value: string | Date | null | undefined): string | undefined {
+  if (value === null || value === undefined) return undefined;
+  if (typeof value === 'string') {
+    if (DATE_KEY_PATTERN.test(value)) return value;
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? undefined : todayKey(parsed);
+  }
+  return Number.isNaN(value.getTime()) ? undefined : todayKey(value);
 }
 
 /** 按小时段返回问候语；hour 由调用方传入方便测试 */

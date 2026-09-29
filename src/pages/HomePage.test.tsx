@@ -362,6 +362,31 @@ describe('HomePage 仪表盘', () => {
     expect(titles.filter((text) => text.includes('快速备忘'))).toHaveLength(1);
   });
 
+  it('凌晨完成的任务也算在「今天」（本地日期口径）', () => {
+    const store = useTaskStore.getState();
+    store.addTask('午夜提交', '', 'medium', '');
+    const taskId = useTaskStore.getState().tasks[0]!.id;
+    useTaskStore.getState().toggleTaskStatus(taskId);
+
+    // 造一条「本地时间今天 00:30 完成」的记录：它的 UTC 日期在东八区是昨天
+    const earlyToday = new Date();
+    earlyToday.setHours(0, 30, 0, 0);
+    useTaskStore.setState({
+      tasks: useTaskStore
+        .getState()
+        .tasks.map((task) =>
+          task.id === taskId ? { ...task, completedAt: earlyToday.toISOString() } : task,
+        ),
+    });
+
+    renderHome();
+
+    // 旧实现按 UTC 切日期，在东八区会把这条算成昨天：完成率 0、连续打卡 0
+    expect(screen.getByText('今日完成率').closest('div')!.parentElement!).toHaveTextContent('1');
+    const streakCard = screen.getByText('连续打卡').closest('div')!.parentElement!;
+    expect(within(streakCard).getByText('1')).toBeInTheDocument();
+  });
+
   it('所有卡片都被隐藏时给出恢复指引', () => {
     useUiStore.setState({
       dashboard: DEFAULT_DASHBOARD.map((widget) => ({ ...widget, hidden: true })),
