@@ -31,9 +31,12 @@ import {
   IconButton,
   Input,
   StatCard,
+  useOptionalToast,
 } from '../components/ui';
 import { PageHeader } from '../components/layout';
 import { DashboardGrid, type DashboardWidgetView } from '../components/dashboard';
+import { DayTimeline, type TimelineEntry } from '../components/timeline/DayTimeline';
+import { FocusTimer, type FocusOption } from '../components/timeline/FocusTimer';
 import { useUndoableRemove } from '../hooks/useUndoableRemove';
 import { Heatmap, Sparkline } from '../components/charts';
 import { useTaskStore } from '../store/taskStore';
@@ -45,6 +48,7 @@ import { useDietStore } from '../store/dietStore';
 import { useGameStore } from '../store/gameStore';
 import { useHabitStore } from '../store/habitStore';
 import { useBodyStore } from '../store/bodyStore';
+import { useFocusStore } from '../store/focusStore';
 import { useUiStore } from '../store/uiStore';
 import {
   dayKeyOf,
@@ -72,6 +76,14 @@ import {
   latestPoint,
   weightOf,
 } from '../utils/body';
+import { postFocusSession } from '../services/focusPost';
+import {
+  FOCUS_TARGET_LABELS,
+  POMODORO_MINUTES,
+  focusSummary,
+  formatFocusDuration,
+  timeboxedTasks,
+} from '../utils/focus';
 import { parseQuickTask } from '../utils/quickParse';
 import type { Priority, Task } from '../types';
 
@@ -133,6 +145,7 @@ export const HomePage: React.FC = () => {
     toggleTaskStatus,
     replaceMemos,
     addTask,
+    setTimebox,
     replaceTasks,
   } = useTaskStore();
   const undoableRemove = useUndoableRemove();
@@ -145,6 +158,13 @@ export const HomePage: React.FC = () => {
   const habits = useHabitStore((state) => state.habits);
   const toggleHabitLog = useHabitStore((state) => state.toggleHabitLog);
   const bodyRecords = useBodyStore((state) => state.records);
+
+  const focusSessions = useFocusStore((state) => state.sessions);
+  const activeFocus = useFocusStore((state) => state.active);
+  const startFocus = useFocusStore((state) => state.startFocus);
+  const cancelFocus = useFocusStore((state) => state.cancelFocus);
+  const finishFocus = useFocusStore((state) => state.finishFocus);
+  const toast = useOptionalToast();
 
   // 仪表盘排布存在 lm:ui 里，这里只读出来渲染
   const dashboard = useUiStore((state) => state.dashboard);
@@ -216,11 +236,155 @@ export const HomePage: React.FC = () => {
 
   const streak = currentStreak(activitySeries, today);
 
+  /** 今日时间轴上已排的任务（已按开始时间排好） */
+  const planEntries = useMemo<TimelineEntry[]>(
+    () =>
+      timeboxedTasks(tasks, today).map(({ task, timebox }) => ({
+        id: task.id,
+        title: task.title,
+        start: timebox.start,
+        minutes: timebox.minutes,
+        done: task.status === 'completed',
+      })),
+    [tasks, today],
+  );
+
+  /**
+   * 还没排进今天的任务：今天到期、已经逾期，或干脆没定截止日期。
+   * 未来的任务不往这里塞 —— 时间轴说的是「今天做什么」，不是「以后做什么」。
+   */
+  const planCandidates = useMemo(
+    () =>
+      tasks
+        .filter(
+          (task) =>
+            task.status === 'pending' &&
+            task.timebox?.date !== today &&
+            (!task.dueDate || task.dueDate <= today),
+        )
+        .map((task) => ({ id: task.id, title: task.title })),
+    [tasks, today],
+  );
+
+  /**
+   * 可专注的对象：待办任务，加上「正在做」的那几类实体 ——
+   * 已经读完的书、归档的项目不该出现在这里占位置。
+   */
+  const focusOptions = useMemo<FocusOption[]>(
+    () => [
+      ...tasks
+        .filter((task) => task.status === 'pending')
+        .map((task) => ({
+          key: `task:${task.id}`,
+          title: task.title,
+          target: 'task' as const,
+          entityId: task.id,
+          group: FOCUS_TARGET_LABELS.task,
+        })),
+      ...devProjects
+        .filter((project) => project.status === 'in-progress')
+        .map((project) => ({
+          key: `dev:${project.id}`,
+          title: project.name,
+          target: 'dev' as const,
+          entityId: project.id,
+          group: FOCUS_TARGET_LABELS.dev,
+        })),
+      ...books
+        .filter((book) => book.status === 'reading')
+        .map((book) => ({
+          key: `book:${book.id}`,
+          title: book.title,
+          target: 'book' as const,
+          entityId: book.id,
+          group: FOCUS_TARGET_LABELS.book,
+        })),
+      ...games
+        .filter((game) => game.status === 'playing')
+        .map((game) => ({
+          key: `game:${game.id}`,
+          title: game.name,
+          target: 'game' as const,
+          entityId: game.id,
+          group: FOCUS_TARGET_LABELS.game,
+        })),
+    ],
+    [tasks, devProjects, books, games],
+  );
+
+  /** 今天已经专注了几次、多久，写在卡片副标题上 */
+  const todayFocus = useMemo(() => focusSummary(focusSessions, today), [focusSessions, today]);
+
   const handleAddQuickTask = (): void => {
     const parsed = parseQuickTask(quickInput, today);
     if (!parsed.title) return;
     addTask(parsed.title, '', parsed.priority, parsed.dueDate);
     setQuickInput('');
+  };
+
+  /**
+   * 排进时间轴。新建的盒子给 1 小时 —— 比 30 分钟更接近「一件事」的实际体量，
+   * 长了短了都能用盒子上的 ± 按钮就地调。
+   */
+  const handleSchedule = (taskId: string, start: string): void => {
+    const task = tasks.find((item) => item.id === taskId);
+    if (!task) return;
+    setTimebox(taskId, { date: today, start, minutes: task.timebox?.minutes ?? 60 });
+  };
+
+  const handleResizeBox = (taskId: string, minutes: number): void => {
+    const task = tasks.find((item) => item.id === taskId);
+    if (!task?.timebox) return;
+    setTimebox(taskId, { ...task.timebox, minutes });
+  };
+
+  const handleRemoveBox = (taskId: string): void => setTimebox(taskId, null);
+
+  /** 从时间轴的盒子上直接开始番茄钟，计划时长就取这个盒子排的时长 */
+  const handleFocusBox = (taskId: string): void => {
+    const task = tasks.find((item) => item.id === taskId);
+    if (!task) return;
+    startFocus({
+      entityId: task.id,
+      title: task.title,
+      target: 'task',
+      mode: 'pomodoro',
+      plannedMinutes: task.timebox?.minutes ?? POMODORO_MINUTES,
+    });
+  };
+
+  /**
+   * 结束专注。
+   *
+   * 任务是「勾完成」而不是「记时长」，所以只提示不写流水；
+   * 开发 / 读书 / 游戏走 focusPost 回填，回填结果（成功、对象已删）都要告诉用户 ——
+   * 默默不写才是最糟的结果。
+   */
+  const handleFinishFocus = (): void => {
+    const session = finishFocus();
+    if (!session) return;
+    const duration = formatFocusDuration(session.minutes);
+    if (session.target === 'task') {
+      const task = tasks.find((item) => item.id === session.entityId);
+      const undone = task?.status === 'pending' ? task : undefined;
+      toast?.toast({
+        tone: 'info',
+        title: `本次专注 ${duration}`,
+        description: undone
+          ? '任务不写时长流水 —— 顺手把它勾掉？'
+          : '任务不写时长流水，做完直接勾掉任务即可。',
+        action: undone
+          ? { label: '标记完成', onClick: () => toggleTaskStatus(undone.id) }
+          : undefined,
+      });
+      return;
+    }
+    const outcome = postFocusSession(session);
+    toast?.toast({
+      tone: outcome.ok ? 'success' : 'warning',
+      title: `本次专注 ${duration}`,
+      description: outcome.message,
+    });
   };
 
   const moduleCards = useMemo<ModuleCard[]>(() => {
@@ -360,6 +524,43 @@ export const HomePage: React.FC = () => {
             }
           />
         </div>
+      ),
+    },
+    {
+      id: 'timeline',
+      title: '今日时间轴',
+      content: (
+        <Card>
+          <CardHeader
+            title="今日时间轴"
+            subtitle={
+              todayFocus.count > 0
+                ? `今天已专注 ${todayFocus.count} 次、共 ${formatFocusDuration(todayFocus.minutes)}`
+                : '把任务排到时间轴上，再从盒子里直接开始专注'
+            }
+          />
+          <CardBody>
+            <div className="mb-4">
+              <FocusTimer
+                active={activeFocus}
+                options={focusOptions}
+                onStart={startFocus}
+                onFinish={handleFinishFocus}
+                onCancel={cancelFocus}
+              />
+            </div>
+            <DayTimeline
+              label={`${today} 的时间轴`}
+              entries={planEntries}
+              candidates={planCandidates}
+              onSchedule={handleSchedule}
+              onResize={handleResizeBox}
+              onRemove={handleRemoveBox}
+              onFocus={handleFocusBox}
+              activeId={activeFocus?.entityId ?? null}
+            />
+          </CardBody>
+        </Card>
       ),
     },
     {

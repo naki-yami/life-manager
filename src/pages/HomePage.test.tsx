@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it } from 'vitest';
@@ -13,7 +13,9 @@ import { useDietStore } from '../store/dietStore';
 import { useGameStore } from '../store/gameStore';
 import { useHabitStore } from '../store/habitStore';
 import { useBodyStore } from '../store/bodyStore';
+import { useFocusStore } from '../store/focusStore';
 import { DASHBOARD_WIDGET_IDS, DEFAULT_DASHBOARD, useUiStore } from '../store/uiStore';
+import { ToastProvider } from '../components/ui';
 import { STORAGE_KEYS } from '../utils/storageKeys';
 import { todayKey } from '../utils/date';
 
@@ -37,12 +39,17 @@ beforeEach(() => {
   useGameStore.setState({ games: [] });
   useHabitStore.setState({ habits: [] });
   useBodyStore.setState({ records: [] });
+  useFocusStore.setState({ sessions: [], active: null });
   useUiStore.setState({ dashboard: DEFAULT_DASHBOARD.map((widget) => ({ ...widget })) });
 });
 
 /** 仪表盘栅格；页面里可能还有卡片内部的列表，取文档顺序里的第一个 */
 const dashboardList = (): HTMLElement => screen.getAllByRole('list')[0]!;
-const dashboardItems = (): HTMLElement[] => within(dashboardList()).getAllByRole('listitem');
+/** 只取卡片的直接子项：卡片内部（时间轴、待办列表）也有自己的 li */
+const dashboardItems = (): HTMLElement[] =>
+  Array.from(dashboardList().children).filter(
+    (child): child is HTMLElement => child.tagName === 'LI',
+  );
 
 describe('HomePage', () => {
   it('统计卡片反映真实数据', () => {
@@ -445,5 +452,97 @@ describe('HomePage 仪表盘', () => {
     expect(
       screen.getByText('所有卡片都被隐藏了，点右上角「编辑布局」可以恢复。'),
     ).toBeInTheDocument();
+  });
+});
+
+describe('HomePage 今日时间轴', () => {
+  it('把今天到期的任务排上时间轴，并从盒子上开始专注', async () => {
+    useTaskStore.getState().addTask('写周报', '', 'high', todayKey());
+    renderHome();
+
+    expect(screen.getByRole('heading', { name: '今日时间轴' })).toBeInTheDocument();
+    expect(screen.getByText('待排（1）')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('把「写周报」排到'), { target: { value: '09:00' } });
+
+    const task = useTaskStore.getState().tasks[0]!;
+    expect(task.timebox).toEqual({ date: todayKey(), start: '09:00', minutes: 60 });
+    expect(screen.getByText('09:00–10:00')).toBeInTheDocument();
+    expect(screen.getByText('待排（0）')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: '开始专注：写周报' }));
+    expect(useFocusStore.getState().active).toMatchObject({
+      entityId: task.id,
+      target: 'task',
+      plannedMinutes: 60,
+    });
+  });
+
+  it('结束专注会把时长写进对应模块的流水', async () => {
+    useBookStore.getState().addBook('人类简史', '尤瓦尔', '历史');
+    const bookId = useBookStore.getState().books[0]!.id;
+    useBookStore.getState().updateBookStatus(bookId, 'reading');
+
+    useFocusStore.getState().startFocus({
+      entityId: bookId,
+      title: '人类简史',
+      target: 'book',
+      mode: 'stopwatch',
+      plannedMinutes: 25,
+    });
+    // 假装这一轮已经跑了 30 分钟
+    useFocusStore.setState({
+      active: {
+        ...useFocusStore.getState().active!,
+        startedAt: new Date(Date.now() - 30 * 60_000).toISOString(),
+      },
+    });
+
+    renderHome();
+    await userEvent.click(screen.getByRole('button', { name: '结束并记录' }));
+
+    expect(useFocusStore.getState().active).toBeNull();
+    const session = useFocusStore.getState().sessions[0]!;
+    expect(session.minutes).toBeGreaterThanOrEqual(30);
+    expect(session.posted).toBe(true);
+
+    const reading = useBookStore.getState().sessions;
+    expect(reading).toHaveLength(1);
+    expect(reading[0]).toMatchObject({ bookId, minutes: session.minutes });
+  });
+
+  it('没有可排的任务时时间轴给出空态，而不是崩掉', () => {
+    renderHome();
+
+    expect(screen.getByText('今天该排的都排上了。')).toBeInTheDocument();
+    expect(screen.getByText('目前没有可以专注的对象')).toBeInTheDocument();
+  });
+
+  it('任务专注结束后可以顺手把它勾掉', async () => {
+    useTaskStore.getState().addTask('写周报', '', 'high', todayKey());
+    const taskId = useTaskStore.getState().tasks[0]!.id;
+    useFocusStore.getState().startFocus({
+      entityId: taskId,
+      title: '写周报',
+      target: 'task',
+      mode: 'stopwatch',
+      plannedMinutes: 25,
+    });
+
+    // 这条要验证提示里的「标记完成」，所以得带上 ToastProvider
+    render(
+      <MemoryRouter initialEntries={['/']}>
+        <ToastProvider>
+          <Routes>
+            <Route path="/" element={<HomePage />} />
+          </Routes>
+        </ToastProvider>
+      </MemoryRouter>,
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: '结束并记录' }));
+    await userEvent.click(await screen.findByRole('button', { name: '标记完成' }));
+
+    expect(useTaskStore.getState().tasks[0]!.status).toBe('completed');
   });
 });

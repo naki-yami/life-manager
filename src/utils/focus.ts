@@ -153,6 +153,19 @@ export function elapsedMinutes(startedAt: string, now: Date | number = Date.now(
   return Math.max(0, Math.ceil((at - start) / 60000));
 }
 
+/**
+ * 秒 -> 'mm:ss'；超过一小时用 'h:mm:ss'。
+ * 秒表按秒走，整分钟跳动会让人怀疑表停了，所以显示到秒。
+ */
+export function formatTimer(seconds: number): string {
+  const total = Math.max(0, Math.floor(seconds));
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const rest = total % 60;
+  const mmss = `${String(minutes).padStart(2, '0')}:${String(rest).padStart(2, '0')}`;
+  return hours > 0 ? `${hours}:${mmss}` : mmss;
+}
+
 /** 这一天排了时间盒的任务，按开始时间排序（同刻则短盒子在前） */
 export function timeboxedTasks(
   tasks: readonly Task[],
@@ -165,7 +178,7 @@ export function timeboxedTasks(
     .sort((a, b) => startOf(a.task) - startOf(b.task) || a.timebox.minutes - b.timebox.minutes);
 }
 
-export interface TestBoxInput {
+export interface TimeboxInput {
   id: string;
   title: string;
   /** 从 00:00 起的开始分钟数 */
@@ -173,7 +186,7 @@ export interface TestBoxInput {
   minutes: number;
 }
 
-export interface LaidOutBox extends TestBoxInput {
+export interface LaidOutBox extends TimeboxInput {
   /** 同一组重叠盒子里的第几列（从 0 开始） */
   lane: number;
   /** 这一组重叠盒子一共几列 */
@@ -188,7 +201,7 @@ export interface LaidOutBox extends TestBoxInput {
  * 分列只在「互相重叠的那一组」内计算（经典日历做法）：别处有重叠，
  * 不会把这边不相干的盒子一起压窄。
  */
-export function layoutTimeboxes(items: readonly TestBoxInput[]): LaidOutBox[] {
+export function layoutTimeboxes(items: readonly TimeboxInput[]): LaidOutBox[] {
   const sorted = [...items].sort((a, b) => a.start - b.start || b.minutes - a.minutes);
   const laid: LaidOutBox[] = [];
   let group: LaidOutBox[] = [];

@@ -11,7 +11,16 @@ export type Density = 'comfortable' | 'compact';
  * 所以这里只存 id + 尺寸 + 是否隐藏，具体渲染什么由 `components/dashboard` 决定。
  */
 export type DashboardWidgetId =
-  'stats' | 'capture' | 'focus' | 'todos' | 'memos' | 'habits' | 'body' | 'activity' | 'modules';
+  | 'stats'
+  | 'timeline'
+  | 'capture'
+  | 'focus'
+  | 'todos'
+  | 'memos'
+  | 'habits'
+  | 'body'
+  | 'activity'
+  | 'modules';
 
 /** 卡片宽度档位，对应 12 栏栅格里的 4 / 8 / 12 栏：小 + 中正好凑满一行 */
 export type DashboardWidgetSize = 'sm' | 'md' | 'lg';
@@ -24,6 +33,7 @@ export interface DashboardWidget {
 
 export const DASHBOARD_WIDGET_IDS: readonly DashboardWidgetId[] = [
   'stats',
+  'timeline',
   'capture',
   'focus',
   'todos',
@@ -36,9 +46,13 @@ export const DASHBOARD_WIDGET_IDS: readonly DashboardWidgetId[] = [
 
 export const DASHBOARD_WIDGET_SIZES: readonly DashboardWidgetSize[] = ['sm', 'md', 'lg'];
 
-/** 默认排布：统计整行 → 快速添加 + 今日聚焦 → 待办 + 备忘 → 习惯 + 身体指标 → 热力图 → 模块概览 */
+/**
+ * 默认排布：统计整行 → 今日时间轴整行（时间轴 + 专注计时）→ 快速添加 + 今日聚焦
+ * → 待办 + 备忘 → 习惯 + 身体指标 → 热力图 → 模块概览
+ */
 export const DEFAULT_DASHBOARD: readonly DashboardWidget[] = [
   { id: 'stats', size: 'lg', hidden: false },
+  { id: 'timeline', size: 'lg', hidden: false },
   { id: 'capture', size: 'md', hidden: false },
   { id: 'focus', size: 'sm', hidden: false },
   { id: 'todos', size: 'md', hidden: false },

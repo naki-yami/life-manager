@@ -119,6 +119,7 @@ describe('uiStore 仪表盘', () => {
     useUiStore.getState().moveDashboardWidget('stats', 'focus');
 
     expect(idsOf(useUiStore.getState().dashboard)).toEqual([
+      'timeline',
       'capture',
       'focus',
       'stats',
