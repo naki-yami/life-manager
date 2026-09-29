@@ -14,7 +14,7 @@ import {
   restoreAutoSnapshot,
   serializeBackup,
 } from './backup';
-import { STORAGE_KEYS } from '../utils/storageKeys';
+import { clearAppStorage, STORAGE_KEYS } from '../utils/storageKeys';
 
 /** 一份覆盖所有模块的完整数据，用于往返测试 */
 function sampleData(): BackupData {
@@ -698,6 +698,36 @@ describe('自动备份快照', () => {
     expect(removed).toHaveLength(2);
     expect(listAutoSnapshots()).toHaveLength(0);
     expect(localStorage.getItem('lm:books')).not.toBeNull();
+  });
+
+  it('清除全部数据后，能从快照把数据完整恢复回来', () => {
+    localStorage.clear();
+    // 走一遍真实链路：数据落盘 → 留快照 → 清除数据 → 回滚
+    localStorage.setItem(
+      STORAGE_KEYS.tasks,
+      JSON.stringify({ state: { tasks: [{ id: 't1', title: '写周报' }], memos: [] }, version: 11 }),
+    );
+    localStorage.setItem(
+      STORAGE_KEYS.books,
+      JSON.stringify({ state: { books: [{ id: 'b1', title: '人类简史' }] }, version: 11 }),
+    );
+    const before = {
+      tasks: localStorage.getItem(STORAGE_KEYS.tasks),
+      books: localStorage.getItem(STORAGE_KEYS.books),
+    };
+
+    const key = createAutoSnapshot('清除所有数据前');
+    expect(key).not.toBeNull();
+
+    // 「清除数据」会删掉 lm:* 的普通 key，但快照必须留着 —— 否则就没得回滚了
+    clearAppStorage();
+    expect(localStorage.getItem(STORAGE_KEYS.tasks)).toBeNull();
+    expect(localStorage.getItem(STORAGE_KEYS.books)).toBeNull();
+    expect(listAutoSnapshots()).toHaveLength(1);
+
+    expect(restoreAutoSnapshot(key!)).toBe(true);
+    expect(localStorage.getItem(STORAGE_KEYS.tasks)).toBe(before.tasks);
+    expect(localStorage.getItem(STORAGE_KEYS.books)).toBe(before.books);
   });
 
   it('快照损坏时恢复会失败而不是抛错', () => {
