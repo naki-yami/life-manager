@@ -1,16 +1,44 @@
 import React from 'react';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { BooksPage } from './BooksPage';
 import { ToastProvider } from '../components/ui';
 import { useBookStore } from '../store/bookStore';
+import { requestPaletteFocus, resetPaletteFocus } from '../hooks/usePaletteFocus';
 
 beforeEach(() => {
   useBookStore.setState({ books: [], sessions: [] });
 });
 
 const bookId = (title: string) => useBookStore.getState().books.find((b) => b.title === title)!.id;
+
+describe('BooksPage 从命令面板打开', () => {
+  afterEach(() => {
+    resetPaletteFocus();
+  });
+
+  it('聚焦某本书时打开它的笔记面板', () => {
+    useBookStore.getState().addBook('置身事内', '兰小欢', '');
+    render(<BooksPage />);
+
+    act(() => {
+      requestPaletteFocus('/books', bookId('置身事内'));
+    });
+
+    expect(screen.getByRole('dialog', { name: '《置身事内》的笔记' })).toBeInTheDocument();
+  });
+
+  it('聚焦一本不存在的书时不弹面板', () => {
+    render(<BooksPage />);
+
+    act(() => {
+      requestPaletteFocus('/books', 'missing');
+    });
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+});
 
 describe('BooksPage', () => {
   it('空态引导添加第一本书', async () => {

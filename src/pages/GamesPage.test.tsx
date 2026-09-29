@@ -1,18 +1,46 @@
 import React from 'react';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { GamesPage } from './GamesPage';
 import { ToastProvider } from '../components/ui';
 import { useGameStore } from '../store/gameStore';
 import { todayKey } from '../utils/date';
 import { GameStatus } from '../types';
+import { requestPaletteFocus, resetPaletteFocus } from '../hooks/usePaletteFocus';
 
 beforeEach(() => {
   useGameStore.setState({ games: [], sessions: [] });
 });
 
 const gameOf = (name: string) => useGameStore.getState().games.find((game) => game.name === name)!;
+
+describe('GamesPage 从命令面板打开', () => {
+  afterEach(() => {
+    resetPaletteFocus();
+  });
+
+  it('聚焦某款游戏时打开它的笔记面板', () => {
+    addGame('星露谷物语');
+    render(<GamesPage />);
+
+    act(() => {
+      requestPaletteFocus('/games', gameOf('星露谷物语').id);
+    });
+
+    expect(screen.getByRole('dialog', { name: '《星露谷物语》的笔记' })).toBeInTheDocument();
+  });
+
+  it('聚焦一款不存在的游戏时不弹面板', () => {
+    render(<GamesPage />);
+
+    act(() => {
+      requestPaletteFocus('/games', 'missing');
+    });
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+});
 
 /** 统计卡片的整块文本，避免多个卡片出现相同数字时选择器歧义 */
 const statText = (label: string): string =>

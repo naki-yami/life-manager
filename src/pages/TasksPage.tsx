@@ -35,6 +35,7 @@ import { daysBetween, formatShortDate, todayKey } from '../utils/date';
 import { seriesByWeek } from '../utils/stats';
 import { Priority, RepeatKind, RepeatRule, Task, TaskStatus } from '../types';
 import { useNewEntryShortcut } from '../hooks/useShortcuts';
+import { usePaletteFocus } from '../hooks/usePaletteFocus';
 
 type Filter = 'all' | TaskStatus;
 type ViewMode = 'list' | 'kanban' | 'quadrant';
@@ -418,6 +419,12 @@ export const TasksPage: React.FC = () => {
       repeatWeekdays: task.repeat?.weekdays ?? [],
     });
   };
+
+  // 命令面板搜到本页的任务时，直接打开它的编辑弹窗
+  usePaletteFocus('/tasks', (taskId) => {
+    const task = tasks.find((item) => item.id === taskId);
+    if (task) openEdit(task);
+  });
 
   const toggleSubExpand = (taskId: string): void => {
     setExpandedSubtasks((previous) => {

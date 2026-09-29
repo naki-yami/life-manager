@@ -37,6 +37,7 @@ import { percentOf, seriesByWeek } from '../utils/stats';
 import { daysBetween, formatDuration, formatNumber, formatShortDate, todayKey } from '../utils/date';
 import { Book, BookStatus, ReadingSession } from '../types';
 import { useNewEntryShortcut } from '../hooks/useShortcuts';
+import { usePaletteFocus } from '../hooks/usePaletteFocus';
 
 /** 年度阅读目标：一年读完 12 本，进度环按它算 */
 const YEARLY_GOAL = 12;
@@ -160,6 +161,17 @@ export const BooksPage: React.FC = () => {
     setSessionForm({ bookId: bookId ?? fallback, date: today, minutes: 30, note: '' });
     setShowSessionModal(true);
   };
+
+  /** 打开某本书的笔记面板；命令面板搜到这本书时也走这里 */
+  const openNotes = (bookId: string): void => {
+    if (!books.some((book) => book.id === bookId)) return;
+    setNoteInput('');
+    setNoteError(undefined);
+    setNotePage('');
+    setNoteBookId(bookId);
+  };
+
+  usePaletteFocus('/books', openNotes);
 
   const sessionMinutes = typeof sessionForm.minutes === 'number' ? sessionForm.minutes : 0;
   const canSaveSession = Boolean(sessionForm.bookId) && sessionMinutes > 0;
@@ -512,12 +524,7 @@ export const BooksPage: React.FC = () => {
                         size="sm"
                         variant="ghost"
                         icon={<StickyNote size={13} aria-hidden />}
-                        onClick={() => {
-                          setNoteInput('');
-                          setNoteError(undefined);
-                          setNotePage('');
-                          setNoteBookId(book.id);
-                        }}
+                        onClick={() => openNotes(book.id)}
                       >
                         笔记（{book.notes.length}）
                       </Button>

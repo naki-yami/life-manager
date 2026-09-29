@@ -2,22 +2,39 @@ import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import {
+  BookOpen,
+  CalendarCheck,
+  Code2,
   CornerDownLeft,
+  Dumbbell,
+  Gamepad2,
   Monitor,
   Moon,
   PanelLeftClose,
   PanelLeftOpen,
+  PenTool,
   Rows3,
   Rows4,
+  Save,
   Search,
+  StickyNote,
   Sun,
+  UtensilsCrossed,
   type LucideIcon,
 } from 'lucide-react';
 import { Kbd } from '../ui';
+import { useOptionalToast } from '../ui/toastContext';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
+import { useEntityIndex } from '../../hooks/useEntityIndex';
+import { requestPaletteFocus } from '../../hooks/usePaletteFocus';
+import { requestNewEntry } from '../../hooks/useShortcuts';
 import { useThemeStore } from '../../store/themeStore';
 import { useUiStore } from '../../store/uiStore';
+import { buildCaptureCandidates, runCapture, type CaptureTarget } from '../../services/capture';
+import { todayKey } from '../../utils/date';
+import type { EntityKind, SearchableEntity } from '../../utils/entityIndex';
 import { fuzzyFilter } from '../../utils/fuzzy';
+import { parseCapture } from '../../utils/quickParse';
 import { NAV_ITEMS } from './navItems';
 import { CommandPaletteContext, type CommandPaletteContextValue } from './commandPaletteContext';
 
@@ -37,6 +54,115 @@ interface PaletteEntry {
   matched: number[];
 }
 
+/** 面板里的分组顺序；数组顺序就是渲染顺序（同组必须连续，标题靠相邻项变化插入） */
+const GROUP = {
+  capture: '建议',
+  entity: '实体',
+  action: '操作',
+  nav: '跳转',
+  appearance: '外观',
+} as const;
+
+const CAPTURE_ICON: Record<CaptureTarget, LucideIcon> = {
+  task: CalendarCheck,
+  memo: StickyNote,
+  book: BookOpen,
+  dev: Code2,
+  writing: PenTool,
+  fitness: Dumbbell,
+  diet: UtensilsCrossed,
+  game: Gamepad2,
+};
+
+const ENTITY_ICON: Record<EntityKind, LucideIcon> = {
+  task: CalendarCheck,
+  memo: StickyNote,
+  book: BookOpen,
+  dev: Code2,
+  writing: PenTool,
+  game: Gamepad2,
+};
+
+interface QuickAction {
+  id: string;
+  path: string;
+  label: string;
+  hint: string;
+  icon: LucideIcon;
+  keywords: string[];
+}
+
+/** 「操作」组：跳过去并直接打开那一页的新建弹窗（页面用 n 键的同一个入口） */
+const QUICK_ACTIONS: QuickAction[] = [
+  {
+    id: 'action:task',
+    path: '/tasks',
+    label: '新建任务',
+    hint: '打开今日计划的新建弹窗',
+    icon: CalendarCheck,
+    keywords: ['new', 'task', 'renwu', 'xinjian'],
+  },
+  {
+    id: 'action:fitness',
+    path: '/fitness',
+    label: '记录训练',
+    hint: '打开健身页的训练记录弹窗',
+    icon: Dumbbell,
+    keywords: ['new', 'workout', 'xunlian', 'jianshen'],
+  },
+  {
+    id: 'action:diet',
+    path: '/diet',
+    label: '记录一餐',
+    hint: '打开饮食页的记餐弹窗',
+    icon: UtensilsCrossed,
+    keywords: ['new', 'meal', 'jican', 'chifan', 'yinshi'],
+  },
+  {
+    id: 'action:book',
+    path: '/books',
+    label: '添加书目',
+    hint: '打开读书页的新增书籍弹窗',
+    icon: BookOpen,
+    keywords: ['new', 'book', 'tianjia', 'dushu'],
+  },
+  {
+    id: 'action:writing',
+    path: '/writing',
+    label: '新建写作项目',
+    hint: '打开写作页的新建弹窗',
+    icon: PenTool,
+    keywords: ['new', 'writing', 'xiezuo'],
+  },
+  {
+    id: 'action:dev',
+    path: '/dev',
+    label: '新建开发项目',
+    hint: '打开开发页的新建弹窗',
+    icon: Code2,
+    keywords: ['new', 'project', 'kaifa'],
+  },
+  {
+    id: 'action:game',
+    path: '/games',
+    label: '添加游戏',
+    hint: '打开游戏页的新增弹窗',
+    icon: Gamepad2,
+    keywords: ['new', 'game', 'youxi'],
+  },
+];
+
+/** 比较实体标题时忽略书名号与空白，让「置身事内」也能命中《置身事内》 */
+const normalizeTitle = (text: string): string => text.replace(/[《》\s]/g, '').toLowerCase();
+
+/** 输入是否正好是某条命令的名字或别名（「密度」「读书」「light」这种） */
+const matchesCommandExactly = (query: string, item: CommandItem): boolean => {
+  const key = normalizeTitle(query);
+  if (key === '') return false;
+  if (normalizeTitle(item.label) === key) return true;
+  return (item.keywords ?? []).some((keyword) => normalizeTitle(keyword) === key);
+};
+
 const CommandPaletteInner: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const panelRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
@@ -44,21 +170,75 @@ const CommandPaletteInner: React.FC<{ onClose: () => void }> = ({ onClose }) => 
   const trap = useFocusTrap(panelRef, { onClose });
 
   const navigate = useNavigate();
+  const toastContext = useOptionalToast();
   const themeMode = useThemeStore((state) => state.themeMode);
   const setThemeMode = useThemeStore((state) => state.setThemeMode);
   const density = useUiStore((state) => state.density);
   const setDensity = useUiStore((state) => state.setDensity);
   const sidebarCollapsed = useUiStore((state) => state.sidebarCollapsed);
   const toggleSidebar = useUiStore((state) => state.toggleSidebar);
+  const entities = useEntityIndex();
 
-  const items = useMemo<CommandItem[]>(() => {
+  const [query, setQuery] = useState('');
+  const [activeIndex, setActiveIndex] = useState(0);
+  const trimmedQuery = query.trim();
+  const today = todayKey();
+
+  const handleBackup = useCallback(async (): Promise<void> => {
+    try {
+      // 备份模块按需加载，不进首屏包
+      const { createAutoSnapshot } = await import('../../services/backup');
+      const key = createAutoSnapshot('命令面板备份');
+      toastContext?.toast({
+        tone: 'success',
+        title: key ? '已留一份快照' : '快照空间已满',
+        description: key
+          ? '可在「数据与设置」里回滚到这一版。'
+          : '本次没有新建快照，数据本身已写入本地。',
+      });
+    } catch {
+      toastContext?.toast({
+        tone: 'danger',
+        title: '备份失败',
+        description: '快照没有创建成功，数据本身不受影响，可以稍后再试。',
+      });
+    }
+  }, [toastContext]);
+
+  /** 跳转 / 外观 / 备份这类与输入无关的命令 */
+  const baseItems = useMemo<CommandItem[]>(() => {
+    const actions: CommandItem[] = QUICK_ACTIONS.map((action) => ({
+      id: action.id,
+      label: action.label,
+      hint: action.hint,
+      icon: action.icon,
+      keywords: action.keywords,
+      group: GROUP.action,
+      run: () => {
+        navigate(action.path);
+        // 目标页是懒加载的，可能还没挂载；requestNewEntry 会留下意图等它认领
+        requestNewEntry();
+      },
+    }));
+    actions.push({
+      id: 'action:backup',
+      label: '立即备份',
+      hint: '把所有数据写成一份可回滚的快照',
+      icon: Save,
+      keywords: ['backup', 'beifen', 'save', 'baocun', 'snapshot'],
+      group: GROUP.action,
+      run: () => {
+        void handleBackup();
+      },
+    });
+
     const navigation: CommandItem[] = NAV_ITEMS.map((item) => ({
       id: `nav:${item.path}`,
       label: item.label,
       hint: item.description,
       icon: item.icon,
       keywords: item.keywords,
-      group: '跳转',
+      group: GROUP.nav,
       run: () => navigate(item.path),
     }));
 
@@ -74,11 +254,12 @@ const CommandPaletteInner: React.FC<{ onClose: () => void }> = ({ onClose }) => 
       hint: themeMode === mode ? '当前使用中' : undefined,
       icon,
       keywords: ['theme', 'zhuti', '主题', mode],
-      group: '外观',
+      group: GROUP.appearance,
       run: () => setThemeMode(mode),
     }));
 
     return [
+      ...actions,
       ...navigation,
       ...themes,
       {
@@ -87,7 +268,7 @@ const CommandPaletteInner: React.FC<{ onClose: () => void }> = ({ onClose }) => 
         hint: '改变页面留白与列表行高',
         icon: density === 'compact' ? Rows3 : Rows4,
         keywords: ['density', 'miju', '密度', '间距'],
-        group: '外观',
+        group: GROUP.appearance,
         run: () => setDensity(density === 'compact' ? 'comfortable' : 'compact'),
       },
       {
@@ -95,23 +276,103 @@ const CommandPaletteInner: React.FC<{ onClose: () => void }> = ({ onClose }) => 
         label: sidebarCollapsed ? '展开侧栏' : '收起侧栏',
         icon: sidebarCollapsed ? PanelLeftOpen : PanelLeftClose,
         keywords: ['sidebar', 'cebian', '侧栏'],
-        group: '外观',
+        group: GROUP.appearance,
         run: toggleSidebar,
       },
     ];
-  }, [navigate, setThemeMode, themeMode, density, setDensity, sidebarCollapsed, toggleSidebar]);
+  }, [
+    navigate,
+    handleBackup,
+    setThemeMode,
+    themeMode,
+    density,
+    setDensity,
+    sidebarCollapsed,
+    toggleSidebar,
+  ]);
 
-  const [query, setQuery] = useState('');
-  const [activeIndex, setActiveIndex] = useState(0);
+  /** 「建议」组：把这句话变成一条记录（外加一个兜底选项） */
+  const captureItems = useMemo<CommandItem[]>(() => {
+    if (!trimmedQuery) return [];
+    const parsed = parseCapture(trimmedQuery, today);
+    return buildCaptureCandidates(parsed).map((candidate) => ({
+      id: candidate.id,
+      label: candidate.label,
+      hint: candidate.hint,
+      icon: CAPTURE_ICON[candidate.target],
+      group: GROUP.capture,
+      run: () => {
+        const result = runCapture(candidate.target, parsed, today);
+        toastContext?.toast({
+          tone: result.tone,
+          title: result.title,
+          description: result.description,
+          action: result.undo ? { label: '撤销', onClick: result.undo } : undefined,
+        });
+      },
+    }));
+  }, [trimmedQuery, today, toastContext]);
+
+  /** 「实体」组：跨模块搜索已经存在的记录 */
+  const { entityEntries, hasExactEntity } = useMemo<{
+    entityEntries: PaletteEntry[];
+    hasExactEntity: boolean;
+  }>(() => {
+    if (!trimmedQuery) return { entityEntries: [], hasExactEntity: false };
+
+    const matches = fuzzyFilter(trimmedQuery, entities, {
+      getText: (entity) => entity.title,
+      getKeywords: (entity) => [entity.subtitle, entity.kindLabel, ...entity.keywords],
+      limit: 8,
+    });
+
+    // 输入和某条记录标题完全一样时把它顶到最前：这时用户多半是在找那条记录，
+    // 而不是想再建一条同名的任务
+    const key = normalizeTitle(trimmedQuery);
+    const exact = entities.find((entity) => normalizeTitle(entity.title) === key);
+    const ordered: SearchableEntity[] = exact
+      ? [exact, ...matches.map((match) => match.item).filter((entity) => entity.id !== exact.id)]
+      : matches.map((match) => match.item);
+
+    return {
+      hasExactEntity: exact !== undefined,
+      entityEntries: ordered.slice(0, 10).map((entity) => ({
+        item: {
+          id: entity.id,
+          label: entity.title,
+          hint: entity.subtitle ? `${entity.kindLabel} · ${entity.subtitle}` : entity.kindLabel,
+          icon: ENTITY_ICON[entity.kind],
+          group: GROUP.entity,
+          run: () => {
+            if (entity.focusable) requestPaletteFocus(entity.path, entity.entityId);
+            navigate(entity.path);
+          },
+        },
+        matched: [],
+      })),
+    };
+  }, [trimmedQuery, entities, navigate]);
 
   const entries = useMemo<PaletteEntry[]>(() => {
-    if (!query.trim()) return items.map((item) => ({ item, matched: [] }));
-    return fuzzyFilter(query, items, {
+    if (!trimmedQuery) return baseItems.map((item) => ({ item, matched: [] }));
+
+    const captures: PaletteEntry[] = captureItems.map((item) => ({ item, matched: [] }));
+    const matchedBase = fuzzyFilter(trimmedQuery, baseItems, {
       getText: (item) => item.label,
       getKeywords: (item) => item.keywords ?? [],
-      limit: 40,
+      limit: 30,
     });
-  }, [items, query]);
+
+    // 三种优先级，越靠前越确定用户在干什么：
+    // 1. 输入就是某条命令的名字 —— 用户在找命令，回车照旧执行它
+    // 2. 输入就是某条记录的名字 —— 用户在找那条记录，而不是想再建一条同名的
+    // 3. 其他情况 —— 默认快速捕获，回车就把这句话落库
+    if (matchedBase.some((entry) => matchesCommandExactly(trimmedQuery, entry.item))) {
+      return [...matchedBase, ...entityEntries, ...captures];
+    }
+    if (hasExactEntity) return [...entityEntries, ...captures, ...matchedBase];
+    return [...captures, ...entityEntries, ...matchedBase];
+  }, [trimmedQuery, baseItems, captureItems, entityEntries, hasExactEntity]);
 
   // 查询变化后回到第一项，避免停留在已被过滤掉的位置
   useEffect(() => {
@@ -189,7 +450,7 @@ const CommandPaletteInner: React.FC<{ onClose: () => void }> = ({ onClose }) => 
             aria-label="搜索功能与命令"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="搜索功能、命令…"
+            placeholder="输入一句话快速记录，或搜索任务、书、项目…"
             className="min-w-0 flex-1 bg-transparent text-sm text-content outline-none placeholder:text-content-tertiary"
           />
           <Kbd>Esc</Kbd>
@@ -277,7 +538,7 @@ export const CommandPalette: React.FC<{ isOpen: boolean; onClose: () => void }> 
 
 /**
  * 提供 ⌘K / Ctrl+K 命令面板。
- * 放在 Layout 外层，所有页面都能用同一份跳转与外观命令。
+ * 放在 Layout 外层，所有页面都能用同一份跳转、外观与快速捕获命令。
  */
 export const CommandPaletteProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isOpen, setIsOpen] = useState(false);

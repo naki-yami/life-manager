@@ -1,8 +1,13 @@
 import React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
-import { describe, expect, it, vi } from 'vitest';
-import { NEW_ENTRY_EVENT, useGlobalShortcuts, useNewEntryShortcut } from './useShortcuts';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import {
+  NEW_ENTRY_EVENT,
+  requestNewEntry,
+  useGlobalShortcuts,
+  useNewEntryShortcut,
+} from './useShortcuts';
 
 const Host: React.FC<{ onOpenPalette: () => void }> = ({ onOpenPalette }) => {
   useGlobalShortcuts(onOpenPalette);
@@ -91,5 +96,64 @@ describe('useGlobalShortcuts', () => {
     fireEvent.keyDown(window, { key: 'n', ctrlKey: true });
     fireEvent.keyDown(window, { key: '/', metaKey: true });
     expect(open).not.toHaveBeenCalled();
+  });
+});
+
+describe('新建意图的认领', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  const Listener: React.FC<{ onNew: () => void }> = ({ onNew }) => {
+    useNewEntryShortcut(onNew);
+    return null;
+  };
+
+  it('命令面板先跳转、页面后挂载时也能认领（懒加载场景）', () => {
+    requestNewEntry();
+
+    const onNew = vi.fn();
+    render(
+      <MemoryRouter>
+        <Listener onNew={onNew} />
+      </MemoryRouter>,
+    );
+
+    expect(onNew).toHaveBeenCalledTimes(1);
+  });
+
+  it('已经挂载的页面立刻收到，且不会在重挂载时再触发一次', () => {
+    const onNew = vi.fn();
+    const { unmount } = render(
+      <MemoryRouter>
+        <Listener onNew={onNew} />
+      </MemoryRouter>,
+    );
+
+    requestNewEntry();
+    expect(onNew).toHaveBeenCalledTimes(1);
+
+    unmount();
+    render(
+      <MemoryRouter>
+        <Listener onNew={onNew} />
+      </MemoryRouter>,
+    );
+    expect(onNew).toHaveBeenCalledTimes(1);
+  });
+
+  it('过期的意图不会被之后的页面误认领', () => {
+    vi.useFakeTimers();
+    requestNewEntry();
+
+    vi.advanceTimersByTime(10_000);
+
+    const onNew = vi.fn();
+    render(
+      <MemoryRouter>
+        <Listener onNew={onNew} />
+      </MemoryRouter>,
+    );
+    expect(onNew).not.toHaveBeenCalled();
   });
 });

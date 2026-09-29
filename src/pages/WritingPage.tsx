@@ -33,6 +33,7 @@ import { filterByKeyword } from '../utils/search';
 import { formatNumber } from '../utils/date';
 import { WritingStatus, WritingType } from '../types';
 import { useNewEntryShortcut } from '../hooks/useShortcuts';
+import { usePaletteFocus } from '../hooks/usePaletteFocus';
 import { ToastContext } from '../components/ui/toastContext';
 import { downloadTextFile } from '../utils/download';
 
@@ -144,6 +145,9 @@ export const WritingPage: React.FC = () => {
     setContentDraft(project.content);
     setEditorId(id);
   };
+
+  // 命令面板搜到本页的稿件时，直接打开编辑器
+  usePaletteFocus('/writing', openEditor);
 
   const handleSaveContent = (): void => {
     if (!editorId) return;

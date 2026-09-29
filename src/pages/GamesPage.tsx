@@ -34,6 +34,7 @@ import {
 import { seriesByMonth } from '../utils/stats';
 import { Game, GamePlatform, GameSession, GameStatus } from '../types';
 import { useNewEntryShortcut } from '../hooks/useShortcuts';
+import { usePaletteFocus } from '../hooks/usePaletteFocus';
 
 type Filter = 'all' | GameStatus;
 
@@ -190,6 +191,12 @@ export const GamesPage: React.FC = () => {
     setNoteInput(game.notes);
     setNoteGameId(game.id);
   };
+
+  // 命令面板搜到本页的游戏时，直接打开它的笔记面板
+  usePaletteFocus('/games', (gameId) => {
+    const game = games.find((item) => item.id === gameId);
+    if (game) openNotes(game);
+  });
 
   const handleAddGame = (): void => {
     const name = form.name.trim();

@@ -2,7 +2,7 @@ import React from 'react';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Link, MemoryRouter, Route, Routes } from 'react-router-dom';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Layout } from './Layout';
 import { NavList, Sidebar } from './Sidebar';
 import { PageHeader } from './PageHeader';
@@ -12,6 +12,8 @@ import { useUiStore } from '../../store/uiStore';
 import { Header } from './Header';
 import { CommandPaletteProvider } from './CommandPalette';
 import { ToastProvider } from '../ui';
+import { useTaskStore } from '../../store/taskStore';
+import { resetPaletteFocus } from '../../hooks/usePaletteFocus';
 
 beforeEach(() => {
   useUiStore.setState({ sidebarCollapsed: false, density: 'comfortable' });
@@ -188,15 +190,88 @@ describe('Layout', () => {
     fireEvent.keyDown(palette, { key: 'Escape' });
     expect(screen.queryByRole('dialog', { name: '命令面板' })).not.toBeInTheDocument();
   });
+});
 
-  it('没有搜索结果时给出空态提示', async () => {
-    renderLayout('/');
+const renderLayoutWithToasts = (path = '/') =>
+  render(
+    <MemoryRouter initialEntries={[path]}>
+      <ToastProvider>
+        <Layout>
+          <Routes>
+            <Route path="/" element={<div>首页内容</div>} />
+            <Route path="/tasks" element={<div>任务内容</div>} />
+            <Route path="/books" element={<div>读书内容</div>} />
+          </Routes>
+        </Layout>
+      </ToastProvider>
+    </MemoryRouter>,
+  );
+
+describe('命令面板快速捕获', () => {
+  beforeEach(() => {
+    useTaskStore.setState({ tasks: [], memos: [] });
+    resetPaletteFocus();
+  });
+
+  afterEach(() => {
+    resetPaletteFocus();
+  });
+
+  it('输入一句话回车即建任务，并给出可撤销的提示', async () => {
+    renderLayoutWithToasts('/');
+
+    fireEvent.keyDown(window, { key: 'k', metaKey: true });
+    const palette = await screen.findByRole('dialog', { name: '命令面板' });
+    await userEvent.type(within(palette).getByRole('combobox'), '交周报 !高');
+
+    expect(within(palette).getByRole('option', { name: /新建任务「交周报」/ })).toBeInTheDocument();
+    await userEvent.keyboard('{Enter}');
+
+    const tasks = useTaskStore.getState().tasks;
+    expect(tasks).toHaveLength(1);
+    expect(tasks[0]).toMatchObject({ title: '交周报', priority: 'high' });
+    expect(screen.queryByRole('dialog', { name: '命令面板' })).not.toBeInTheDocument();
+
+    expect(await screen.findByText('已新建任务「交周报」')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: '撤销' }));
+    expect(useTaskStore.getState().tasks).toHaveLength(0);
+  });
+
+  it('解析结果不对时可以往下选兜底，内容原样进备忘', async () => {
+    renderLayoutWithToasts('/');
+
+    fireEvent.keyDown(window, { key: 'k', metaKey: true });
+    const palette = await screen.findByRole('dialog', { name: '命令面板' });
+    await userEvent.type(within(palette).getByRole('combobox'), '买牛奶');
+    await userEvent.keyboard('{ArrowDown}{Enter}');
+
+    expect(useTaskStore.getState().tasks).toHaveLength(0);
+    expect(useTaskStore.getState().memos[0]!.content).toBe('买牛奶');
+  });
+
+  it('完全没匹配上的输入也有兜底，不会白打一遍', async () => {
+    renderLayoutWithToasts('/');
 
     fireEvent.keyDown(window, { key: 'k', metaKey: true });
     const palette = await screen.findByRole('dialog', { name: '命令面板' });
     await userEvent.type(within(palette).getByRole('combobox'), 'zzzz');
 
-    expect(within(palette).getByText('没有匹配的结果')).toBeInTheDocument();
+    expect(within(palette).getByText('存为备忘「zzzz」')).toBeInTheDocument();
+  });
+
+  it('输入正好是某条记录时，回车跳过去而不是再建一条同名任务', async () => {
+    useTaskStore.getState().addTask('给张总交周报', '', 'high', '');
+    renderLayoutWithToasts('/');
+
+    fireEvent.keyDown(window, { key: 'k', metaKey: true });
+    const palette = await screen.findByRole('dialog', { name: '命令面板' });
+    await userEvent.type(within(palette).getByRole('combobox'), '给张总交周报');
+
+    expect(within(palette).getByText('实体')).toBeInTheDocument();
+    await userEvent.keyboard('{Enter}');
+
+    expect(screen.getByText('任务内容')).toBeInTheDocument();
+    expect(useTaskStore.getState().tasks).toHaveLength(1);
   });
 });
 

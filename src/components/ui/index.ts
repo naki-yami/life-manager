@@ -49,5 +49,5 @@ export type {
 export { Tooltip } from './Tooltip';
 export type { TooltipProps } from './Tooltip';
 export { ToastProvider } from './Toast';
-export { useToast } from './toastContext';
+export { useToast, useOptionalToast } from './toastContext';
 export type { ToastOptions, ToastTone, ToastAction, ToastContextValue } from './toastContext';

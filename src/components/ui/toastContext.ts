@@ -31,3 +31,9 @@ export const useToast = (): ToastContextValue => {
   if (!context) throw new Error('useToast 必须在 <ToastProvider> 内部使用');
   return context;
 };
+
+/**
+ * 和 useToast 一样，但没有 Provider 时返回 null。
+ * 外壳组件（命令面板、顶栏）在测试里可能被单独挂载，用这个不会直接抛错。
+ */
+export const useOptionalToast = (): ToastContextValue | null => useContext(ToastContext);

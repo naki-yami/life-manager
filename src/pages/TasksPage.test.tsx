@@ -1,14 +1,44 @@
 import React from 'react';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { TasksPage } from './TasksPage';
 import { ToastProvider } from '../components/ui';
 import { useTaskStore } from '../store/taskStore';
 import { addDays, todayKey } from '../utils/date';
+import { requestPaletteFocus, resetPaletteFocus } from '../hooks/usePaletteFocus';
 
 beforeEach(() => {
   useTaskStore.setState({ tasks: [], memos: [] });
+});
+
+describe('TasksPage 从命令面板打开', () => {
+  afterEach(() => {
+    resetPaletteFocus();
+  });
+
+  it('聚焦某条任务时打开它的编辑弹窗', () => {
+    seed();
+    render(<TasksPage />);
+    const task = useTaskStore.getState().tasks.find((item) => item.title === '紧急任务')!;
+
+    act(() => {
+      requestPaletteFocus('/tasks', task.id);
+    });
+
+    const dialog = screen.getByRole('dialog', { name: '编辑任务' });
+    expect(within(dialog).getByLabelText(/^标题/)).toHaveValue('紧急任务');
+  });
+
+  it('聚焦一条不存在的任务时安静跳过', () => {
+    render(<TasksPage />);
+
+    act(() => {
+      requestPaletteFocus('/tasks', 'missing');
+    });
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
 });
 
 const seed = () => {

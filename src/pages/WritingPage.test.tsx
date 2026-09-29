@@ -1,11 +1,12 @@
 import React from 'react';
-import { render, screen, within } from '@testing-library/react';
+import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { WritingPage } from './WritingPage';
 import { ToastProvider } from '../components/ui';
 import { useWritingStore } from '../store/writingStore';
 import { WritingStatus } from '../types';
+import { requestPaletteFocus, resetPaletteFocus } from '../hooks/usePaletteFocus';
 
 beforeEach(() => {
   useWritingStore.setState({ projects: [] });
@@ -14,6 +15,33 @@ beforeEach(() => {
 
 const projectOf = (title: string) =>
   useWritingStore.getState().projects.find((project) => project.title === title)!;
+
+describe('WritingPage 从命令面板打开', () => {
+  afterEach(() => {
+    resetPaletteFocus();
+  });
+
+  it('聚焦某篇稿件时直接打开编辑器', () => {
+    useWritingStore.getState().addProject('周报模板', 'article');
+    render(<WritingPage />);
+
+    act(() => {
+      requestPaletteFocus('/writing', projectOf('周报模板').id);
+    });
+
+    expect(screen.getByRole('dialog', { name: '《周报模板》编辑正文' })).toBeInTheDocument();
+  });
+
+  it('聚焦一篇不存在的稿件时不弹编辑器', () => {
+    render(<WritingPage />);
+
+    act(() => {
+      requestPaletteFocus('/writing', 'missing');
+    });
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+});
 
 /** 统计卡片的整块文本，避免多个卡片出现相同数字时选择器歧义 */
 const statText = (label: string): string =>

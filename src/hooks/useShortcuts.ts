@@ -1,17 +1,44 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { NAV_ITEMS } from '../components/layout/navItems';
 
 /** 「n 新建当前模块条目」走 window 自定义事件解耦：外壳监听按键，页面注册动作 */
 export const NEW_ENTRY_EVENT = 'lm:new-entry';
 
+/** 登记后多久作废，避免跳到一个没有新建入口的页面后，被之后挂载的页面误认领 */
+const NEW_ENTRY_TTL_MS = 3000;
+let pendingNewEntryAt = 0;
+
+/**
+ * 广播「新建」意图。
+ *
+ * 页面是按路由懒加载的：跳转那一刻目标页可能还没挂载，所以除了发事件，
+ * 还记一个时间戳；页面挂载后自己补认领（见 useNewEntryShortcut）。
+ */
+export function requestNewEntry(): void {
+  pendingNewEntryAt = Date.now();
+  window.dispatchEvent(new CustomEvent(NEW_ENTRY_EVENT));
+}
+
 /** 页面用它注册「新建」动作；按 n 时动作会被触发 */
 export function useNewEntryShortcut(handler: () => void): void {
+  // 用 ref 存最新的 handler，避免每次渲染都重新订阅窗口事件
+  const handlerRef = useRef(handler);
+  handlerRef.current = handler;
+
   useEffect(() => {
-    const listener = (): void => handler();
+    const listener = (): void => {
+      pendingNewEntryAt = 0;
+      handlerRef.current();
+    };
     window.addEventListener(NEW_ENTRY_EVENT, listener);
+    // 从命令面板「跳转 + 新建」进来时，事件比页面挂载更早，这里补一次
+    if (Date.now() - pendingNewEntryAt < NEW_ENTRY_TTL_MS) {
+      pendingNewEntryAt = 0;
+      handlerRef.current();
+    }
     return () => window.removeEventListener(NEW_ENTRY_EVENT, listener);
-  }, [handler]);
+  }, []);
 }
 
 /** 正在往输入框里打字时，单键快捷键必须让路 */
@@ -48,7 +75,7 @@ export function useGlobalShortcuts(onOpenPalette: () => void): void {
 
       if (event.key === 'n') {
         event.preventDefault();
-        window.dispatchEvent(new CustomEvent(NEW_ENTRY_EVENT));
+        requestNewEntry();
         return;
       }
       if (event.key === '/') {
