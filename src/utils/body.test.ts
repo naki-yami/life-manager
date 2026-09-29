@@ -15,6 +15,7 @@ import {
   hasAnyValue,
   latestPoint,
   measurementFields,
+  measurementKeysOf,
   measurementLabel,
   measurementOf,
   readMetric,
@@ -240,6 +241,16 @@ describe('measurementFields / measurementLabel', () => {
   it('未知部位回退成键名', () => {
     expect(measurementLabel('waist')).toBe('腰围');
     expect(measurementLabel('左腿')).toBe('左腿');
+  });
+
+  it('measurementKeysOf 汇总出现过的部位，内置的排在前、自定义的按字母序', () => {
+    const keys = measurementKeysOf([
+      metric('2026-09-01', { measurements: { 左腿: 55, waist: 80 } }),
+      metric('2026-09-02', { measurements: { chest: 95, 右臂: 33 } }),
+    ]);
+
+    expect(keys).toEqual(['chest', 'waist', '右臂', '左腿']);
+    expect(measurementKeysOf([])).toEqual([]);
   });
 });
 

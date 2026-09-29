@@ -125,6 +125,7 @@ describe('uiStore 仪表盘', () => {
       'todos',
       'memos',
       'habits',
+      'body',
       'activity',
       'modules',
     ]);

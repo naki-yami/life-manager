@@ -685,6 +685,7 @@ describe('身体指标的导入兼容', () => {
 
   it('脏读数在导入时被清洗到「没记」，坏日期的记录整条丢弃', () => {
     const backup = sampleData();
+    // 故意塞脏数据：NaN 体重、超 100 的体脂、混了字符串的围度表、坏日期
     backup.bodyMetrics = [
       {
         id: 'body-1',
@@ -701,7 +702,7 @@ describe('身体指标的导入兼容', () => {
         measurements: {},
         createdAt: '2026-09-26T07:00:00.000Z',
       },
-    ];
+    ] as unknown as typeof backup.bodyMetrics;
 
     const parsed = parseBackup(serializeBackup(backup));
     expect(parsed.ok).toBe(true);

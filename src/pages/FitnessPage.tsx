@@ -4,7 +4,10 @@ import {
   Copy,
   Dumbbell,
   ListChecks,
+  Pencil,
+  Percent,
   Plus,
+  Scale,
   Trash2,
   TrendingUp,
   Trophy,
@@ -28,18 +31,39 @@ import {
   StatCard,
 } from '../components/ui';
 import { PageHeader, Toolbar } from '../components/layout';
-import { BarChart, Heatmap } from '../components/charts';
+import { BarChart, Heatmap, LineChart } from '../components/charts';
 import { useFitnessStore } from '../store/fitnessStore';
+import { useBodyStore } from '../store/bodyStore';
 import { useUndoableRemove } from '../hooks/useUndoableRemove';
 import { filterByKeyword } from '../utils/search';
 import { formatNumber, todayKey } from '../utils/date';
 import { activeDays, seriesByDay, seriesByWeek } from '../utils/stats';
 import { epley1RM, personalBests } from '../utils/fitness';
+import {
+  bodyEntries,
+  bodyFatOf,
+  bodyPoints,
+  changeFromPrevious,
+  formatDelta,
+  formatMetric,
+  latestPoint,
+  BODY_FAT_META,
+  WEIGHT_META,
+  measurementFields,
+  measurementKeysOf,
+  measurementLabel,
+  measurementOf,
+  round1,
+  sortedMetrics,
+  weightOf,
+  type BodyFieldMeta,
+} from '../utils/body';
+import type { BodyMetric } from '../types';
 import { ToastContext } from '../components/ui/toastContext';
 import { useNewEntryShortcut } from '../hooks/useShortcuts';
 import { MonthCalendar, type CalendarMark } from '../components/ui';
 
-type View = 'plans' | 'records';
+type View = 'plans' | 'records' | 'body';
 
 interface ExerciseDraft {
   name: string;
@@ -61,6 +85,43 @@ const emptyWorkoutForm = (): {
   exercises: [emptyExercise()],
   notes: '',
 });
+
+interface BodyFormState {
+  date: string;
+  weight: number | '';
+  bodyFat: number | '';
+  /** 部位键 -> 输入框里的值；空串表示这次没量这一项 */
+  measurements: Record<string, number | ''>;
+  /** 这次要填的围度项：内置五个 + 这条记录里已经有的自定义部位 */
+  parts: BodyFieldMeta[];
+}
+
+/** 记录里的围度 → 表单值；空对象表示这天还没记过 */
+const measurementsFrom = (record?: BodyMetric): Record<string, number | ''> => {
+  const result: Record<string, number | ''> = {};
+  if (!record) return result;
+  for (const key of Object.keys(record.measurements)) result[key] = record.measurements[key]!;
+  return result;
+};
+
+/** 打开弹窗（或切换日期）时的表单初值：有记录就带出那天的数据，没有就清空 */
+const bodyFormOf = (record: BodyMetric | undefined, date: string): BodyFormState => ({
+  date,
+  weight: record?.weight ?? '',
+  bodyFat: record?.bodyFat ?? '',
+  measurements: measurementsFrom(record),
+  parts: measurementFields(record),
+});
+
+/** 表单里真正填了的围度项；空值不提交，也就不会在记录里留下 0 */
+const filledMeasurements = (form: BodyFormState): Record<string, number> => {
+  const result: Record<string, number> = {};
+  for (const part of form.parts) {
+    const value = form.measurements[part.key];
+    if (typeof value === 'number' && value > 0) result[part.key] = value;
+  }
+  return result;
+};
 
 /** 训练容量 = 组数 × 次数 × 重量，用来衡量整体训练量 */
 const volumeOf = (exercises: Array<{ sets: number; reps: number; weight: number }>): number =>
@@ -101,6 +162,16 @@ export const FitnessPage: React.FC = () => {
   const [workoutForm, setWorkoutForm] = useState(emptyWorkoutForm);
   const toastContext = React.useContext(ToastContext);
   const [recordDateFilter, setRecordDateFilter] = useState<string | null>(null);
+
+  const {
+    records: bodyRecords,
+    saveRecord: saveBodyRecord,
+    deleteRecord: deleteBodyRecord,
+    replaceRecords: replaceBodyRecords,
+  } = useBodyStore();
+  const [showBodyModal, setShowBodyModal] = useState(false);
+  const [bodyForm, setBodyForm] = useState<BodyFormState>(() => bodyFormOf(undefined, todayKey()));
+  const [pendingBodyId, setPendingBodyId] = useState<string | null>(null);
 
   const totalVolume = records.reduce((sum, record) => sum + volumeOf(record.exercises), 0);
   const bests = useMemo(() => personalBests(records), [records]);
@@ -144,6 +215,31 @@ export const FitnessPage: React.FC = () => {
   );
   const recentTrainingDays = activeDays(trendSeries).length;
 
+  /** 身体指标：趋势点只取真实记录，缺测的日子不补 0（补 0 会把折线拽到底部） */
+  const latestWeight = useMemo(() => latestPoint(bodyRecords, weightOf), [bodyRecords]);
+  const weightChange = useMemo(() => changeFromPrevious(bodyRecords, weightOf), [bodyRecords]);
+  const latestBodyFat = useMemo(() => latestPoint(bodyRecords, bodyFatOf), [bodyRecords]);
+  const weightPoints = useMemo(() => bodyPoints(bodyRecords, weightOf), [bodyRecords]);
+  const bodyFatPoints = useMemo(() => bodyPoints(bodyRecords, bodyFatOf), [bodyRecords]);
+  const measurementKeys = useMemo(() => measurementKeysOf(bodyRecords), [bodyRecords]);
+  const bodyList = useMemo(
+    () =>
+      sortedMetrics(bodyRecords)
+        .reverse()
+        .map((record) => ({ record, entries: bodyEntries(record) })),
+    [bodyRecords],
+  );
+
+  /** 每条记录相对「上一次称重」的变化，列表里一眼就能看到走势 */
+  const weightDeltas = useMemo(() => {
+    const points = bodyPoints(bodyRecords, weightOf, 0);
+    const deltas = new Map<string, number>();
+    for (let index = 1; index < points.length; index += 1) {
+      deltas.set(points[index]!.date, round1(points[index]!.value - points[index - 1]!.value));
+    }
+    return deltas;
+  }, [bodyRecords]);
+
   const visiblePlans = useMemo(
     () => filterByKeyword(plans, keyword, (plan) => [plan.name, plan.description]),
     [plans, keyword],
@@ -179,6 +275,9 @@ export const FitnessPage: React.FC = () => {
 
   const pendingPlan = plans.find((plan) => plan.id === pendingPlanId) ?? null;
   const pendingRecord = records.find((record) => record.id === pendingRecordId) ?? null;
+  const pendingBody = bodyRecords.find((record) => record.id === pendingBodyId) ?? null;
+  /** 表单选中的那天是不是已经有记录（用来提示「保存会更新它」） */
+  const bodyFormHasRecord = bodyRecords.some((record) => record.date === bodyForm.date);
 
   const openPlanModal = (): void => {
     setPlanForm({ name: '', description: '' });
@@ -190,7 +289,43 @@ export const FitnessPage: React.FC = () => {
     setShowWorkoutModal(true);
   };
 
-  useNewEntryShortcut(() => openWorkoutModal());
+  /** 身体指标的弹窗：新建时默认今天，编辑时带出那天的数据 */
+  const openBodyModal = (record?: BodyMetric): void => {
+    setBodyForm(bodyFormOf(record, record?.date ?? todayKey()));
+    setShowBodyModal(true);
+  };
+
+  /** 换日期就带出那天的数据：切到已有记录的日子，保存是更新而不是把它覆盖成空 */
+  const changeBodyDate = (date: string): void => {
+    setBodyForm(
+      bodyFormOf(
+        bodyRecords.find((record) => record.date === date),
+        date,
+      ),
+    );
+  };
+
+  const setBodyMeasurement = (key: string, value: number | ''): void => {
+    setBodyForm((form) => ({ ...form, measurements: { ...form.measurements, [key]: value } }));
+  };
+
+  const handleSaveBody = (): void => {
+    saveBodyRecord({
+      date: bodyForm.date,
+      weight: typeof bodyForm.weight === 'number' ? bodyForm.weight : undefined,
+      bodyFat: typeof bodyForm.bodyFat === 'number' ? bodyForm.bodyFat : undefined,
+      measurements: filledMeasurements(bodyForm),
+    });
+    setShowBodyModal(false);
+  };
+
+  const canSaveBody =
+    bodyForm.weight !== '' ||
+    bodyForm.bodyFat !== '' ||
+    Object.values(bodyForm.measurements).some((value) => typeof value === 'number' && value > 0);
+
+  // 按 n 时跟着当前标签走：身体指标页记身体数据，其余标签记训练
+  useNewEntryShortcut(() => (view === 'body' ? openBodyModal() : openWorkoutModal()));
 
   /** 复制最近一次训练：带出计划名与全部动作，日期改为今天 */
   const copyLastWorkout = (): void => {
@@ -268,63 +403,112 @@ export const FitnessPage: React.FC = () => {
     <div className="space-y-section">
       <PageHeader
         title="健身"
-        description="训练计划与每次训练的动作、组次记录"
+        description={
+          view === 'body'
+            ? '体重、体脂与围度的按日记录与趋势'
+            : '训练计划与每次训练的动作、组次记录'
+        }
         icon={Dumbbell}
         actions={
-          <>
-            {records.length > 0 && (
+          view === 'body' ? (
+            <Button icon={<Plus size={16} aria-hidden />} onClick={() => openBodyModal()}>
+              记录身体数据
+            </Button>
+          ) : (
+            <>
+              {records.length > 0 && (
+                <Button
+                  variant="secondary"
+                  icon={<Copy size={16} aria-hidden />}
+                  onClick={copyLastWorkout}
+                >
+                  复制上次训练
+                </Button>
+              )}
               <Button
                 variant="secondary"
-                icon={<Copy size={16} aria-hidden />}
-                onClick={copyLastWorkout}
+                icon={<Plus size={16} aria-hidden />}
+                onClick={() => openWorkoutModal()}
               >
-                复制上次训练
+                记录训练
               </Button>
-            )}
-            <Button
-              variant="secondary"
-              icon={<Plus size={16} aria-hidden />}
-              onClick={() => openWorkoutModal()}
-            >
-              记录训练
-            </Button>
-            <Button icon={<Plus size={16} aria-hidden />} onClick={openPlanModal}>
-              新建计划
-            </Button>
-          </>
+              <Button icon={<Plus size={16} aria-hidden />} onClick={openPlanModal}>
+                新建计划
+              </Button>
+            </>
+          )
         }
       />
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard
-          label="训练计划数"
-          value={plans.length}
-          unit="个"
-          icon={<ListChecks size={16} aria-hidden />}
-        />
-        <StatCard
-          label="训练记录数"
-          value={records.length}
-          unit="次"
-          icon={<Dumbbell size={16} aria-hidden />}
-        />
-        <StatCard
-          label="本周训练"
-          value={thisWeekCount}
-          unit="次"
-          tone="accent"
-          icon={<CalendarDays size={16} aria-hidden />}
-          footer={thisWeekCount === 0 ? '本周还没练' : `近 14 天有 ${recentTrainingDays} 天练过`}
-        />
-        <StatCard
-          label="累计容量"
-          value={formatNumber(totalVolume)}
-          unit="kg"
-          icon={<TrendingUp size={16} aria-hidden />}
-        />
-      </div>
+      {view === 'body' ? (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <StatCard
+            label="当前体重"
+            value={latestWeight ? formatMetric(latestWeight.value) : '—'}
+            unit={latestWeight ? 'kg' : undefined}
+            icon={<Scale size={16} aria-hidden />}
+            footer={latestWeight ? `${latestWeight.date} 记录` : '还没有称过'}
+          />
+          <StatCard
+            label="较上次"
+            value={weightChange ? formatDelta(weightChange.delta) : '—'}
+            unit={weightChange ? 'kg' : undefined}
+            icon={<TrendingUp size={16} aria-hidden />}
+            footer={
+              weightChange
+                ? `上次 ${formatMetric(weightChange.previous.value)} kg（${weightChange.previous.date}）`
+                : '至少两次记录才有对比'
+            }
+          />
+          <StatCard
+            label="当前体脂率"
+            value={latestBodyFat ? formatMetric(latestBodyFat.value) : '—'}
+            unit={latestBodyFat ? '%' : undefined}
+            icon={<Percent size={16} aria-hidden />}
+            footer={latestBodyFat ? `${latestBodyFat.date} 记录` : '还没有体脂记录'}
+          />
+          <StatCard
+            label="记录天数"
+            value={bodyRecords.length}
+            unit="天"
+            icon={<CalendarDays size={16} aria-hidden />}
+            footer={
+              measurementKeys.length > 0 ? `围度记了 ${measurementKeys.length} 项` : '围度还没记过'
+            }
+          />
+        </div>
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <StatCard
+            label="训练计划数"
+            value={plans.length}
+            unit="个"
+            icon={<ListChecks size={16} aria-hidden />}
+          />
+          <StatCard
+            label="训练记录数"
+            value={records.length}
+            unit="次"
+            icon={<Dumbbell size={16} aria-hidden />}
+          />
+          <StatCard
+            label="本周训练"
+            value={thisWeekCount}
+            unit="次"
+            tone="accent"
+            icon={<CalendarDays size={16} aria-hidden />}
+            footer={thisWeekCount === 0 ? '本周还没练' : `近 14 天有 ${recentTrainingDays} 天练过`}
+          />
+          <StatCard
+            label="累计容量"
+            value={formatNumber(totalVolume)}
+            unit="kg"
+            icon={<TrendingUp size={16} aria-hidden />}
+          />
+        </div>
+      )}
 
-      {records.length > 0 && (
+      {view !== 'body' && records.length > 0 && (
         <div className="grid gap-4 lg:grid-cols-2">
           <Card>
             <CardHeader
@@ -353,7 +537,82 @@ export const FitnessPage: React.FC = () => {
         </div>
       )}
 
-      {records.length > 0 && bests.length > 0 && (
+      {view === 'body' && bodyRecords.length > 0 && (
+        <div className="grid gap-4 lg:grid-cols-2">
+          <Card>
+            <CardHeader
+              title="体重趋势"
+              subtitle={
+                weightPoints.length > 0
+                  ? `最近 ${weightPoints.length} 次称重，缺测的日子不补 0`
+                  : '还没有体重记录'
+              }
+            />
+            <CardBody>
+              <LineChart
+                data={weightPoints}
+                label="体重趋势"
+                formatValue={(value) => `${formatMetric(value)} kg`}
+              />
+            </CardBody>
+          </Card>
+
+          <Card>
+            <CardHeader
+              title="体脂趋势"
+              subtitle={
+                bodyFatPoints.length > 0
+                  ? `最近 ${bodyFatPoints.length} 次测量`
+                  : '还没有体脂记录，下次称体脂时一起填上'
+              }
+            />
+            <CardBody>
+              <LineChart
+                data={bodyFatPoints}
+                label="体脂趋势"
+                tone="warning"
+                formatValue={(value) => `${formatMetric(value)} %`}
+              />
+            </CardBody>
+          </Card>
+        </div>
+      )}
+
+      {view === 'body' && measurementKeys.length > 0 && (
+        <Card>
+          <CardHeader title="围度" subtitle="最近一次的数值与较上次的变化" />
+          <CardBody>
+            <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {measurementKeys.map((key) => {
+                const latest = latestPoint(bodyRecords, measurementOf(key));
+                const change = changeFromPrevious(bodyRecords, measurementOf(key));
+                return (
+                  <li key={key} className="rounded border border-line-subtle px-3 py-2">
+                    <div className="flex items-baseline justify-between gap-2">
+                      <span className="text-sm text-content-secondary">
+                        {measurementLabel(key)}
+                      </span>
+                      <span className="text-sm font-medium text-content tabular">
+                        {latest ? formatMetric(latest.value) : '—'}
+                        <span className="ml-0.5 text-2xs text-content-tertiary">cm</span>
+                      </span>
+                    </div>
+                    <p className="mt-0.5 text-2xs text-content-tertiary">
+                      {change
+                        ? `较上次 ${formatDelta(change.delta)} cm · ${change.previous.date}`
+                        : latest
+                          ? `${latest.date} 记录`
+                          : ''}
+                    </p>
+                  </li>
+                );
+              })}
+            </ul>
+          </CardBody>
+        </Card>
+      )}
+
+      {view !== 'body' && records.length > 0 && bests.length > 0 && (
         <Card>
           <CardHeader
             title="个人最佳"
@@ -380,7 +639,11 @@ export const FitnessPage: React.FC = () => {
       )}
 
       <Toolbar
-        search={{ value: keyword, onChange: setKeyword, placeholder: '搜索计划、动作或备注…' }}
+        search={
+          view === 'body'
+            ? undefined
+            : { value: keyword, onChange: setKeyword, placeholder: '搜索计划、动作或备注…' }
+        }
         actions={
           <SegmentedControl
             label="切换健身视图"
@@ -389,6 +652,7 @@ export const FitnessPage: React.FC = () => {
             options={[
               { value: 'plans', label: '训练计划', count: plans.length },
               { value: 'records', label: '训练记录', count: records.length },
+              { value: 'body', label: '身体指标', count: bodyRecords.length },
             ]}
           />
         }
@@ -401,11 +665,7 @@ export const FitnessPage: React.FC = () => {
             subtitle="点一天可以只看那天的训练"
             action={
               recordDateFilter ? (
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  onClick={() => setRecordDateFilter(null)}
-                >
+                <Button size="sm" variant="secondary" onClick={() => setRecordDateFilter(null)}>
                   只看 {recordDateFilter} · 清除
                 </Button>
               ) : null
@@ -422,7 +682,75 @@ export const FitnessPage: React.FC = () => {
         </Card>
       )}
 
-      {view === 'plans' ? (
+      {view === 'body' ? (
+        bodyList.length === 0 ? (
+          <Card>
+            <EmptyState
+              icon={<Scale size={22} aria-hidden />}
+              title="还没有身体数据"
+              description="体重、体脂与围度按天记下来，趋势和「较上次」会自动算好。一天一条，同一天再记就是修正。"
+              action={
+                <Button icon={<Plus size={16} aria-hidden />} onClick={() => openBodyModal()}>
+                  记录身体数据
+                </Button>
+              }
+            />
+          </Card>
+        ) : (
+          <ul className="grid gap-3">
+            {bodyList.map(({ record, entries }) => {
+              const delta = weightDeltas.get(record.date);
+              return (
+                <li key={record.id}>
+                  <Card className="p-4">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="font-semibold text-content">{record.date}</h3>
+                          {delta !== undefined && (
+                            <Badge tone="default">较上次 {formatDelta(delta)} kg</Badge>
+                          )}
+                          <Badge tone="info">{entries.length} 项</Badge>
+                        </div>
+                        <ul className="mt-3 grid gap-1.5 sm:grid-cols-2">
+                          {entries.map((entry) => (
+                            <li
+                              key={entry.key}
+                              className="flex items-center justify-between gap-3 rounded border border-line-subtle px-3 py-1.5"
+                            >
+                              <span className="min-w-0 truncate text-sm text-content-secondary">
+                                {entry.label}
+                              </span>
+                              <span className="shrink-0 text-xs text-content-tertiary tabular">
+                                {formatMetric(entry.value)} {entry.unit}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-1">
+                        <IconButton
+                          label={`编辑 ${record.date} 的身体数据`}
+                          size="sm"
+                          icon={<Pencil size={15} />}
+                          onClick={() => openBodyModal(record)}
+                        />
+                        <IconButton
+                          label={`删除 ${record.date} 的身体数据`}
+                          size="sm"
+                          icon={<Trash2 size={15} />}
+                          onClick={() => setPendingBodyId(record.id)}
+                          className="hover:text-danger"
+                        />
+                      </div>
+                    </div>
+                  </Card>
+                </li>
+              );
+            })}
+          </ul>
+        )
+      ) : view === 'plans' ? (
         visiblePlans.length === 0 ? (
           <Card>
             <EmptyState
@@ -720,6 +1048,72 @@ export const FitnessPage: React.FC = () => {
         </div>
       </Modal>
 
+      <Modal
+        isOpen={showBodyModal}
+        onClose={() => setShowBodyModal(false)}
+        title="记录身体数据"
+        description="只填这次量到的项，留空的不记；一天一条，同一天再记就是修正"
+        size="lg"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setShowBodyModal(false)}>
+              取消
+            </Button>
+            <Button onClick={handleSaveBody} disabled={!canSaveBody}>
+              保存记录
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <Input
+            label="日期"
+            type="date"
+            value={bodyForm.date}
+            onChange={(event) => changeBodyDate(event.target.value)}
+            hint={bodyFormHasRecord ? '这一天已有记录，保存会更新它' : undefined}
+          />
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <NumberInput
+              label="体重(kg)"
+              value={bodyForm.weight}
+              onChange={(value) => setBodyForm((form) => ({ ...form, weight: value }))}
+              min={WEIGHT_META.min}
+              max={WEIGHT_META.max}
+              step={WEIGHT_META.step}
+              placeholder="如 70.5"
+            />
+            <NumberInput
+              label="体脂率(%)"
+              value={bodyForm.bodyFat}
+              onChange={(value) => setBodyForm((form) => ({ ...form, bodyFat: value }))}
+              min={BODY_FAT_META.min}
+              max={BODY_FAT_META.max}
+              step={BODY_FAT_META.step}
+              placeholder="如 18.5"
+            />
+          </div>
+
+          <div>
+            <p className="text-sm font-medium text-content">围度（cm）</p>
+            <div className="mt-2 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {bodyForm.parts.map((part) => (
+                <NumberInput
+                  key={part.key}
+                  label={part.label}
+                  value={bodyForm.measurements[part.key] ?? ''}
+                  onChange={(value) => setBodyMeasurement(part.key, value)}
+                  min={part.min}
+                  max={part.max}
+                  step={part.step}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+      </Modal>
+
       <ConfirmDialog
         isOpen={pendingPlan !== null}
         onClose={() => setPendingPlanId(null)}
@@ -766,6 +1160,33 @@ export const FitnessPage: React.FC = () => {
         description={
           pendingRecord
             ? `确定要删除 ${pendingRecord.date} 的这次训练吗？共 ${pendingRecord.exercises.length} 个动作，删除后无法恢复。`
+            : ''
+        }
+        confirmText="删除"
+        tone="danger"
+      />
+
+      <ConfirmDialog
+        isOpen={pendingBody !== null}
+        onClose={() => setPendingBodyId(null)}
+        onConfirm={() => {
+          const target = pendingBody;
+          const snapshot = bodyRecords;
+          if (pendingBodyId) deleteBodyRecord(pendingBodyId);
+          setPendingBodyId(null);
+          if (target) {
+            undoableRemove({
+              message: `已删除 ${target.date} 的身体数据`,
+              description: '点「撤销」可以恢复。',
+              snapshot,
+              restore: replaceBodyRecords,
+            });
+          }
+        }}
+        title="删除身体数据"
+        description={
+          pendingBody
+            ? `确定要删除 ${pendingBody.date} 的身体数据吗？这一天记的 ${bodyEntries(pendingBody).length} 项都会被删掉。`
             : ''
         }
         confirmText="删除"

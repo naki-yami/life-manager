@@ -12,6 +12,7 @@ import { useFitnessStore } from '../store/fitnessStore';
 import { useDietStore } from '../store/dietStore';
 import { useGameStore } from '../store/gameStore';
 import { useHabitStore } from '../store/habitStore';
+import { useBodyStore } from '../store/bodyStore';
 import { DASHBOARD_WIDGET_IDS, DEFAULT_DASHBOARD, useUiStore } from '../store/uiStore';
 import { STORAGE_KEYS } from '../utils/storageKeys';
 import { todayKey } from '../utils/date';
@@ -35,6 +36,7 @@ beforeEach(() => {
   useDietStore.setState({ records: [] });
   useGameStore.setState({ games: [] });
   useHabitStore.setState({ habits: [] });
+  useBodyStore.setState({ records: [] });
   useUiStore.setState({ dashboard: DEFAULT_DASHBOARD.map((widget) => ({ ...widget })) });
 });
 
@@ -410,6 +412,27 @@ describe('HomePage 仪表盘', () => {
 
     expect(screen.queryByText('今日习惯')).not.toBeInTheDocument();
     expect(screen.queryByText('今日习惯暂无数据')).not.toBeInTheDocument();
+  });
+
+  it('身体指标卡片显示最近体重、较上次与趋势', () => {
+    useBodyStore.getState().saveRecord({ date: '2026-09-20', weight: 71, bodyFat: 18.5 });
+    useBodyStore.getState().saveRecord({ date: '2026-09-27', weight: 70.4 });
+
+    renderHome();
+
+    expect(screen.getByText('身体指标')).toBeInTheDocument();
+    expect(screen.getByText('较上次 -0.6 kg · 上次 71 kg')).toBeInTheDocument();
+    expect(screen.getByText('70.4')).toBeInTheDocument();
+    expect(screen.getByText('体脂 18.5% · 2026-09-27')).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: '最近体重趋势' })).toBeInTheDocument();
+  });
+
+  it('没有体重记录时首页不渲染身体指标卡片', () => {
+    useBodyStore.getState().saveRecord({ date: '2026-09-27', measurements: { waist: 80 } });
+
+    renderHome();
+
+    expect(screen.queryByText('身体指标')).not.toBeInTheDocument();
   });
 
   it('所有卡片都被隐藏时给出恢复指引', () => {

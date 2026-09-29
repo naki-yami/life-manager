@@ -44,6 +44,7 @@ import { useFitnessStore } from '../store/fitnessStore';
 import { useDietStore } from '../store/dietStore';
 import { useGameStore } from '../store/gameStore';
 import { useHabitStore } from '../store/habitStore';
+import { useBodyStore } from '../store/bodyStore';
 import { useUiStore } from '../store/uiStore';
 import {
   dayKeyOf,
@@ -62,6 +63,15 @@ import {
   sumSeries,
 } from '../utils/stats';
 import { habitAmountOn, habitTarget, pendingHabits, scheduleLabel } from '../utils/habits';
+import {
+  bodyFatOf,
+  bodyPoints,
+  changeFromPrevious,
+  formatDelta,
+  formatMetric,
+  latestPoint,
+  weightOf,
+} from '../utils/body';
 import { parseQuickTask } from '../utils/quickParse';
 import type { Priority, Task } from '../types';
 
@@ -134,6 +144,7 @@ export const HomePage: React.FC = () => {
   const games = useGameStore((state) => state.games);
   const habits = useHabitStore((state) => state.habits);
   const toggleHabitLog = useHabitStore((state) => state.toggleHabitLog);
+  const bodyRecords = useBodyStore((state) => state.records);
 
   // 仪表盘排布存在 lm:ui 里，这里只读出来渲染
   const dashboard = useUiStore((state) => state.dashboard);
@@ -150,6 +161,12 @@ export const HomePage: React.FC = () => {
 
   /** 今天还没打卡的习惯：既喂「今日习惯」卡片，也用来算欢迎语里的提醒 */
   const pendingHabitList = useMemo(() => pendingHabits(habits, today), [habits, today]);
+
+  /** 身体指标卡片：最近一次体重 / 体脂，以及与上一次的差 */
+  const latestWeight = useMemo(() => latestPoint(bodyRecords, weightOf), [bodyRecords]);
+  const latestBodyFat = useMemo(() => latestPoint(bodyRecords, bodyFatOf), [bodyRecords]);
+  const weightChange = useMemo(() => changeFromPrevious(bodyRecords, weightOf), [bodyRecords]);
+  const weightPoints = useMemo(() => bodyPoints(bodyRecords, weightOf, 14), [bodyRecords]);
 
   /** 完成任务 / 训练 / 饮食任意一条都算一次活动，用来喂热力图与环比 */
   const activitySeries = useMemo(
@@ -601,6 +618,50 @@ export const HomePage: React.FC = () => {
             </CardBody>
           </Card>
         ) : null,
+    },
+    {
+      id: 'body',
+      title: '身体指标',
+      content: latestWeight ? (
+        <Card>
+          <CardHeader
+            title="身体指标"
+            subtitle={
+              weightChange
+                ? `较上次 ${formatDelta(weightChange.delta)} kg · 上次 ${formatMetric(weightChange.previous.value)} kg`
+                : '第一次记录，坚持量下去就能看到趋势'
+            }
+            action={
+              <Button variant="ghost" size="sm" onClick={() => navigate('/fitness')}>
+                记录
+              </Button>
+            }
+          />
+          <CardBody>
+            <div className="flex items-end justify-between gap-3">
+              <div className="min-w-0">
+                <div className="flex items-baseline gap-1">
+                  <span className="text-2xl font-semibold tabular text-content">
+                    {formatMetric(latestWeight.value)}
+                  </span>
+                  <span className="text-xs text-content-tertiary">kg</span>
+                </div>
+                <p className="mt-1 truncate text-xs text-content-tertiary">
+                  {latestBodyFat ? `体脂 ${formatMetric(latestBodyFat.value)}% · ` : ''}
+                  {latestWeight.date}
+                </p>
+              </div>
+              <div className="w-24 shrink-0">
+                <Sparkline
+                  data={weightPoints.map((point) => point.value)}
+                  label="最近体重趋势"
+                  height={36}
+                />
+              </div>
+            </div>
+          </CardBody>
+        </Card>
+      ) : null,
     },
     {
       id: 'activity',

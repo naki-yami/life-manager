@@ -11,7 +11,7 @@ export type Density = 'comfortable' | 'compact';
  * 所以这里只存 id + 尺寸 + 是否隐藏，具体渲染什么由 `components/dashboard` 决定。
  */
 export type DashboardWidgetId =
-  'stats' | 'capture' | 'focus' | 'todos' | 'memos' | 'habits' | 'activity' | 'modules';
+  'stats' | 'capture' | 'focus' | 'todos' | 'memos' | 'habits' | 'body' | 'activity' | 'modules';
 
 /** 卡片宽度档位，对应 12 栏栅格里的 4 / 8 / 12 栏：小 + 中正好凑满一行 */
 export type DashboardWidgetSize = 'sm' | 'md' | 'lg';
@@ -29,13 +29,14 @@ export const DASHBOARD_WIDGET_IDS: readonly DashboardWidgetId[] = [
   'todos',
   'memos',
   'habits',
+  'body',
   'activity',
   'modules',
 ];
 
 export const DASHBOARD_WIDGET_SIZES: readonly DashboardWidgetSize[] = ['sm', 'md', 'lg'];
 
-/** 默认排布：统计整行 → 快速添加 + 今日聚焦 → 待办 + 备忘 → 习惯 → 热力图 → 模块概览 */
+/** 默认排布：统计整行 → 快速添加 + 今日聚焦 → 待办 + 备忘 → 习惯 + 身体指标 → 热力图 → 模块概览 */
 export const DEFAULT_DASHBOARD: readonly DashboardWidget[] = [
   { id: 'stats', size: 'lg', hidden: false },
   { id: 'capture', size: 'md', hidden: false },
@@ -43,6 +44,7 @@ export const DEFAULT_DASHBOARD: readonly DashboardWidget[] = [
   { id: 'todos', size: 'md', hidden: false },
   { id: 'memos', size: 'sm', hidden: false },
   { id: 'habits', size: 'md', hidden: false },
+  { id: 'body', size: 'sm', hidden: false },
   { id: 'activity', size: 'lg', hidden: false },
   { id: 'modules', size: 'lg', hidden: false },
 ];

@@ -1,7 +1,7 @@
 import React from 'react';
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import { BarChart, Heatmap, Sparkline } from './index';
+import { BarChart, Heatmap, LineChart, Sparkline } from './index';
 import { dayRange, weekdayIndex } from '../../utils/stats';
 
 describe('Sparkline', () => {
@@ -52,6 +52,80 @@ describe('BarChart', () => {
     const items = container.querySelectorAll('figcaption li');
     expect(items).toHaveLength(3);
     expect(items[2]).toHaveTextContent('2026-01-08：4 个');
+  });
+});
+
+describe('LineChart', () => {
+  it('没有数据时退回提示态', () => {
+    render(<LineChart data={[]} label="体重趋势" />);
+
+    expect(screen.getByRole('img', { name: '体重趋势（暂无数据）' })).toBeInTheDocument();
+  });
+
+  it('按区间上下沿自适应，而不是把 0 当基线', () => {
+    const data = [
+      { date: '2026-09-01', value: 70 },
+      { date: '2026-09-02', value: 68 },
+    ];
+    const { container } = render(
+      <LineChart data={data} label="体重趋势" formatValue={(value) => `${value} kg`} />,
+    );
+
+    expect(
+      screen.getByRole('img', {
+        name: '体重趋势：共 2 次记录，最新 68 kg，最低 68 kg，最高 70 kg',
+      }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('最低 68 kg · 最高 70 kg')).toBeInTheDocument();
+    // 70kg 画在 8%、68kg 画在 92% —— 若按 0 基线，两点都会贴顶
+    expect(container.querySelector('polyline')?.getAttribute('points')).toBe(
+      '0.00,8.00 100.00,92.00',
+    );
+    expect(container.querySelector('polyline')?.getAttribute('class')).toContain('stroke-accent');
+    expect(container.querySelectorAll('line')).toHaveLength(2);
+  });
+
+  it('数值完全相同时画水平线，也不画高低参考线', () => {
+    const data = [
+      { date: '2026-09-01', value: 70 },
+      { date: '2026-09-02', value: 70 },
+    ];
+    const { container } = render(<LineChart data={data} label="体重趋势" />);
+
+    expect(container.querySelector('polyline')?.getAttribute('points')).toBe(
+      '0.00,50.00 100.00,50.00',
+    );
+    expect(container.querySelectorAll('line')).toHaveLength(0);
+  });
+
+  it('每个点都有悬停明细，读屏明细逐条列出', () => {
+    const data = [
+      { date: '2026-09-01', value: 70 },
+      { date: '2026-09-03', value: 69 },
+    ];
+    const { container } = render(
+      <LineChart
+        data={data}
+        label="体重趋势"
+        tone="success"
+        formatValue={(value) => `${value} kg`}
+      />,
+    );
+
+    const titles = [...container.querySelectorAll('rect title')].map((node) => node.textContent);
+    expect(titles).toEqual(['2026-09-01 · 70 kg', '2026-09-03 · 69 kg']);
+
+    const items = container.querySelectorAll('figcaption li');
+    expect(items).toHaveLength(2);
+    expect(items[1]).toHaveTextContent('2026-09-03：69 kg');
+  });
+
+  it('只有一个点时画在中间，不除以零', () => {
+    const { container } = render(
+      <LineChart data={[{ date: '2026-09-01', value: 70 }]} label="体重趋势" />,
+    );
+
+    expect(container.querySelector('polyline')?.getAttribute('points')).toBe('50.00,50.00');
   });
 });
 

@@ -74,7 +74,7 @@ export const NAV_ITEMS: NavItem[] = [
     label: '健身计划',
     description: '训练记录与身体指标',
     icon: Dumbbell,
-    keywords: ['fitness', 'workout', 'jianshen', '训练', '运动'],
+    keywords: ['fitness', 'workout', 'jianshen', '健身', '训练', '运动', '体重', '体脂', '围度'],
     group: 'main',
   },
   {

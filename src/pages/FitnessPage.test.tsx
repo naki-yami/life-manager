@@ -1,14 +1,16 @@
 import React from 'react';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { FitnessPage } from './FitnessPage';
 import { ToastProvider } from '../components/ui';
 import { useFitnessStore } from '../store/fitnessStore';
+import { useBodyStore } from '../store/bodyStore';
 import { addDays, todayKey } from '../utils/date';
 
 beforeEach(() => {
   useFitnessStore.setState({ plans: [], records: [] });
+  useBodyStore.setState({ records: [] });
 });
 
 /** 统计卡片的整块文本，避免多个卡片出现相同数字时选择器歧义 */
@@ -23,6 +25,14 @@ const addRecord = (planName: string, date: string, weight = 60): void => {
   useFitnessStore
     .getState()
     .addRecord(planName, date, [{ name: '杠铃卧推', sets: 5, reps: 5, weight }], '状态不错');
+};
+
+const addBody = (
+  date: string,
+  weight?: number,
+  measurements: Record<string, number> = {},
+): void => {
+  useBodyStore.getState().saveRecord({ date, weight, measurements });
 };
 
 describe('FitnessPage', () => {
@@ -275,5 +285,137 @@ describe('FitnessPage', () => {
 
     await userEvent.click(screen.getByRole('button', { name: '只看 2026-09-01 · 清除' }));
     expect(screen.getByText('推日')).toBeInTheDocument();
+  });
+  it('身体指标空态引导记录第一笔', async () => {
+    render(<FitnessPage />);
+    await userEvent.click(screen.getByRole('button', { name: /^身体指标/ }));
+
+    expect(screen.getByText('还没有身体数据')).toBeInTheDocument();
+    expect(screen.queryByRole('img', { name: /体重趋势/ })).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getAllByRole('button', { name: '记录身体数据' })[0]!);
+    expect(screen.getByRole('dialog', { name: '记录身体数据' })).toBeInTheDocument();
+  });
+
+  it('记录体重后统计卡、趋势图与列表一起更新', async () => {
+    render(<FitnessPage />);
+    await userEvent.click(screen.getByRole('button', { name: /^身体指标/ }));
+    await userEvent.click(screen.getAllByRole('button', { name: '记录身体数据' })[0]!);
+
+    const dialog = screen.getByRole('dialog', { name: '记录身体数据' });
+    fireEvent.change(within(dialog).getByLabelText('体重(kg)'), { target: { value: '70.4' } });
+    await userEvent.click(within(dialog).getByRole('button', { name: '保存记录' }));
+
+    expect(useBodyStore.getState().records).toHaveLength(1);
+    expect(useBodyStore.getState().records[0]).toMatchObject({ date: todayKey(), weight: 70.4 });
+
+    expect(statText('当前体重')).toContain('70.4');
+    expect(statText('较上次')).toContain('—');
+    expect(
+      screen.getByRole('img', {
+        name: '体重趋势：共 1 次记录，最新 70.4 kg，最低 70.4 kg，最高 70.4 kg',
+      }),
+    ).toBeInTheDocument();
+  });
+
+  it('新增第二条体重后，「较上次」与趋势图都算出正确的差', async () => {
+    addBody('2026-09-27', 71);
+    render(<FitnessPage />);
+    await userEvent.click(screen.getByRole('button', { name: /^身体指标/ }));
+    await userEvent.click(screen.getAllByRole('button', { name: '记录身体数据' })[0]!);
+
+    const dialog = screen.getByRole('dialog', { name: '记录身体数据' });
+    fireEvent.change(within(dialog).getByLabelText('日期'), { target: { value: '2026-09-29' } });
+    fireEvent.change(within(dialog).getByLabelText('体重(kg)'), { target: { value: '70.4' } });
+    await userEvent.click(within(dialog).getByRole('button', { name: '保存记录' }));
+
+    expect(statText('当前体重')).toContain('70.4');
+    expect(statText('较上次')).toContain('-0.6');
+    expect(statText('较上次')).toContain('上次 71 kg（2026-09-27）');
+    expect(
+      screen.getByRole('img', {
+        name: '体重趋势：共 2 次记录，最新 70.4 kg，最低 70.4 kg，最高 71 kg',
+      }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('较上次 -0.6 kg')).toBeInTheDocument();
+  });
+
+  it('编辑某天会带出那天的数据，保存是修正而不是新增', async () => {
+    addBody('2026-09-27', 71);
+    render(<FitnessPage />);
+    await userEvent.click(screen.getByRole('button', { name: /^身体指标/ }));
+    await userEvent.click(screen.getByRole('button', { name: '编辑 2026-09-27 的身体数据' }));
+
+    const dialog = screen.getByRole('dialog', { name: '记录身体数据' });
+    expect(within(dialog).getByLabelText('日期')).toHaveValue('2026-09-27');
+    expect(within(dialog).getByLabelText('体重(kg)')).toHaveValue(71);
+    expect(within(dialog).getByText('这一天已有记录，保存会更新它')).toBeInTheDocument();
+
+    fireEvent.change(within(dialog).getByLabelText('体重(kg)'), { target: { value: '70.5' } });
+    await userEvent.click(within(dialog).getByRole('button', { name: '保存记录' }));
+
+    expect(useBodyStore.getState().records).toHaveLength(1);
+    expect(useBodyStore.getState().records[0]!.weight).toBe(70.5);
+  });
+
+  it('只填围度也能保存，围度卡显示较上次的变化', async () => {
+    addBody('2026-09-20', undefined, { waist: 82 });
+    render(<FitnessPage />);
+    await userEvent.click(screen.getByRole('button', { name: /^身体指标/ }));
+    await userEvent.click(screen.getAllByRole('button', { name: '记录身体数据' })[0]!);
+
+    const dialog = screen.getByRole('dialog', { name: '记录身体数据' });
+    fireEvent.change(within(dialog).getByLabelText('日期'), { target: { value: '2026-09-29' } });
+    fireEvent.change(within(dialog).getByLabelText('腰围'), { target: { value: '80.5' } });
+    await userEvent.click(within(dialog).getByRole('button', { name: '保存记录' }));
+
+    expect(useBodyStore.getState().records).toHaveLength(2);
+    // 围度卡里那一格：显示最新值与相对上一次的变化
+    const row = screen.getByText(/较上次 -1.5 cm/).closest('li')!;
+    expect(within(row).getByText('腰围')).toBeInTheDocument();
+    expect(within(row).getByText('80.5')).toBeInTheDocument();
+    expect(within(row).getByText(/2026-09-20/)).toBeInTheDocument();
+  });
+
+  it('一天都没填时不能保存', async () => {
+    render(<FitnessPage />);
+    await userEvent.click(screen.getByRole('button', { name: /^身体指标/ }));
+    await userEvent.click(screen.getAllByRole('button', { name: '记录身体数据' })[0]!);
+
+    const dialog = screen.getByRole('dialog', { name: '记录身体数据' });
+    expect(within(dialog).getByRole('button', { name: '保存记录' })).toBeDisabled();
+
+    fireEvent.change(within(dialog).getByLabelText('胸围'), { target: { value: '95' } });
+    expect(within(dialog).getByRole('button', { name: '保存记录' })).toBeEnabled();
+  });
+
+  it('删除身体数据要二次确认，撤销可以恢复', async () => {
+    addBody('2026-09-27', 71);
+    render(
+      <ToastProvider>
+        <FitnessPage />
+      </ToastProvider>,
+    );
+    await userEvent.click(screen.getByRole('button', { name: /^身体指标/ }));
+    await userEvent.click(screen.getByRole('button', { name: '删除 2026-09-27 的身体数据' }));
+
+    const dialog = screen.getByRole('dialog', { name: '删除身体数据' });
+    expect(within(dialog).getByText(/1 项都会被删掉/)).toBeInTheDocument();
+    await userEvent.click(within(dialog).getByRole('button', { name: '删除' }));
+    expect(useBodyStore.getState().records).toHaveLength(0);
+
+    await userEvent.click(screen.getByRole('button', { name: '撤销' }));
+    expect(useBodyStore.getState().records).toHaveLength(1);
+  });
+
+  it('身体指标页按 n 打开的是身体数据弹窗', async () => {
+    render(<FitnessPage />);
+    await userEvent.click(screen.getByRole('button', { name: /^身体指标/ }));
+
+    act(() => {
+      window.dispatchEvent(new CustomEvent('lm:new-entry'));
+    });
+
+    expect(screen.getByRole('dialog', { name: '记录身体数据' })).toBeInTheDocument();
   });
 });

@@ -19,7 +19,11 @@ export interface BodyFieldMeta {
   unit: string;
   /** 输入框步进 */
   step: number;
-  /** 输入框的建议范围，只做提示，不做静默裁剪 */
+  /**
+   * 输入框与存储共用的边界：
+   * min 只要求「是个正数」（1），max 用来挡「把身高填进胸围」这类脏数据。
+   * 两处共用一套数字，界面上能填的就一定能存下去，不会出现「填了却没记上」。
+   */
   min: number;
   max: number;
 }
@@ -32,14 +36,17 @@ export const MAX_BODY_READING = 500;
 const MAX_MEASUREMENT_COUNT = 20;
 const MAX_PART_KEY_LENGTH = 24;
 
+/** 任何身体读数的下界：0 与负数不是读数，是「没记」 */
+export const MIN_BODY_READING = 1;
+
 /** 体重：高频项，所以是独立字段而不是塞进 measurements */
 export const WEIGHT_META: BodyFieldMeta = {
   key: 'weight',
   label: '体重',
   unit: 'kg',
   step: 0.1,
-  min: 20,
-  max: 400,
+  min: MIN_BODY_READING,
+  max: MAX_BODY_READING,
 };
 
 /** 体脂率：同为高频项 */
@@ -48,8 +55,8 @@ export const BODY_FAT_META: BodyFieldMeta = {
   label: '体脂率',
   unit: '%',
   step: 0.1,
-  min: 1,
-  max: 75,
+  min: MIN_BODY_READING,
+  max: MAX_BODY_FAT,
 };
 
 /** 两个独立字段，按界面顺序排列 */
@@ -57,11 +64,46 @@ export const BODY_FIELDS: readonly BodyFieldMeta[] = [WEIGHT_META, BODY_FAT_META
 
 /** 内置围度部位，顺序即界面顺序（胸 → 腰 → 臀 → 臂 → 腿） */
 export const MEASUREMENT_PARTS: readonly BodyFieldMeta[] = [
-  { key: 'chest', label: '胸围', unit: 'cm', step: 0.5, min: 30, max: 250 },
-  { key: 'waist', label: '腰围', unit: 'cm', step: 0.5, min: 30, max: 250 },
-  { key: 'hip', label: '臀围', unit: 'cm', step: 0.5, min: 30, max: 250 },
-  { key: 'arm', label: '臂围', unit: 'cm', step: 0.5, min: 10, max: 100 },
-  { key: 'thigh', label: '腿围', unit: 'cm', step: 0.5, min: 10, max: 150 },
+  {
+    key: 'chest',
+    label: '胸围',
+    unit: 'cm',
+    step: 0.5,
+    min: MIN_BODY_READING,
+    max: MAX_BODY_READING,
+  },
+  {
+    key: 'waist',
+    label: '腰围',
+    unit: 'cm',
+    step: 0.5,
+    min: MIN_BODY_READING,
+    max: MAX_BODY_READING,
+  },
+  {
+    key: 'hip',
+    label: '臀围',
+    unit: 'cm',
+    step: 0.5,
+    min: MIN_BODY_READING,
+    max: MAX_BODY_READING,
+  },
+  {
+    key: 'arm',
+    label: '臂围',
+    unit: 'cm',
+    step: 0.5,
+    min: MIN_BODY_READING,
+    max: MAX_BODY_READING,
+  },
+  {
+    key: 'thigh',
+    label: '腿围',
+    unit: 'cm',
+    step: 0.5,
+    min: MIN_BODY_READING,
+    max: MAX_BODY_READING,
+  },
 ];
 
 /** 保留一位小数；非有限值原样返回，由调用方决定怎么处理 */
@@ -138,6 +180,26 @@ export function hasAnyValue(record: BodyMetric): boolean {
   );
 }
 
+/**
+ * 部位排序：内置部位按定义顺序，自定义部位统一排在其后并按字母序。
+ * 界面上出现的每一个部位列表都走它，保证同一个部位永远在同一个位置。
+ */
+export function compareMeasurementKeys(a: string, b: string): number {
+  const order = (key: string): number => {
+    const index = MEASUREMENT_PARTS.findIndex((part) => part.key === key);
+    return index === -1 ? MEASUREMENT_PARTS.length : index;
+  };
+  return order(a) - order(b) || a.localeCompare(b);
+}
+
+/** 这些记录里出现过的全部围度部位，按统一顺序排列 */
+export function measurementKeysOf(records: readonly BodyMetric[]): string[] {
+  const keys = new Set<string>();
+  for (const record of records) {
+    for (const key of Object.keys(record.measurements)) keys.add(key);
+  }
+  return [...keys].sort(compareMeasurementKeys);
+}
 export interface BodyEntry {
   key: string;
   label: string;
@@ -157,14 +219,7 @@ export function bodyEntries(record: BodyMetric): BodyEntry[] {
       entries.push({ key: field.key, label: field.label, unit: field.unit, value });
     }
   }
-  // 内置部位按定义顺序，自定义部位排在其后并按字母序，位置稳定
-  const order = (key: string): number => {
-    const index = MEASUREMENT_PARTS.findIndex((part) => part.key === key);
-    return index === -1 ? MEASUREMENT_PARTS.length : index;
-  };
-  const keys = Object.keys(record.measurements).sort(
-    (a, b) => order(a) - order(b) || a.localeCompare(b),
-  );
+  const keys = Object.keys(record.measurements).sort(compareMeasurementKeys);
   for (const key of keys) {
     const value = readMetric(record.measurements[key], 'measurement');
     if (value === undefined) continue;
@@ -181,13 +236,13 @@ export function measurementFields(record?: BodyMetric): BodyFieldMeta[] {
   const known = new Set(MEASUREMENT_PARTS.map((part) => part.key));
   const extra = Object.keys(record?.measurements ?? {})
     .filter((key) => !known.has(key))
-    .sort((a, b) => a.localeCompare(b))
+    .sort(compareMeasurementKeys)
     .map((key) => ({
       key,
       label: key,
       unit: 'cm',
       step: 0.5,
-      min: 0,
+      min: MIN_BODY_READING,
       max: MAX_BODY_READING,
     }));
   return [...MEASUREMENT_PARTS, ...extra];
