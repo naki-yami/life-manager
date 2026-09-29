@@ -11,6 +11,8 @@ import { useWritingStore } from '../store/writingStore';
 import { useFitnessStore } from '../store/fitnessStore';
 import { useDietStore } from '../store/dietStore';
 import { useGameStore } from '../store/gameStore';
+import { DASHBOARD_WIDGET_IDS, DEFAULT_DASHBOARD, useUiStore } from '../store/uiStore';
+import { STORAGE_KEYS } from '../utils/storageKeys';
 import { todayKey } from '../utils/date';
 
 const renderHome = () =>
@@ -31,7 +33,12 @@ beforeEach(() => {
   useFitnessStore.setState({ plans: [], records: [] });
   useDietStore.setState({ records: [] });
   useGameStore.setState({ games: [] });
+  useUiStore.setState({ dashboard: DEFAULT_DASHBOARD.map((widget) => ({ ...widget })) });
 });
+
+/** 仪表盘栅格；页面里可能还有卡片内部的列表，取文档顺序里的第一个 */
+const dashboardList = (): HTMLElement => screen.getAllByRole('list')[0]!;
+const dashboardItems = (): HTMLElement[] => within(dashboardList()).getAllByRole('listitem');
 
 describe('HomePage', () => {
   it('统计卡片反映真实数据', () => {
@@ -229,5 +236,141 @@ describe('HomePage', () => {
 
     expect(screen.queryByText('备忘条')).not.toBeInTheDocument();
     expect(screen.getByText('0 条 · 回车即可保存')).toBeInTheDocument();
+  });
+});
+
+describe('HomePage 仪表盘', () => {
+  it('按 lm:ui 里保存的顺序与条目渲染卡片', () => {
+    useUiStore.setState({
+      dashboard: [
+        { id: 'modules', size: 'lg', hidden: false },
+        { id: 'capture', size: 'md', hidden: false },
+      ],
+    });
+
+    renderHome();
+
+    const items = dashboardItems();
+    expect(items).toHaveLength(2);
+    expect(items[0]).toHaveTextContent('模块概览');
+    expect(items[1]).toHaveTextContent('快速添加任务');
+  });
+
+  it('宽度档位映射到 12 栏栅格，窄屏单列', () => {
+    useUiStore.setState({
+      dashboard: [
+        { id: 'todos', size: 'sm', hidden: false },
+        { id: 'capture', size: 'md', hidden: false },
+        { id: 'stats', size: 'lg', hidden: false },
+      ],
+    });
+
+    renderHome();
+
+    expect(dashboardList()).toHaveClass('grid-cols-1', 'lg:grid-cols-12');
+
+    const items = dashboardItems();
+    expect(items[0]).toHaveClass('lg:col-span-4');
+    expect(items[1]).toHaveClass('lg:col-span-8');
+    expect(items[2]).toHaveClass('lg:col-span-12');
+  });
+
+  it('「编辑布局」进入编辑态：出现拖拽手柄与宽度控件，没数据的卡片也显示出来', async () => {
+    renderHome();
+
+    const enter = screen.getByRole('button', { name: '编辑布局' });
+    expect(enter).toHaveAttribute('aria-pressed', 'false');
+    // 浏览态：没有活动数据就不显示热力图卡片
+    expect(screen.queryByText('近 30 天活动暂无数据')).not.toBeInTheDocument();
+
+    await userEvent.click(enter);
+
+    const exit = screen.getByRole('button', { name: '完成编辑' });
+    expect(exit).toHaveAttribute('aria-pressed', 'true');
+    expect(
+      screen.getByRole('button', { name: '拖动「快速添加任务」调整顺序' }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: '「今日待办」的宽度' })).toBeInTheDocument();
+    // 编辑态渲染占位卡，否则用户没法把一张暂时没数据的卡片拖走或隐藏
+    expect(screen.getByText('近 30 天活动暂无数据')).toBeInTheDocument();
+
+    await userEvent.click(exit);
+    expect(
+      screen.queryByRole('button', { name: '拖动「快速添加任务」调整顺序' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('隐藏卡片后内容消失、写进 lm:ui，还能从「已隐藏」里点回来', async () => {
+    renderHome();
+    expect(screen.getByRole('textbox', { name: '备忘内容' })).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: '编辑布局' }));
+    await userEvent.click(screen.getByRole('button', { name: '隐藏「快速备忘」' }));
+
+    expect(screen.queryByRole('textbox', { name: '备忘内容' })).not.toBeInTheDocument();
+    expect(useUiStore.getState().dashboard.find((widget) => widget.id === 'memos')?.hidden).toBe(
+      true,
+    );
+
+    const raw = localStorage.getItem(STORAGE_KEYS.ui);
+    const persisted = JSON.parse(raw ?? '{}') as {
+      state?: { dashboard?: Array<{ id: string; hidden: boolean }> };
+    };
+    expect(persisted.state?.dashboard?.find((widget) => widget.id === 'memos')?.hidden).toBe(true);
+
+    await userEvent.click(screen.getByRole('button', { name: '快速备忘' }));
+    expect(screen.getByRole('textbox', { name: '备忘内容' })).toBeInTheDocument();
+  });
+
+  it('改宽度会写进 lm:ui 并作用到栅格', async () => {
+    renderHome();
+    await userEvent.click(screen.getByRole('button', { name: '编辑布局' }));
+
+    await userEvent.click(
+      within(screen.getByRole('group', { name: '「快速添加任务」的宽度' })).getByRole('button', {
+        name: '宽',
+      }),
+    );
+
+    expect(useUiStore.getState().dashboard.find((widget) => widget.id === 'capture')?.size).toBe(
+      'lg',
+    );
+
+    const captureItem = dashboardItems().find((item) =>
+      (item.textContent ?? '').includes('快速添加任务'),
+    )!;
+    expect(captureItem).toHaveClass('lg:col-span-12');
+  });
+
+  it('「恢复默认布局」把顺序、宽度、隐藏一起还原', async () => {
+    useUiStore.setState({
+      dashboard: [
+        { id: 'todos', size: 'sm', hidden: true },
+        { id: 'capture', size: 'sm', hidden: false },
+      ],
+    });
+
+    renderHome();
+    await userEvent.click(screen.getByRole('button', { name: '编辑布局' }));
+    await userEvent.click(screen.getByRole('button', { name: '恢复默认布局' }));
+
+    expect(useUiStore.getState().dashboard).toHaveLength(DASHBOARD_WIDGET_IDS.length);
+
+    const titles = dashboardItems().map((item) => item.textContent ?? '');
+    expect(titles).toHaveLength(DASHBOARD_WIDGET_IDS.length);
+    expect(titles[0]).toContain('概览统计');
+    expect(titles.filter((text) => text.includes('快速备忘'))).toHaveLength(1);
+  });
+
+  it('所有卡片都被隐藏时给出恢复指引', () => {
+    useUiStore.setState({
+      dashboard: DEFAULT_DASHBOARD.map((widget) => ({ ...widget, hidden: true })),
+    });
+
+    renderHome();
+
+    expect(
+      screen.getByText('所有卡片都被隐藏了，点右上角「编辑布局」可以恢复。'),
+    ).toBeInTheDocument();
   });
 });

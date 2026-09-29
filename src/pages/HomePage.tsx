@@ -7,6 +7,7 @@ import {
   Dumbbell,
   Flame,
   Gamepad2,
+  LayoutDashboard,
   ListPlus,
   ListTodo,
   NotebookPen,
@@ -32,6 +33,7 @@ import {
   StatCard,
 } from '../components/ui';
 import { PageHeader } from '../components/layout';
+import { DashboardGrid, type DashboardWidgetView } from '../components/dashboard';
 import { useUndoableRemove } from '../hooks/useUndoableRemove';
 import { Heatmap, Sparkline } from '../components/charts';
 import { useTaskStore } from '../store/taskStore';
@@ -41,6 +43,7 @@ import { useWritingStore } from '../store/writingStore';
 import { useFitnessStore } from '../store/fitnessStore';
 import { useDietStore } from '../store/dietStore';
 import { useGameStore } from '../store/gameStore';
+import { useUiStore } from '../store/uiStore';
 import { daysBetween, formatLongDate, formatNumber, greeting, todayKey } from '../utils/date';
 import {
   changeRate,
@@ -103,8 +106,16 @@ interface ModuleCard {
 
 export const HomePage: React.FC = () => {
   const navigate = useNavigate();
-  const { tasks, memos, addMemo, deleteMemo, toggleTaskStatus, replaceMemos, addTask, replaceTasks } =
-    useTaskStore();
+  const {
+    tasks,
+    memos,
+    addMemo,
+    deleteMemo,
+    toggleTaskStatus,
+    replaceMemos,
+    addTask,
+    replaceTasks,
+  } = useTaskStore();
   const undoableRemove = useUndoableRemove();
   const books = useBookStore((state) => state.books);
   const devProjects = useDevStore((state) => state.projects);
@@ -113,9 +124,17 @@ export const HomePage: React.FC = () => {
   const mealRecords = useDietStore((state) => state.records);
   const games = useGameStore((state) => state.games);
 
+  // 仪表盘排布存在 lm:ui 里，这里只读出来渲染
+  const dashboard = useUiStore((state) => state.dashboard);
+  const moveDashboardWidget = useUiStore((state) => state.moveDashboardWidget);
+  const setWidgetSize = useUiStore((state) => state.setWidgetSize);
+  const setWidgetHidden = useUiStore((state) => state.setWidgetHidden);
+  const resetDashboard = useUiStore((state) => state.resetDashboard);
+
   const [memoInput, setMemoInput] = useState('');
   const [memoError, setMemoError] = useState<string | undefined>();
   const [quickInput, setQuickInput] = useState('');
+  const [editingLayout, setEditingLayout] = useState(false);
   const today = todayKey();
 
   /** 完成任务 / 训练 / 饮食任意一条都算一次活动，用来喂热力图与环比 */
@@ -249,106 +268,106 @@ export const HomePage: React.FC = () => {
     setMemoError(undefined);
   };
 
-  return (
-    <div className="space-y-section">
-      <PageHeader
-        title={`${greeting()} 👋`}
-        description={`今天是 ${formatLongDate()} · ${
-          pendingTasks.length > 0
-            ? `今天有 ${pendingTasks.length} 件事待办${
-                urgentTasks.length > 0 ? `，其中 ${urgentTasks.length} 件紧急` : ''
-              }`
-            : '今天暂无待办，可以安排点想做的事'
-        }`}
-        actions={
-          <Button variant="secondary" onClick={() => navigate('/tasks')}>
-            管理今日计划
-          </Button>
-        }
-      />
-
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <StatCard
-          label="待办任务"
-          value={pendingTasks.length}
-          tone="accent"
-          icon={<ListTodo size={16} aria-hidden />}
-          footer={`已完成 ${completedCount} 项`}
-        />
-        {dueTodayTasks.length > 0 ? (
+  /**
+   * 仪表盘卡片。顺序、宽度、是否隐藏由 `lm:ui` 决定，这里只负责「每张卡片长什么样」。
+   * content 为 null 表示当前没数据 —— 平时不占位，进编辑态会渲染成占位卡（见 DashboardGrid）。
+   */
+  const widgetViews: DashboardWidgetView[] = [
+    {
+      id: 'stats',
+      title: '概览统计',
+      content: (
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
           <StatCard
-            label="今日完成率"
-            value={Math.round((dueTodayDone / dueTodayTasks.length) * 100)}
-            unit="%"
-            tone="success"
-            icon={<CheckCircle2 size={16} aria-hidden />}
-            footer={`今日到期 ${dueTodayDone}/${dueTodayTasks.length}`}
+            label="待办任务"
+            value={pendingTasks.length}
+            tone="accent"
+            icon={<ListTodo size={16} aria-hidden />}
+            footer={`已完成 ${completedCount} 项`}
           />
-        ) : (
+          {dueTodayTasks.length > 0 ? (
+            <StatCard
+              label="今日完成率"
+              value={Math.round((dueTodayDone / dueTodayTasks.length) * 100)}
+              unit="%"
+              tone="success"
+              icon={<CheckCircle2 size={16} aria-hidden />}
+              footer={`今日到期 ${dueTodayDone}/${dueTodayTasks.length}`}
+            />
+          ) : (
+            <StatCard
+              label="今日完成率"
+              value={completedToday}
+              unit="项"
+              tone="success"
+              icon={<CheckCircle2 size={16} aria-hidden />}
+              footer="今天没有到期任务"
+            />
+          )}
           <StatCard
-            label="今日完成率"
-            value={completedToday}
+            label="连续打卡"
+            value={streak}
+            unit="天"
+            tone={streak > 0 ? 'warning' : 'default'}
+            icon={<Flame size={16} aria-hidden />}
+            footer="完成任务/训练/饮食都算"
+          />
+          <StatCard
+            label="近 7 天完成"
+            value={weekCompletion.current}
             unit="项"
             tone="success"
-            icon={<CheckCircle2 size={16} aria-hidden />}
-            footer="今天没有到期任务"
+            icon={<TrendingUp size={16} aria-hidden />}
+            trend={{ value: completionChange, label: '较上一周' }}
+            footer={
+              <Sparkline
+                data={completionSeries.map((point) => point.value)}
+                label="近 14 天每日完成任务数趋势"
+                tone="success"
+                height={24}
+              />
+            }
           />
-        )}
-        <StatCard
-          label="连续打卡"
-          value={streak}
-          unit="天"
-          tone={streak > 0 ? 'warning' : 'default'}
-          icon={<Flame size={16} aria-hidden />}
-          footer="完成任务/训练/饮食都算"
-        />
-        <StatCard
-          label="近 7 天完成"
-          value={weekCompletion.current}
-          unit="项"
-          tone="success"
-          icon={<TrendingUp size={16} aria-hidden />}
-          trend={{ value: completionChange, label: '较上一周' }}
-          footer={
-            <Sparkline
-              data={completionSeries.map((point) => point.value)}
-              label="近 14 天每日完成任务数趋势"
-              tone="success"
-              height={24}
-            />
-          }
-        />
-      </div>
-
-      <Card>
-        <CardHeader title="快速添加任务" subtitle="支持语法：写周报 !高 @今天" />
-        <CardBody>
-          <div className="flex items-start gap-2">
-            <div className="min-w-0 flex-1">
-              <Input
-                aria-label="快速添加任务"
-                value={quickInput}
-                onChange={(event) => setQuickInput(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter' && !event.shiftKey) {
-                    event.preventDefault();
-                    handleAddQuickTask();
-                  }
-                }}
-                placeholder="写周报 !高 @今天（!高/!中/!低 设优先级，@今天/@明天/@日期 设截止）"
+        </div>
+      ),
+    },
+    {
+      id: 'capture',
+      title: '快速添加任务',
+      content: (
+        <Card>
+          <CardHeader title="快速添加任务" subtitle="支持语法：写周报 !高 @今天" />
+          <CardBody>
+            <div className="flex items-start gap-2">
+              <div className="min-w-0 flex-1">
+                <Input
+                  aria-label="快速添加任务"
+                  value={quickInput}
+                  onChange={(event) => setQuickInput(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' && !event.shiftKey) {
+                      event.preventDefault();
+                      handleAddQuickTask();
+                    }
+                  }}
+                  placeholder="写周报 !高 @今天（!高/!中/!低 设优先级，@今天/@明天/@日期 设截止）"
+                />
+              </div>
+              <IconButton
+                label="添加任务"
+                variant="primary"
+                icon={<Plus size={16} />}
+                onClick={handleAddQuickTask}
               />
             </div>
-            <IconButton
-              label="添加任务"
-              variant="primary"
-              icon={<Plus size={16} />}
-              onClick={handleAddQuickTask}
-            />
-          </div>
-        </CardBody>
-      </Card>
-
-      {focusTask && (
+          </CardBody>
+        </Card>
+      ),
+    },
+    {
+      id: 'focus',
+      title: '今日聚焦',
+      content: focusTask ? (
         <Card>
           <CardHeader
             title="今日聚焦"
@@ -393,27 +412,12 @@ export const HomePage: React.FC = () => {
             </div>
           </CardBody>
         </Card>
-      )}
-
-      {activityTotal > 0 && (
-        <Card>
-          <CardHeader
-            title="近 30 天活动"
-            subtitle={`近 7 天 ${weekActivity.current} 次，上一周 ${weekActivity.previous} 次`}
-            action={
-              <Badge tone={activityChange >= 0 ? 'success' : 'default'}>
-                环比 {activityChange >= 0 ? '+' : ''}
-                {activityChange}%
-              </Badge>
-            }
-          />
-          <CardBody>
-            <Heatmap data={activitySeries} label="近 30 天活动热力图" />
-          </CardBody>
-        </Card>
-      )}
-
-      <div className="grid gap-4 lg:grid-cols-2">
+      ) : null,
+    },
+    {
+      id: 'todos',
+      title: '今日待办',
+      content: (
         <Card>
           <CardHeader
             title="今日待办"
@@ -451,7 +455,12 @@ export const HomePage: React.FC = () => {
             )}
           </CardBody>
         </Card>
-
+      ),
+    },
+    {
+      id: 'memos',
+      title: '快速备忘',
+      content: (
         <Card>
           <CardHeader title="快速备忘" subtitle={`${memos.length} 条 · 回车即可保存`} />
           <CardBody>
@@ -526,32 +535,99 @@ export const HomePage: React.FC = () => {
             )}
           </CardBody>
         </Card>
-      </div>
-
-      <section>
-        <h2 className="mb-3 text-lg font-semibold text-content">模块概览</h2>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {moduleCards.map((module) => {
-            const Icon = module.icon;
-            return (
-              <Card key={module.path} onClick={() => navigate(module.path)} className="p-4">
-                <div className="flex items-center gap-3">
-                  <span
-                    className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${TONE_CLASS[module.tone]}`}
-                  >
-                    <Icon size={20} aria-hidden />
-                  </span>
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-content">{module.label}</p>
-                    <p className="truncate text-xs text-content-secondary">{module.stat}</p>
-                    <p className="truncate text-2xs text-content-tertiary">{module.detail}</p>
+      ),
+    },
+    {
+      id: 'activity',
+      title: '近 30 天活动',
+      content:
+        activityTotal > 0 ? (
+          <Card>
+            <CardHeader
+              title="近 30 天活动"
+              subtitle={`近 7 天 ${weekActivity.current} 次，上一周 ${weekActivity.previous} 次`}
+              action={
+                <Badge tone={activityChange >= 0 ? 'success' : 'default'}>
+                  环比 {activityChange >= 0 ? '+' : ''}
+                  {activityChange}%
+                </Badge>
+              }
+            />
+            <CardBody>
+              <Heatmap data={activitySeries} label="近 30 天活动热力图" />
+            </CardBody>
+          </Card>
+        ) : null,
+    },
+    {
+      id: 'modules',
+      title: '模块概览',
+      content: (
+        <section>
+          <h2 className="mb-3 text-lg font-semibold text-content">模块概览</h2>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {moduleCards.map((module) => {
+              const Icon = module.icon;
+              return (
+                <Card key={module.path} onClick={() => navigate(module.path)} className="p-4">
+                  <div className="flex items-center gap-3">
+                    <span
+                      className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${TONE_CLASS[module.tone]}`}
+                    >
+                      <Icon size={20} aria-hidden />
+                    </span>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-content">{module.label}</p>
+                      <p className="truncate text-xs text-content-secondary">{module.stat}</p>
+                      <p className="truncate text-2xs text-content-tertiary">{module.detail}</p>
+                    </div>
                   </div>
-                </div>
-              </Card>
-            );
-          })}
-        </div>
-      </section>
+                </Card>
+              );
+            })}
+          </div>
+        </section>
+      ),
+    },
+  ];
+
+  return (
+    <div className="space-y-section">
+      <PageHeader
+        title={`${greeting()} 👋`}
+        description={`今天是 ${formatLongDate()} · ${
+          pendingTasks.length > 0
+            ? `今天有 ${pendingTasks.length} 件事待办${
+                urgentTasks.length > 0 ? `，其中 ${urgentTasks.length} 件紧急` : ''
+              }`
+            : '今天暂无待办，可以安排点想做的事'
+        }`}
+        actions={
+          <>
+            <Button
+              variant="secondary"
+              icon={<LayoutDashboard size={16} aria-hidden />}
+              aria-pressed={editingLayout}
+              onClick={() => setEditingLayout((previous) => !previous)}
+            >
+              {editingLayout ? '完成编辑' : '编辑布局'}
+            </Button>
+            <Button variant="secondary" onClick={() => navigate('/tasks')}>
+              管理今日计划
+            </Button>
+          </>
+        }
+      />
+
+      <DashboardGrid
+        widgets={dashboard}
+        views={widgetViews}
+        editing={editingLayout}
+        onMove={moveDashboardWidget}
+        onResize={setWidgetSize}
+        onHide={setWidgetHidden}
+        onReset={resetDashboard}
+      />
     </div>
   );
 };

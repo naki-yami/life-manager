@@ -2,7 +2,7 @@ import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { STORAGE_KEYS } from '../utils/storageKeys';
 import { prefersDark, resolveThemeMode, useThemeStore } from './themeStore';
-import { useUiStore } from './uiStore';
+import { DEFAULT_DASHBOARD, useUiStore } from './uiStore';
 import { useTheme } from '../hooks/useTheme';
 import { useDensity } from '../hooks/useDensity';
 
@@ -31,7 +31,11 @@ function persistedState(key: string): Record<string, unknown> | null {
 
 beforeEach(() => {
   useThemeStore.setState({ themeMode: 'system' });
-  useUiStore.setState({ sidebarCollapsed: false, density: 'comfortable' });
+  useUiStore.setState({
+    sidebarCollapsed: false,
+    density: 'comfortable',
+    dashboard: DEFAULT_DASHBOARD.map((widget) => ({ ...widget })),
+  });
 });
 
 afterEach(() => {
