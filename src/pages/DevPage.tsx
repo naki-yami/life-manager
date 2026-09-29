@@ -35,7 +35,7 @@ import {
   TagInput,
   Textarea,
 } from '../components/ui';
-import { PageHeader, Toolbar } from '../components/layout';
+import { MasterDetail, PageHeader, Toolbar } from '../components/layout';
 import { BarChart } from '../components/charts';
 import { useDevStore } from '../store/devStore';
 import { useUndoableRemove } from '../hooks/useUndoableRemove';
@@ -319,6 +319,10 @@ export const DevPage: React.FC = () => {
     setEditingProjectId(project.id);
   };
 
+  const closeEditModal = (): void => {
+    setEditingProjectId(null);
+  };
+
   const handleSaveEdit = (): void => {
     if (!editingProjectId || !editForm.name.trim()) return;
     updateProject(editingProjectId, {
@@ -481,233 +485,309 @@ export const DevPage: React.FC = () => {
         </Card>
       )}
 
-      <Toolbar
-        search={{ value: keyword, onChange: setKeyword, placeholder: '搜索项目、任务或标签…' }}
-        actions={
-          <SegmentedControl
-            label="按项目状态筛选"
-            value={filter}
-            onChange={setFilter}
-            options={FILTER_OPTIONS.map((option) => ({
-              ...option,
-              count:
-                option.value === 'all'
-                  ? projects.filter((project) => !project.archived).length
-                  : option.value === 'archived'
-                    ? projects.filter((project) => project.archived).length
-                    : projects.filter(
-                        (project) => !project.archived && project.status === option.value,
-                      ).length,
-            }))}
+      <MasterDetail
+        detailTitle={editingProject ? `编辑「${editingProject.name}」` : '编辑项目'}
+        detailOpen={editingProject !== null}
+        onCloseDetail={closeEditModal}
+        drawerWidth="lg"
+        emptyDetail={
+          <EmptyState
+            icon={<Pencil size={20} aria-hidden />}
+            title="还没有选中项目"
+            description="点左边任意一个项目的「编辑」，就能在这里改技术栈、仓库地址和标签。"
+            className="py-6"
           />
         }
-      />
+        detail={
+          editingProject ? (
+            <div className="space-y-4">
+              <Input
+                label="项目名称"
+                value={editForm.name}
+                onChange={(event) => setEditForm({ ...editForm, name: event.target.value })}
+                required
+              />
+              <Input
+                label="描述"
+                value={editForm.description}
+                onChange={(event) => setEditForm({ ...editForm, description: event.target.value })}
+                placeholder="项目描述（可选）"
+                multiline
+                rows={3}
+              />
+              <Input
+                label="技术栈"
+                value={editForm.techStack}
+                onChange={(event) => setEditForm({ ...editForm, techStack: event.target.value })}
+                placeholder="用逗号分隔，如：React, TypeScript"
+              />
+              <Input
+                label="仓库地址"
+                value={editForm.repoUrl}
+                onChange={(event) => setEditForm({ ...editForm, repoUrl: event.target.value })}
+                placeholder="https://github.com/…（可选）"
+              />
+              <TagInput
+                label="标签"
+                hint="回车或逗号分隔；标签跨模块通用，可在命令面板里输入 #标签 直接找"
+                value={editForm.tags}
+                suggestions={tagSuggestions}
+                onChange={(tags) => setEditForm({ ...editForm, tags })}
+              />
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Input
+                  label="开始日期"
+                  type="date"
+                  value={editForm.startDate}
+                  onChange={(event) => setEditForm({ ...editForm, startDate: event.target.value })}
+                />
+                <Input
+                  label="结束日期"
+                  type="date"
+                  value={editForm.endDate}
+                  onChange={(event) => setEditForm({ ...editForm, endDate: event.target.value })}
+                />
+              </div>
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                <Button variant="secondary" onClick={closeEditModal}>
+                  取消
+                </Button>
+                <Button onClick={handleSaveEdit} disabled={!editForm.name.trim()}>
+                  保存
+                </Button>
+              </div>
+            </div>
+          ) : null
+        }
+      >
+        <Toolbar
+          search={{ value: keyword, onChange: setKeyword, placeholder: '搜索项目、任务或标签…' }}
+          actions={
+            <SegmentedControl
+              label="按项目状态筛选"
+              value={filter}
+              onChange={setFilter}
+              options={FILTER_OPTIONS.map((option) => ({
+                ...option,
+                count:
+                  option.value === 'all'
+                    ? projects.filter((project) => !project.archived).length
+                    : option.value === 'archived'
+                      ? projects.filter((project) => project.archived).length
+                      : projects.filter(
+                          (project) => !project.archived && project.status === option.value,
+                        ).length,
+              }))}
+            />
+          }
+        />
 
-      {visibleProjects.length === 0 ? (
-        <Card>{emptyState}</Card>
-      ) : (
-        <ul className="space-y-4">
-          {visibleProjects.map((project) => {
-            const isExpanded = expanded.has(project.id);
-            const done = project.tasks.filter((task) => task.status === 'done').length;
-            const percent =
-              project.tasks.length === 0 ? 0 : Math.round((done / project.tasks.length) * 100);
-            const stalledDays = stalledDaysOf(project);
+        {visibleProjects.length === 0 ? (
+          <Card>{emptyState}</Card>
+        ) : (
+          <ul className="space-y-4">
+            {visibleProjects.map((project) => {
+              const isExpanded = expanded.has(project.id);
+              const done = project.tasks.filter((task) => task.status === 'done').length;
+              const percent =
+                project.tasks.length === 0 ? 0 : Math.round((done / project.tasks.length) * 100);
+              const stalledDays = stalledDaysOf(project);
 
-            return (
-              <li key={project.id}>
-                <Card>
-                  <div className="flex items-start gap-2 p-4">
-                    <IconButton
-                      label={isExpanded ? `收起「${project.name}」` : `展开「${project.name}」`}
-                      size="sm"
-                      aria-expanded={isExpanded}
-                      icon={isExpanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
-                      onClick={() => toggleExpand(project.id)}
-                    />
+              return (
+                <li key={project.id}>
+                  <Card>
+                    <div className="flex items-start gap-2 p-4">
+                      <IconButton
+                        label={isExpanded ? `收起「${project.name}」` : `展开「${project.name}」`}
+                        size="sm"
+                        aria-expanded={isExpanded}
+                        icon={isExpanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
+                        onClick={() => toggleExpand(project.id)}
+                      />
 
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Link
-                          to={`/dev/${project.id}`}
-                          className="font-semibold text-content hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-line-focus"
-                        >
-                          {project.name}
-                        </Link>
-                        <Badge tone={PROJECT_STATUS_TONE[project.status]} dot>
-                          {PROJECT_STATUS_LABEL[project.status]}
-                        </Badge>
-                        {stalledDays !== null && (
-                          <Badge tone="warning">停滞 {stalledDays} 天</Badge>
-                        )}
-                      </div>
-                      {project.description && (
-                        <p className="mt-0.5 text-sm text-content-tertiary">
-                          {project.description}
-                        </p>
-                      )}
-
-                      {(project.techStack.length > 0 || project.repoUrl) && (
-                        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                          {project.techStack.map((tech) => (
-                            <Badge key={tech} tone="default">
-                              {tech}
-                            </Badge>
-                          ))}
-                          {project.repoUrl && (
-                            <a
-                              href={project.repoUrl}
-                              target="_blank"
-                              rel="noreferrer"
-                              aria-label={`打开「${project.name}」的仓库地址`}
-                              className="inline-flex items-center gap-1 text-xs text-accent hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-line-focus"
-                            >
-                              <ExternalLink size={12} aria-hidden />
-                              仓库
-                            </a>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Link
+                            to={`/dev/${project.id}`}
+                            className="font-semibold text-content hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-line-focus"
+                          >
+                            {project.name}
+                          </Link>
+                          <Badge tone={PROJECT_STATUS_TONE[project.status]} dot>
+                            {PROJECT_STATUS_LABEL[project.status]}
+                          </Badge>
+                          {stalledDays !== null && (
+                            <Badge tone="warning">停滞 {stalledDays} 天</Badge>
                           )}
                         </div>
-                      )}
+                        {project.description && (
+                          <p className="mt-0.5 text-sm text-content-tertiary">
+                            {project.description}
+                          </p>
+                        )}
 
-                      <div className="mt-1.5">
-                        <TagEditor
-                          tags={project.tags}
-                          suggestions={tagSuggestions}
-                          onChange={(tags) => updateProject(project.id, { tags })}
-                        />
-                      </div>
-
-                      <div className="mt-3 flex flex-wrap items-center gap-3">
-                        <ProgressBar
-                          className="min-w-40 flex-1"
-                          value={percent}
-                          showValue
-                          label={`任务完成 ${done}/${project.tasks.length}`}
-                          tone={percent === 100 ? 'success' : 'accent'}
-                        />
-                        <span className="text-xs text-content-tertiary tabular">
-                          累计 {formatNumber(project.hoursSpent)} 小时
-                        </span>
-                        <Select
-                          aria-label={`调整「${project.name}」的状态`}
-                          className="w-32"
-                          value={project.status}
-                          onChange={(value) =>
-                            updateProjectStatus(project.id, value as DevProjectStatus)
-                          }
-                          options={PROJECT_STATUS_OPTIONS}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="flex shrink-0 gap-0.5">
-                      <IconButton
-                        label={`给「${project.name}」添加任务`}
-                        size="sm"
-                        icon={<Plus size={16} />}
-                        onClick={() => {
-                          setTaskForm({ title: '', priority: 'medium', type: 'feature' });
-                          setTaskProjectId(project.id);
-                        }}
-                      />
-                      <IconButton
-                        label={`记录「${project.name}」的工时`}
-                        size="sm"
-                        icon={<Clock size={15} />}
-                        onClick={() => openSessionModal(project.id)}
-                      />
-                      <IconButton
-                        label={`编辑「${project.name}」`}
-                        size="sm"
-                        icon={<Pencil size={14} />}
-                        onClick={() => openEditModal(project)}
-                      />
-                      <IconButton
-                        label={
-                          project.archived
-                            ? `取消归档「${project.name}」`
-                            : `归档「${project.name}」`
-                        }
-                        size="sm"
-                        icon={
-                          project.archived ? <ArchiveRestore size={14} /> : <Archive size={14} />
-                        }
-                        onClick={() => toggleArchived(project)}
-                      />
-                      <IconButton
-                        label={`删除项目「${project.name}」`}
-                        size="sm"
-                        icon={<Trash2 size={15} />}
-                        onClick={() => setPendingDeleteProjectId(project.id)}
-                        className="hover:text-danger"
-                      />
-                    </div>
-                  </div>
-
-                  {isExpanded && (
-                    <div className="border-t border-line-subtle p-4">
-                      {project.tasks.length === 0 ? (
-                        <EmptyState
-                          title="这个项目还没有任务"
-                          description="拆成几条具体的事，推进起来更有数。"
-                          className="py-4"
-                        />
-                      ) : (
-                        <ul className="space-y-2">
-                          {project.tasks.map((task) => (
-                            <li
-                              key={task.id}
-                              className="flex items-center gap-3 rounded bg-inset px-3 py-2"
-                            >
-                              <Badge tone={ITEM_TYPE_TONE[task.type]}>
-                                {ITEM_TYPE_LABEL[task.type]}
+                        {(project.techStack.length > 0 || project.repoUrl) && (
+                          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                            {project.techStack.map((tech) => (
+                              <Badge key={tech} tone="default">
+                                {tech}
                               </Badge>
-                              <span
-                                className={`min-w-0 flex-1 truncate text-sm ${
-                                  task.status === 'done'
-                                    ? 'text-content-tertiary line-through'
-                                    : 'text-content-secondary'
-                                }`}
+                            ))}
+                            {project.repoUrl && (
+                              <a
+                                href={project.repoUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                aria-label={`打开「${project.name}」的仓库地址`}
+                                className="inline-flex items-center gap-1 text-xs text-accent hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-line-focus"
                               >
-                                {task.title}
-                              </span>
-                              <Select
-                                aria-label={`调整任务「${task.title}」的状态`}
-                                className="w-28"
-                                value={task.status}
-                                onChange={(value) =>
-                                  updateTaskStatus(project.id, task.id, value as DevTaskStatus)
-                                }
-                                options={TASK_STATUS_OPTIONS}
-                              />
-                              <IconButton
-                                label={`删除任务「${task.title}」`}
-                                size="sm"
-                                icon={<Trash2 size={14} />}
-                                onClick={() => {
-                                  const snapshot = projects;
-                                  deleteTask(project.id, task.id);
-                                  undoableRemove({
-                                    message: `已删除任务「${task.title}」`,
-                                    description: '点「撤销」可以恢复。',
-                                    snapshot,
-                                    restore: replaceProjects,
-                                  });
-                                }}
-                                className="hover:text-danger"
-                              />
-                            </li>
-                          ))}
-                        </ul>
-                      )}
+                                <ExternalLink size={12} aria-hidden />
+                                仓库
+                              </a>
+                            )}
+                          </div>
+                        )}
+
+                        <div className="mt-1.5">
+                          <TagEditor
+                            tags={project.tags}
+                            suggestions={tagSuggestions}
+                            onChange={(tags) => updateProject(project.id, { tags })}
+                          />
+                        </div>
+
+                        <div className="mt-3 flex flex-wrap items-center gap-3">
+                          <ProgressBar
+                            className="min-w-40 flex-1"
+                            value={percent}
+                            showValue
+                            label={`任务完成 ${done}/${project.tasks.length}`}
+                            tone={percent === 100 ? 'success' : 'accent'}
+                          />
+                          <span className="text-xs text-content-tertiary tabular">
+                            累计 {formatNumber(project.hoursSpent)} 小时
+                          </span>
+                          <Select
+                            aria-label={`调整「${project.name}」的状态`}
+                            className="w-32"
+                            value={project.status}
+                            onChange={(value) =>
+                              updateProjectStatus(project.id, value as DevProjectStatus)
+                            }
+                            options={PROJECT_STATUS_OPTIONS}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex shrink-0 gap-0.5">
+                        <IconButton
+                          label={`给「${project.name}」添加任务`}
+                          size="sm"
+                          icon={<Plus size={16} />}
+                          onClick={() => {
+                            setTaskForm({ title: '', priority: 'medium', type: 'feature' });
+                            setTaskProjectId(project.id);
+                          }}
+                        />
+                        <IconButton
+                          label={`记录「${project.name}」的工时`}
+                          size="sm"
+                          icon={<Clock size={15} />}
+                          onClick={() => openSessionModal(project.id)}
+                        />
+                        <IconButton
+                          label={`编辑「${project.name}」`}
+                          size="sm"
+                          icon={<Pencil size={14} />}
+                          onClick={() => openEditModal(project)}
+                        />
+                        <IconButton
+                          label={
+                            project.archived
+                              ? `取消归档「${project.name}」`
+                              : `归档「${project.name}」`
+                          }
+                          size="sm"
+                          icon={
+                            project.archived ? <ArchiveRestore size={14} /> : <Archive size={14} />
+                          }
+                          onClick={() => toggleArchived(project)}
+                        />
+                        <IconButton
+                          label={`删除项目「${project.name}」`}
+                          size="sm"
+                          icon={<Trash2 size={15} />}
+                          onClick={() => setPendingDeleteProjectId(project.id)}
+                          className="hover:text-danger"
+                        />
+                      </div>
                     </div>
-                  )}
-                </Card>
-              </li>
-            );
-          })}
-        </ul>
-      )}
+
+                    {isExpanded && (
+                      <div className="border-t border-line-subtle p-4">
+                        {project.tasks.length === 0 ? (
+                          <EmptyState
+                            title="这个项目还没有任务"
+                            description="拆成几条具体的事，推进起来更有数。"
+                            className="py-4"
+                          />
+                        ) : (
+                          <ul className="space-y-2">
+                            {project.tasks.map((task) => (
+                              <li
+                                key={task.id}
+                                className="flex items-center gap-3 rounded bg-inset px-3 py-2"
+                              >
+                                <Badge tone={ITEM_TYPE_TONE[task.type]}>
+                                  {ITEM_TYPE_LABEL[task.type]}
+                                </Badge>
+                                <span
+                                  className={`min-w-0 flex-1 truncate text-sm ${
+                                    task.status === 'done'
+                                      ? 'text-content-tertiary line-through'
+                                      : 'text-content-secondary'
+                                  }`}
+                                >
+                                  {task.title}
+                                </span>
+                                <Select
+                                  aria-label={`调整任务「${task.title}」的状态`}
+                                  className="w-28"
+                                  value={task.status}
+                                  onChange={(value) =>
+                                    updateTaskStatus(project.id, task.id, value as DevTaskStatus)
+                                  }
+                                  options={TASK_STATUS_OPTIONS}
+                                />
+                                <IconButton
+                                  label={`删除任务「${task.title}」`}
+                                  size="sm"
+                                  icon={<Trash2 size={14} />}
+                                  onClick={() => {
+                                    const snapshot = projects;
+                                    deleteTask(project.id, task.id);
+                                    undoableRemove({
+                                      message: `已删除任务「${task.title}」`,
+                                      description: '点「撤销」可以恢复。',
+                                      snapshot,
+                                      restore: replaceProjects,
+                                    });
+                                  }}
+                                  className="hover:text-danger"
+                                />
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    )}
+                  </Card>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </MasterDetail>
 
       <Modal
         isOpen={showAddProject}
@@ -744,73 +824,6 @@ export const DevPage: React.FC = () => {
           />
         </div>
       </Modal>
-
-      <Modal
-        isOpen={editingProject !== null}
-        onClose={() => setEditingProjectId(null)}
-        title={editingProject ? `编辑「${editingProject.name}」` : '编辑项目'}
-        footer={
-          <>
-            <Button variant="secondary" onClick={() => setEditingProjectId(null)}>
-              取消
-            </Button>
-            <Button onClick={handleSaveEdit} disabled={!editForm.name.trim()}>
-              保存
-            </Button>
-          </>
-        }
-      >
-        <div className="space-y-4">
-          <Input
-            label="项目名称"
-            value={editForm.name}
-            onChange={(event) => setEditForm({ ...editForm, name: event.target.value })}
-            required
-          />
-          <Input
-            label="描述"
-            value={editForm.description}
-            onChange={(event) => setEditForm({ ...editForm, description: event.target.value })}
-            placeholder="项目描述（可选）"
-            multiline
-            rows={3}
-          />
-          <Input
-            label="技术栈"
-            value={editForm.techStack}
-            onChange={(event) => setEditForm({ ...editForm, techStack: event.target.value })}
-            placeholder="用逗号分隔，如：React, TypeScript"
-          />
-          <Input
-            label="仓库地址"
-            value={editForm.repoUrl}
-            onChange={(event) => setEditForm({ ...editForm, repoUrl: event.target.value })}
-            placeholder="https://github.com/…（可选）"
-          />
-          <TagInput
-            label="标签"
-            hint="回车或逗号分隔；标签跨模块通用，可在命令面板里输入 #标签 直接找"
-            value={editForm.tags}
-            suggestions={tagSuggestions}
-            onChange={(tags) => setEditForm({ ...editForm, tags })}
-          />
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Input
-              label="开始日期"
-              type="date"
-              value={editForm.startDate}
-              onChange={(event) => setEditForm({ ...editForm, startDate: event.target.value })}
-            />
-            <Input
-              label="结束日期"
-              type="date"
-              value={editForm.endDate}
-              onChange={(event) => setEditForm({ ...editForm, endDate: event.target.value })}
-            />
-          </div>
-        </div>
-      </Modal>
-
       <Modal
         isOpen={taskProject !== null}
         onClose={() => setTaskProjectId(null)}

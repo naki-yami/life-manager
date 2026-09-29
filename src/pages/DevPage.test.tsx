@@ -7,6 +7,8 @@ import { DevPage } from './DevPage';
 import { ToastProvider } from '../components/ui';
 import { useDevStore } from '../store/devStore';
 import { todayKey } from '../utils/date';
+import { MASTER_DETAIL_QUERY } from '../components/layout';
+import { mockMediaQueries } from '../test/matchMedia';
 
 beforeEach(() => {
   useDevStore.setState({ projects: [], sessions: [] });
@@ -297,5 +299,71 @@ describe('DevPage 标签', () => {
 
     expect(screen.getByText('记账工具')).toBeInTheDocument();
     expect(screen.queryByText('写作助手')).not.toBeInTheDocument();
+  });
+});
+describe('DevPage 宽屏双栏', () => {
+  const expectWideLayout = (): void => mockMediaQueries({ [MASTER_DETAIL_QUERY]: true });
+  const panel = (name = '编辑项目'): HTMLElement => screen.getByRole('complementary', { name });
+
+  it('宽屏右栏常驻，没选中项目时是占位内容', () => {
+    useDevStore.getState().addProject('写作助手', '');
+    expectWideLayout();
+
+    renderDev();
+
+    expect(within(panel()).getByText('还没有选中项目')).toBeInTheDocument();
+    expect(screen.getByText('写作助手')).toBeInTheDocument();
+  });
+
+  it('点「编辑」在右栏就地改，不再弹对话框', async () => {
+    useDevStore.getState().addProject('写作助手', '');
+    expectWideLayout();
+
+    renderDev();
+    await userEvent.click(screen.getByRole('button', { name: '编辑「写作助手」' }));
+
+    // 焦点没被搬进对话框，项目列表也还在
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.getByText('写作助手')).toBeInTheDocument();
+
+    const aside = panel('编辑「写作助手」');
+    await userEvent.type(within(aside).getByLabelText('技术栈'), 'React, TypeScript');
+    await userEvent.click(within(aside).getByRole('button', { name: '保存' }));
+
+    expect(useDevStore.getState().projects[0]!.techStack).toEqual(['React', 'TypeScript']);
+    expect(screen.getByText('React')).toBeInTheDocument();
+    // 存完右栏回到占位，不留上一条的残影
+    expect(within(panel()).getByText('还没有选中项目')).toBeInTheDocument();
+  });
+
+  it('「取消」只关右栏，不写回 store', async () => {
+    useDevStore.getState().addProject('写作助手', '');
+    expectWideLayout();
+
+    renderDev();
+    await userEvent.click(screen.getByRole('button', { name: '编辑「写作助手」' }));
+
+    const aside = panel('编辑「写作助手」');
+    const nameInput = within(aside).getByLabelText(/^项目名称/);
+    await userEvent.clear(nameInput);
+    await userEvent.type(nameInput, '不该被保存');
+    await userEvent.click(within(aside).getByRole('button', { name: '取消' }));
+
+    expect(within(panel()).getByText('还没有选中项目')).toBeInTheDocument();
+    expect(useDevStore.getState().projects[0]!.name).toBe('写作助手');
+  });
+
+  it('再点另一个项目的「编辑」，右栏换成那一个', async () => {
+    const store = useDevStore.getState();
+    store.addProject('记账工具', '');
+    store.addProject('写作助手', '');
+    expectWideLayout();
+
+    renderDev();
+    await userEvent.click(screen.getByRole('button', { name: '编辑「写作助手」' }));
+    expect(within(panel('编辑「写作助手」')).getByLabelText(/^项目名称/)).toHaveValue('写作助手');
+
+    await userEvent.click(screen.getByRole('button', { name: '编辑「记账工具」' }));
+    expect(within(panel('编辑「记账工具」')).getByLabelText(/^项目名称/)).toHaveValue('记账工具');
   });
 });
