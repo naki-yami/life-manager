@@ -26,6 +26,21 @@ async function boot(): Promise<void> {
       </ErrorBoundary>
     </React.StrictMode>,
   );
+
+  // 首屏已经画出来了，再去做备份到文件夹这件事：要读全量数据 + 写文件，不该挡渲染
+  void syncFolderBackup();
+}
+
+/*
+ * 「备份到文件夹」（D3②）：用户授权过目标文件夹的话，每次打开静默更新一份。
+ *
+ * 必须在数据水合完成之后再读数据 —— 水合前 `readAllData()` 拿到的是空 store，
+ * 这时候写出去就把上一个好备份覆盖成一个空文件了。
+ * 动态 import：这条链路会拉进整棵备份 schema，不该进首屏包。
+ */
+async function syncFolderBackup(): Promise<void> {
+  const { syncFolderBackupAfterBoot } = await import('./services/appData');
+  await syncFolderBackupAfterBoot();
 }
 
 void boot();

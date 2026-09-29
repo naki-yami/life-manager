@@ -3,10 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import {
   Database,
   Download,
+  FolderOpen,
   History,
   LayoutGrid,
   Monitor,
   Moon,
+  RefreshCw,
   RotateCcw,
   Settings as SettingsIcon,
   Sun,
@@ -58,6 +60,17 @@ import {
   restoreAutoSnapshot,
 } from '../services/backup';
 import type { AutoSnapshot, ImportMode, ImportPlan, ParseIssue } from '../services/backup';
+import { readAllData } from '../services/appData';
+import {
+  FOLDER_BACKUP_FILE,
+  chooseFolderBackupFolder,
+  forgetFolderBackupFolder,
+  getFolderBackupStatus,
+  isFolderBackupSupported,
+  isFolderPickerAbort,
+  writeFolderBackupNow,
+} from '../services/folderSync';
+import type { FolderBackupStatus } from '../services/folderSync';
 import { MAX_AUTO_BACKUPS } from '../utils/storageKeys';
 import { clearAppData, measureAppStorage } from '../store/storage';
 import type { AppStorageUsage } from '../store/storage';
@@ -73,34 +86,6 @@ const SHORTCUT_ROWS: Array<{ keys: string; action: string }> = [
 ];
 
 
-/** 从各 store 读取当前全量数据（用 getState 读取，避免订阅与闭包过期） */
-function readAllData(): BackupData {
-  const taskState = useTaskStore.getState();
-  return {
-    tasks: taskState.tasks,
-    memos: taskState.memos,
-    books: useBookStore.getState().books,
-    devProjects: useDevStore.getState().projects,
-    workSessions: useDevStore.getState().sessions,
-    writingProjects: useWritingStore.getState().projects,
-    fitnessPlans: useFitnessStore.getState().plans,
-    fitnessRecords: useFitnessStore.getState().records,
-    bodyMetrics: useBodyStore.getState().records,
-    dietRecords: useDietStore.getState().records,
-    games: useGameStore.getState().games,
-    gameSessions: useGameStore.getState().sessions,
-    readingSessions: useBookStore.getState().sessions,
-    habits: useHabitStore.getState().habits,
-    focusSessions: useFocusStore.getState().sessions,
-    reviews: useReviewStore.getState().reviews,
-    goals: useGoalStore.getState().goals,
-    settings: {
-      themeMode: useThemeStore.getState().themeMode,
-      density: useUiStore.getState().density,
-      sidebarCollapsed: useUiStore.getState().sidebarCollapsed,
-    },
-  };
-}
 
 /** 把导入结果写回各 store。整对象写入，保留 id / 状态 / 时间戳 / 嵌套数组 */
 function applyPlan(data: Partial<BackupData>): void {
@@ -165,6 +150,17 @@ function formatBytes(bytes: number): string {
   return `${(bytes / 1024 / 1024).toFixed(2)} MB`;
 }
 
+/** 出错时给用户看的那句话；拿不到 message 就退回到一句通用文案 */
+function errorText(error: unknown): string {
+  return error instanceof Error && error.message ? error.message : '未知错误';
+}
+
+function formatDateTime(iso: string): string {
+  if (!iso) return '—';
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime()) ? '—' : date.toLocaleString('zh-CN');
+}
+
 const MODE_OPTIONS: { value: ImportMode; label: string; hint: string }[] = [
   { value: 'merge', label: '合并', hint: '保留现有数据，只补充备份中没有的条目（按 id 去重）' },
   { value: 'append', label: '追加', hint: '全部追加进来，id 冲突时自动分配新 id' },
@@ -189,7 +185,10 @@ export const SettingsPage: React.FC = () => {
   const [importErrors, setImportErrors] = useState<ParseIssue[]>([]);
   const [snapshots, setSnapshots] = useState<AutoSnapshot[]>([]);
   const [usage, setUsage] = useState<AppStorageUsage | null>(null);
+  const [folderStatus, setFolderStatus] = useState<FolderBackupStatus | null>(null);
+  const [folderBusy, setFolderBusy] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const folderSupported = isFolderBackupSupported();
 
   /**
    * 重新读一遍存储占用与快照。
@@ -199,12 +198,14 @@ export const SettingsPage: React.FC = () => {
    */
   const refreshStorage = useCallback(async (): Promise<void> => {
     try {
-      const [nextUsage, nextSnapshots] = await Promise.all([
+      const [nextUsage, nextSnapshots, nextFolder] = await Promise.all([
         measureAppStorage(),
         listAutoSnapshots(),
+        getFolderBackupStatus(),
       ]);
       setUsage(nextUsage);
       setSnapshots(nextSnapshots);
+      setFolderStatus(nextFolder);
     } catch (error) {
       console.error('[Life Manager] 读取本地存储状态失败。', error);
     }
@@ -264,6 +265,61 @@ export const SettingsPage: React.FC = () => {
       tone: 'success',
     });
   }, [toast, totalEntries]);
+
+  /** 选（或换）一个备份文件夹：会弹系统授权框，所以必须由点击触发 */
+  const handleChooseFolder = useCallback(async (): Promise<void> => {
+    setFolderBusy(true);
+    try {
+      const next = await chooseFolderBackupFolder(readAllData());
+      setFolderStatus(next);
+      toast({
+        title: '已写入备份文件夹',
+        description: `以后每次打开应用都会更新「${next.folderName}」里的 ${FOLDER_BACKUP_FILE}`,
+        tone: 'success',
+      });
+    } catch (error) {
+      // 在系统弹窗里按「取消」不算失败，不该弹一条红色错误
+      if (!isFolderPickerAbort(error)) {
+        toast({ title: '没能写入文件夹', description: errorText(error), tone: 'danger' });
+      }
+    } finally {
+      setFolderBusy(false);
+    }
+  }, [toast]);
+
+  const handleWriteFolderNow = useCallback(async (): Promise<void> => {
+    setFolderBusy(true);
+    try {
+      const next = await writeFolderBackupNow(readAllData());
+      setFolderStatus(next);
+      toast({
+        title: '已更新备份文件',
+        description: `${next.folderName} · ${formatDateTime(next.lastWrittenAt)}`,
+        tone: 'success',
+      });
+    } catch (error) {
+      toast({ title: '没能写入文件夹', description: errorText(error), tone: 'danger' });
+    } finally {
+      setFolderBusy(false);
+    }
+  }, [toast]);
+
+  const handleForgetFolder = useCallback(async (): Promise<void> => {
+    setFolderBusy(true);
+    try {
+      await forgetFolderBackupFolder();
+      setFolderStatus(null);
+      toast({
+        title: '已取消文件夹备份',
+        description: '已经写出去的那份备份文件留在原地，没有被删除。',
+        tone: 'info',
+      });
+    } catch (error) {
+      toast({ title: '操作失败', description: errorText(error), tone: 'danger' });
+    } finally {
+      setFolderBusy(false);
+    }
+  }, [toast]);
 
   const handleImportFile = (event: React.ChangeEvent<HTMLInputElement>): void => {
     const file = event.target.files?.[0];
@@ -470,6 +526,74 @@ export const SettingsPage: React.FC = () => {
           <Button icon={<Download size={16} aria-hidden />} onClick={handleExport}>
             导出 JSON
           </Button>
+        </CardBody>
+      </Card>
+
+      <Card>
+        <CardHeader
+          title="备份到文件夹"
+          subtitle="授权一个文件夹后，每次打开应用都会自动更新里面的一份完整备份"
+        />
+        <CardBody className="space-y-3">
+          {!folderSupported && (
+            <Alert tone="info" title="这个浏览器不支持">
+              需要支持「文件系统访问」的浏览器（Chrome / Edge 桌面版）。可以改用上面的「导出 JSON」，
+              每周手动存一份到网盘或移动硬盘。
+            </Alert>
+          )}
+
+          {folderSupported && folderStatus === null && (
+            <>
+              <p className="text-sm text-content-secondary">
+                还没有选择文件夹。选好之后这里会记住它，之后每次打开应用都静默写入一份最新备份，
+                不用再记得手动导出。
+              </p>
+              <Button
+                icon={<FolderOpen size={16} aria-hidden />}
+                disabled={folderBusy}
+                onClick={() => void handleChooseFolder()}
+              >
+                {folderBusy ? '正在写入…' : '选择文件夹'}
+              </Button>
+            </>
+          )}
+
+          {folderSupported && folderStatus !== null && (
+            <>
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge tone={folderStatus.granted ? 'success' : 'warning'}>
+                  {folderStatus.granted ? '已授权' : '需要重新授权'}
+                </Badge>
+                <span className="text-sm text-content">{folderStatus.folderName}</span>
+              </div>
+              <p className="text-sm text-content-secondary">
+                最近一次写入：{formatDateTime(folderStatus.lastWrittenAt)} · 文件名固定为{' '}
+                {FOLDER_BACKUP_FILE}，每次覆盖，不会在文件夹里堆一串历史文件。
+              </p>
+              {!folderStatus.granted && (
+                <Alert tone="warning" title="文件夹授权已失效">
+                  浏览器会在长时间不用后收回授权，开机时的自动写入已经暂停。
+                  点「立即写入」重新授权一次即可恢复。
+                </Alert>
+              )}
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant="secondary"
+                  icon={<RefreshCw size={16} aria-hidden />}
+                  disabled={folderBusy}
+                  onClick={() => void handleWriteFolderNow()}
+                >
+                  {folderBusy ? '正在写入…' : '立即写入'}
+                </Button>
+                <Button variant="ghost" disabled={folderBusy} onClick={() => void handleChooseFolder()}>
+                  换一个文件夹
+                </Button>
+                <Button variant="ghost" disabled={folderBusy} onClick={() => void handleForgetFolder()}>
+                  取消授权
+                </Button>
+              </div>
+            </>
+          )}
         </CardBody>
       </Card>
 

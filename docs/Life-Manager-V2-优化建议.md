@@ -308,6 +308,8 @@ V1 缺：时间盒、专注计时、每日总结、每周复盘、目标与达�
 - 建议：① 按日自动生成一份快照，与手动快照分池、保留 14 天；② 提供"导出到指定文件夹"（File System Access API，Chrome / Edge 可用，纯本地不联网），记住目录句柄后每次打开应用静默写一份；③ 设置页显示最近一次备份时间与一键恢复。
 - 兜底：不支持该 API 的浏览器降级为"每周提醒导出"。
 
+> **进度（2026-09-29）**：✅ 三项全部落地。① 每日快照见 §9「V2.0 第一阶段」；② 导出到指定文件夹见 §9「V2.1 第九阶段」（句柄存 IndexedDB、开机静默写、授权失效不弹窗）；③ 设置页有最近写入时间与一键回滚。兜底文案已在设置页给出。
+
 ### D4 归一化层 + 统一 store 工厂
 
 - **问题**：`migrateState()` 只做顶层浅合并，数组内单条记录的新字段回填不了，导致 `src/types/index.ts` 里到处是"旧数据可能没有"的注释、各页面到处是 `?? []`。
@@ -365,7 +367,7 @@ V1 缺：时间盒、专注计时、每日总结、每周复盘、目标与达�
 **验收**
 
 - [x] 清除浏览器数据后，能从自动备份或导出的文件完整恢复（ackup.test.ts 有一条端到端用例：留快照 → 清除 → 回滚，数据逐字节一致）
-- [x] 写入失败、配额紧张都有明确提示，不再静默失败（storage.test.ts 20+ 条 + kv.test.ts 20 条 + hydrate.test.ts 2 条 + StorageAlert.test.tsx 5 条）
+- [x] 写入失败、配额紧张都有明确提示，不再静默失败（storage.test.ts 20+ 条 + kv.test.ts 12 条 + hydrate.test.ts 2 条 + StorageAlert.test.tsx 5 条）
 - [x] ⌘K 能搜到并创建 8 类实体（任务 / 书 / 开发项目 / 写作 / 训练 / 饮食 / 游戏 / 备忘），一次输入完成录入
 - [x] 首页卡片可隐藏 / 重排 / 调尺寸，刷新后保持
 - [x] 桌面端（≥1280px）读书页用双栏替代弹窗，窄屏仍走抽屉
@@ -419,7 +421,7 @@ pm run size）≤ 300KB ✅
 | ----------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
 | D2 写入可靠性                 | ✅     | `src/store/storage.ts`：写入失败不再把异常抛进 React，改由 `StorageAlert` 明确提示「立刻导出备份」；告警按 key 粒度恢复                         |
 | D4 归一化层 + 统一 store 工厂 | ✅     | `persistOptions()` + `src/store/normalize.ts`，9 个 store 全部迁移；修好了「逐条补字段写在 `migrate` 里、版本号升到头之后就再也不执行」的老问题 |
-| D3 自动备份（部分）           | ✅     | 每日首次打开自动快照 `ensureDailySnapshot()`，空库不占快照位；快照写入也纳入配额保护。**未做**：导出到指定文件夹（File System Access API）      |
+| D3 自动备份                   | ✅     | 每日首次打开自动快照 `ensureDailySnapshot()`，空库不占快照位；快照写入也纳入配额保护；「导出到指定文件夹」见 §9「V2.1 第九阶段」                  |
 | D2 容量告警                   | ✅     | 占用集中到 `getStorageUsage()`，设置页超过 3MB 预警                                                                                             |
 | D1 存储层迁移到 IndexedDB     | ✅     | 数据与快照改走 IndexedDB（`src/store/kv.ts`），localStorage 只留「主题 / 密度」两个同步键；老数据首启只写不删地搬家，首屏用 `hydrateAllStores()` 门控。见 §9「V2.1 第八阶段」 |
 
@@ -894,11 +896,45 @@ pm run size）≤ 300KB ✅
   返回值会变成**每个 action 的返回值**。一旦这里透出 promise，所有 action 都变成「返回 promise 的 action」，
   React 的 `act()` 会把它们当异步动作处理，测试时序全乱。所以 `persistStorage.setItem` 返回 `void`，async 实现单独抽成 `writePersisted()`。
 
-**新增测试**：`src/store/kv.test.ts` 20 条（内存假后端 + 极简 IndexedDB 替身 `stubIndexedDb()`：key→后端路由、首启搬家、
+**新增测试**：`src/store/kv.test.ts` 12 条（内存假后端 + 极简 IndexedDB 替身 `installIndexedDbStub()`：key→后端路由、首启搬家、
 两端合并读取、写入前先等首次读取、IndexedDB 往返、打不开时返回 `null`）；`src/store/hydrate.test.ts` 2 条
 （全读完立刻 resolve、有 store 挂在读取上时不 resolve）；`storage.test.ts` / `backup.test.ts` 全部改异步并补读失败、读取抛错、
 `readAppStateEntries`、`measureAppStorage`、`clearAppData` 各组用例；`StorageAlert.test.tsx` 补读失败文案 1 条。
 测试总数 996 → **1018**（64 → **66** 个测试文件）。首屏 gzip 152.5 → **154.0 KB**（预算 300KB 的 51%）。
+
+---
+
+### V2.1 第九阶段：备份到指定文件夹（已完成）
+
+| 项           | 状态 | 说明                                                                                                                                                                     |
+| ------------ | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 目录授权     | ✅   | 设置页「备份到文件夹」选一个目录（`showDirectoryPicker`），目录句柄存进**独立的** IndexedDB 库 `life-manager-handles`                                                     |
+| 开机静默写   | ✅   | `syncFolderBackupAfterBoot()` 在数据水合**之后**跑，每次打开覆盖一份 `life-manager-auto-backup.json`                                                                      |
+| 写入格式     | ✅   | 与「导出 JSON」同一个信封结构（`app` / `schemaVersion` / `exportedAt` / `data`），随时能从「导入数据」读回来                                                              |
+| 授权失效     | ✅   | 过期只把状态标成「需要重新授权」，开机写入直接跳过、**绝不弹窗**；手动「立即写入」才重新请求授权                                                                          |
+| 取消授权     | ✅   | 忘掉句柄，已经写出去的文件不动                                                                                                                                           |
+| 不支持时     | ✅   | 没有 `showDirectoryPicker`、或拿不到 IndexedDB（句柄存不住）时，页面直接说明并引导改用「导出 JSON」，而不是给一个点了没反应的按钮                                        |
+
+**几个刻意的选择**
+
+- **句柄单独开一个库**：`FileSystemDirectoryHandle` 只能结构化克隆，JSON 序列化不了，所以它没法跟主题一起塞进
+  localStorage。那就干脆放在自己的 `life-manager-handles` 库里；也正因为如此，退回 localStorage 的环境里
+  这个功能直接判定为「不支持」——而不是「假装支持、重开就忘」。
+- **固定文件名，不做轮转**：每次覆盖 `life-manager-auto-backup.json`。这个目录是用户自己选的（同步盘、移动硬盘），
+  在那里堆一串日期文件是要用户自己收拾的；「总是最新的一份」才是它存在的意义。要历史版本，应用内的快照池负责。
+- **开机只在「已经授权」时才写**：`queryPermission` 不是 `granted` 就跳过。浏览器要求目录授权由用户手势触发，
+  开机时静默调 `requestPermission` 会被拒，更糟的是会弹一个用户没预期的框。
+- **写失败一律吞掉**：U 盘拔了、目录被删、磁盘满 —— 开机时这些只意味着「这次没更新备份」，
+  不该升级成「应用启动报错」。设置页会显示最近一次写入时间，新鲜度是可查的。
+- **必须先水合、再读数据**：`readAllData()` 读的是内存 store。水合完成前调用会拿到一份空数据，
+  写出去就把上一个好备份覆盖成空文件 —— 这是这条功能里唯一「写错就丢数据」的点，
+  所以它被放在 `boot()` 里 `hydrateAllStores()` 之后，并单独抽成 `syncFolderBackupAfterBoot()` 写了测试。
+
+**新增测试**：`services/folderSync.test.ts` 17 条（支持判定 3、选择文件夹 4、开机静默写入 4、手动写入与取消授权 6）；
+`services/appData.test.ts` 4 条（`readAllData()` 的拼装，以及开机备份「写的是当前内存数据」「失败不抛错」）；
+`pages/SettingsPage.test.tsx` 补 3 条（不支持时的提示、授权后写入 / 立即更新 / 取消授权、授权失效后重新授权）。
+另外把 kv.test.ts 里的 IndexedDB 替身抽成 `src/test/indexedDbStub.ts`，再配一个 `src/test/fakeFolder.ts` 给两处共用。
+测试总数 1018 → **1042**（66 → **68** 个测试文件）。首屏 gzip 154.0 → **154.1 KB**（代码都落在路由懒加载与动态 import 的分包里）。
 
 ---
 

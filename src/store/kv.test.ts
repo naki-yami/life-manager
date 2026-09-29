@@ -15,6 +15,7 @@ import {
   writeAppValue,
 } from './storage';
 import { STORAGE_KEYS } from '../utils/storageKeys';
+import { installIndexedDbStub } from '../test/indexedDbStub';
 
 afterEach(() => {
   // 注入是全局的，用完必须还原，否则会串到下一个用例
@@ -41,70 +42,6 @@ function memoryStore(seed: Record<string, string> = {}): {
       entries: async (prefix) => [...data].filter(([key]) => key.startsWith(prefix)),
     },
   };
-}
-
-/** 极简 IndexedDB 替身：只实现 kv.ts 用到的那几个方法，回调一律按微任务异步派发 */
-function stubIndexedDb(): Map<string, string> {
-  const data = new Map<string, string>();
-
-  class Request<T> {
-    onsuccess: (() => void) | null = null;
-    onerror: (() => void) | null = null;
-    onupgradeneeded: (() => void) | null = null;
-    result: T | undefined;
-    error: Error | null = null;
-  }
-
-  const succeed = <T>(request: Request<T>, value: T): Request<T> => {
-    queueMicrotask(() => {
-      request.result = value;
-      request.onsuccess?.();
-    });
-    return request;
-  };
-
-  const open = (): Request<unknown> => {
-    const request = new Request<unknown>();
-    const db = {
-      objectStoreNames: { contains: (name: string) => name === 'kv' },
-      createObjectStore: () => undefined,
-      transaction: () => {
-        const transaction = {
-          error: null as Error | null,
-          oncomplete: null as (() => void) | null,
-          onerror: null as (() => void) | null,
-          onabort: null as (() => void) | null,
-          objectStore: () => ({
-            put: (value: string, key: string) => {
-              data.set(key, value);
-              return succeed(new Request<void>(), undefined);
-            },
-            get: (key: string) => succeed(new Request<string | undefined>(), data.get(key)),
-            delete: (key: string) => {
-              data.delete(key);
-              return succeed(new Request<void>(), undefined);
-            },
-            getAll: () => succeed(new Request<string[]>(), [...data.values()]),
-            getAllKeys: () => succeed(new Request<string[]>(), [...data.keys()]),
-          }),
-        };
-        // 事务完成排在本次操作的微任务之后，读请求总是先拿到值
-        queueMicrotask(() => transaction.oncomplete?.());
-        return transaction;
-      },
-    };
-
-    queueMicrotask(() => {
-      // 真 IDB 在 upgradeneeded 里就能拿到 request.result
-      request.result = db;
-      request.onupgradeneeded?.();
-      request.onsuccess?.();
-    });
-    return request;
-  };
-
-  vi.stubGlobal('indexedDB', { open });
-  return data;
 }
 
 describe('key 到后端的路由', () => {
@@ -248,7 +185,7 @@ describe('写入前先等首次读取落地', () => {
 
 describe('IndexedDB 后端', () => {
   it('读写删与按前缀遍历都按异步语义工作', async () => {
-    const data = stubIndexedDb();
+    const db = installIndexedDbStub();
     const store = await createIndexedDbStore();
     expect(store).not.toBeNull();
 
@@ -264,7 +201,7 @@ describe('IndexedDB 后端', () => {
 
     await store!.remove('lm:tasks');
     expect(await store!.get('lm:tasks')).toBeNull();
-    expect(data.has('lm:tasks')).toBe(false);
+    expect(db.store('kv').has('lm:tasks')).toBe(false);
   });
 
   it('打不开时返回 null，让调用方整条退回 localStorage', async () => {

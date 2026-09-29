@@ -6,6 +6,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SettingsPage } from './SettingsPage';
 import { ToastProvider } from '../components/ui';
 import { serializeBackup } from '../services/backup';
+import { FOLDER_BACKUP_FILE, resetFolderBackupStore } from '../services/folderSync';
+import { installIndexedDbStub } from '../test/indexedDbStub';
+import { fakeFolder, stubDirectoryPicker } from '../test/fakeFolder';
 import type { BackupData } from '../services/schemas';
 import { useTaskStore } from '../store/taskStore';
 import { useBookStore } from '../store/bookStore';
@@ -37,6 +40,9 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  // 句柄仓库缓存与假 indexedDB 都是全局的，不清会串到下一个用例
+  resetFolderBackupStore();
+  vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
 
@@ -321,5 +327,59 @@ describe('SettingsPage', () => {
     expect(screen.getByRole('button', { name: /正在读取/ })).toBeDisabled();
     expect(screen.getByRole('status', { name: '加载中' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '选择备份文件' })).not.toBeInTheDocument();
+  });
+
+  it('浏览器不支持「备份到文件夹」时给出提示，而不是给一个点了没反应的按钮', () => {
+    renderSettings();
+
+    expect(screen.getByText('这个浏览器不支持')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '选择文件夹' })).not.toBeInTheDocument();
+  });
+
+  it('授权文件夹后写入一份备份，可以立即更新，也可以取消授权', async () => {
+    installIndexedDbStub();
+    const folder = fakeFolder('生活备份');
+    stubDirectoryPicker(folder.handle);
+    useTaskStore.getState().addTask('写周报', '', 'medium', '2026-09-29');
+
+    renderSettings();
+
+    await userEvent.click(await screen.findByRole('button', { name: '选择文件夹' }));
+
+    expect(await screen.findByText('已授权')).toBeInTheDocument();
+    expect(screen.getByText('生活备份')).toBeInTheDocument();
+    // 写出去的是「导出 JSON」同一套格式，能直接再导入回来
+    expect(folder.files.get(FOLDER_BACKUP_FILE)).toContain('写周报');
+    expect(await screen.findByText('已写入备份文件夹')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: '立即写入' }));
+    expect(await screen.findByText('已更新备份文件')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: '取消授权' }));
+
+    expect(await screen.findByRole('button', { name: '选择文件夹' })).toBeInTheDocument();
+    // 取消授权只是忘掉句柄，已经写出去的文件留在原地
+    expect(folder.files.has(FOLDER_BACKUP_FILE)).toBe(true);
+  });
+
+  it('授权失效时提示重新授权，手动写入后会恢复', async () => {
+    installIndexedDbStub();
+    const folder = fakeFolder('移动硬盘');
+    stubDirectoryPicker(folder.handle);
+
+    const first = renderSettings();
+    await userEvent.click(await screen.findByRole('button', { name: '选择文件夹' }));
+    expect(await screen.findByText('已授权')).toBeInTheDocument();
+
+    // 浏览器长时间不用之后把授权收回成 prompt，此时重开设置页会显示「需要重新授权」
+    folder.state.permission = 'prompt';
+    first.unmount();
+    renderSettings();
+
+    expect(await screen.findByText('需要重新授权')).toBeInTheDocument();
+    expect(screen.getByText('文件夹授权已失效')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: '立即写入' }));
+    expect(await screen.findByText('已授权')).toBeInTheDocument();
   });
 });
