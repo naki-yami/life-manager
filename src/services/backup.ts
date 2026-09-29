@@ -14,6 +14,7 @@ import {
   APP_ID,
   BACKUP_MODULES,
   BACKUP_SCHEMA_VERSION,
+  bodyMetricSchema,
   bookSchema,
   devProjectSchema,
   fitnessPlanSchema,
@@ -148,6 +149,7 @@ export function parseBackup(
   modules.writingProjects = pick(writingProjectSchema, 'writingProjects');
   modules.fitnessPlans = pick(fitnessPlanSchema, 'fitnessPlans');
   modules.fitnessRecords = pick(workoutRecordSchema, 'fitnessRecords');
+  modules.bodyMetrics = pick(bodyMetricSchema, 'bodyMetrics');
   modules.dietRecords = pick(mealRecordSchema, 'dietRecords');
   modules.games = pick(gameSchema, 'games');
   modules.gameSessions = pick(gameSessionSchema, 'gameSessions');
@@ -253,6 +255,7 @@ export function planImport(
   const writingProjects = merge('writingProjects', current.writingProjects ?? []);
   const fitnessPlans = merge('fitnessPlans', current.fitnessPlans ?? []);
   const fitnessRecords = merge('fitnessRecords', current.fitnessRecords ?? []);
+  const bodyMetrics = merge('bodyMetrics', current.bodyMetrics ?? []);
   const dietRecords = merge('dietRecords', current.dietRecords ?? []);
   const games = merge('games', current.games ?? []);
   const gameSessions = merge('gameSessions', current.gameSessions ?? []);
@@ -271,6 +274,7 @@ export function planImport(
       writingProjects: writingProjects.items,
       fitnessPlans: fitnessPlans.items,
       fitnessRecords: fitnessRecords.items,
+      bodyMetrics: bodyMetrics.items,
       dietRecords: dietRecords.items,
       games: games.items,
       gameSessions: gameSessions.items,
@@ -306,6 +310,11 @@ export function planImport(
         incoming: count(backup.fitnessRecords),
         added: fitnessRecords.added,
         skipped: fitnessRecords.skipped,
+      },
+      bodyMetrics: {
+        incoming: count(backup.bodyMetrics),
+        added: bodyMetrics.added,
+        skipped: bodyMetrics.skipped,
       },
       dietRecords: {
         incoming: count(backup.dietRecords),

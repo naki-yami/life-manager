@@ -322,3 +322,24 @@ export interface Habit {
   logs: Record<string, number>;
   createdAt: string;
 }
+
+// Body metric types
+/**
+ * 身体指标：一天最多一条。
+ *
+ * `weight` / `bodyFat` 是高频项，所以拆成独立字段而不是塞进 measurements ——
+ * 趋势图、环比、统计页都要单独读它们，独立字段省掉一层字符串键查找。
+ * `measurements` 存围度，键是部位（内置胸 / 腰 / 臀 / 臂 / 腿，也允许自建），值统一按 cm 记。
+ */
+export interface BodyMetric {
+  id: string;
+  /** 记录日期 YYYY-MM-DD；同一天只保留一条 */
+  date: string;
+  /** 体重（kg）；undefined 表示那天没称 */
+  weight?: number;
+  /** 体脂率（%）；undefined 表示那天没测 */
+  bodyFat?: number;
+  /** 围度（cm）：部位键 -> 数值；没填的部位不会出现 */
+  measurements: Record<string, number>;
+  createdAt: string;
+}

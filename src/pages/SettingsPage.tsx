@@ -39,6 +39,7 @@ import { useFitnessStore } from '../store/fitnessStore';
 import { useDietStore } from '../store/dietStore';
 import { useGameStore } from '../store/gameStore';
 import { useHabitStore } from '../store/habitStore';
+import { useBodyStore } from '../store/bodyStore';
 import { useThemeStore } from '../store/themeStore';
 import { useUiStore } from '../store/uiStore';
 import { BACKUP_MODULES, MODULE_LABELS } from '../services/schemas';
@@ -79,6 +80,7 @@ function readAllData(): BackupData {
     writingProjects: useWritingStore.getState().projects,
     fitnessPlans: useFitnessStore.getState().plans,
     fitnessRecords: useFitnessStore.getState().records,
+    bodyMetrics: useBodyStore.getState().records,
     dietRecords: useDietStore.getState().records,
     games: useGameStore.getState().games,
     gameSessions: useGameStore.getState().sessions,
@@ -102,6 +104,7 @@ function applyPlan(data: Partial<BackupData>): void {
   if (data.writingProjects) useWritingStore.getState().replaceProjects(data.writingProjects);
   if (data.fitnessPlans) useFitnessStore.getState().replacePlans(data.fitnessPlans);
   if (data.fitnessRecords) useFitnessStore.getState().replaceRecords(data.fitnessRecords);
+  if (data.bodyMetrics) useBodyStore.getState().replaceRecords(data.bodyMetrics);
   if (data.dietRecords) useDietStore.getState().replaceRecords(data.dietRecords);
   if (data.games) useGameStore.getState().replaceGames(data.games);
   if (data.gameSessions) useGameStore.getState().replaceSessions(data.gameSessions);
@@ -129,6 +132,7 @@ function resetStores(): void {
   useWritingStore.getState().replaceProjects([]);
   useFitnessStore.getState().replacePlans([]);
   useFitnessStore.getState().replaceRecords([]);
+  useBodyStore.getState().replaceRecords([]);
   useDietStore.getState().replaceRecords([]);
   useGameStore.getState().replaceGames([]);
   useGameStore.getState().replaceSessions([]);
@@ -179,6 +183,7 @@ export const SettingsPage: React.FC = () => {
   const writingCount = useWritingStore((state) => state.projects.length);
   const planCount = useFitnessStore((state) => state.plans.length);
   const recordCount = useFitnessStore((state) => state.records.length);
+  const bodyCount = useBodyStore((state) => state.records.length);
   const dietCount = useDietStore((state) => state.records.length);
   const gameCount = useGameStore((state) => state.games.length);
   const sessionCount = useGameStore((state) => state.sessions.length);
@@ -194,6 +199,7 @@ export const SettingsPage: React.FC = () => {
     { module: 'writingProjects', label: MODULE_LABELS.writingProjects, count: writingCount },
     { module: 'fitnessPlans', label: MODULE_LABELS.fitnessPlans, count: planCount },
     { module: 'fitnessRecords', label: MODULE_LABELS.fitnessRecords, count: recordCount },
+    { module: 'bodyMetrics', label: MODULE_LABELS.bodyMetrics, count: bodyCount },
     { module: 'dietRecords', label: MODULE_LABELS.dietRecords, count: dietCount },
     { module: 'games', label: MODULE_LABELS.games, count: gameCount },
     { module: 'gameSessions', label: MODULE_LABELS.gameSessions, count: sessionCount },

@@ -214,6 +214,16 @@ function sampleData(): BackupData {
         createdAt: '2026-09-20T00:00:00.000Z',
       },
     ],
+    bodyMetrics: [
+      {
+        id: 'body-1',
+        date: '2026-09-27',
+        weight: 70.4,
+        bodyFat: 18.2,
+        measurements: { waist: 80, chest: 95 },
+        createdAt: '2026-09-27T07:00:00.000Z',
+      },
+    ],
     settings: { theme: 'dark' },
   };
 }
@@ -227,6 +237,7 @@ const emptyData = (): BackupData => ({
   writingProjects: [],
   fitnessPlans: [],
   fitnessRecords: [],
+  bodyMetrics: [],
   dietRecords: [],
   games: [],
   gameSessions: [],
@@ -255,6 +266,7 @@ describe('导出 / 导入 往返', () => {
     expect(plan.data.writingProjects).toEqual(original.writingProjects);
     expect(plan.data.fitnessPlans).toEqual(original.fitnessPlans);
     expect(plan.data.fitnessRecords).toEqual(original.fitnessRecords);
+    expect(plan.data.bodyMetrics).toEqual(original.bodyMetrics);
     expect(plan.data.dietRecords).toEqual(original.dietRecords);
     expect(plan.data.games).toEqual(original.games);
     expect(plan.data.habits).toEqual(original.habits);
@@ -286,7 +298,7 @@ describe('导出 / 导入 往返', () => {
   it('信封结构包含 schemaVersion 与 exportedAt', () => {
     const envelope = buildBackupEnvelope(emptyData(), new Date('2026-09-28T00:00:00.000Z'));
     expect(envelope.app).toBe('life-manager');
-    expect(envelope.schemaVersion).toBe(12);
+    expect(envelope.schemaVersion).toBe(13);
     expect(envelope.exportedAt).toBe('2026-09-28T00:00:00.000Z');
   });
 });
@@ -649,6 +661,63 @@ describe('习惯的导入兼容', () => {
   });
 });
 
+describe('身体指标的导入兼容', () => {
+  const keptMetric = {
+    id: 'keep',
+    date: '2026-09-01',
+    weight: 70,
+    measurements: {},
+    createdAt: '2026-09-01T07:00:00.000Z',
+  };
+
+  it('旧备份没有 bodyMetrics 时该模块视为缺失，覆盖模式也不会清空现有记录', () => {
+    const legacy = sampleData() as Record<string, unknown>;
+    delete legacy.bodyMetrics;
+    const parsed = parseBackup(JSON.stringify(legacy));
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+
+    expect(parsed.backup.modules.bodyMetrics).toBeUndefined();
+
+    const plan = planImport({ bodyMetrics: [keptMetric] }, parsed.backup.modules, 'overwrite');
+    expect(plan.data.bodyMetrics).toEqual([keptMetric]);
+  });
+
+  it('脏读数在导入时被清洗到「没记」，坏日期的记录整条丢弃', () => {
+    const backup = sampleData();
+    backup.bodyMetrics = [
+      {
+        id: 'body-1',
+        date: '2026-09-27',
+        weight: Number.NaN,
+        bodyFat: 150,
+        measurements: { waist: 80.44, bad: 'x' },
+        createdAt: '2026-09-27T07:00:00.000Z',
+      },
+      {
+        id: 'body-2',
+        date: '2026/09/26',
+        weight: 70,
+        measurements: {},
+        createdAt: '2026-09-26T07:00:00.000Z',
+      },
+    ];
+
+    const parsed = parseBackup(serializeBackup(backup));
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+
+    const plan = planImport(emptyData(), parsed.backup.modules, 'merge');
+    expect(plan.data.bodyMetrics).toHaveLength(1);
+    expect(plan.data.bodyMetrics?.[0]).toMatchObject({
+      id: 'body-1',
+      bodyFat: 100,
+      measurements: { waist: 80.4 },
+    });
+    expect(plan.data.bodyMetrics?.[0]?.weight).toBeUndefined();
+  });
+});
+
 describe('导入模式', () => {
   const existing = [{ id: 'a', title: '现有' }];
 
@@ -711,6 +780,7 @@ describe('导入模式', () => {
       plan.data.writingProjects,
       plan.data.fitnessPlans,
       plan.data.fitnessRecords,
+      plan.data.bodyMetrics,
       plan.data.dietRecords,
       plan.data.games,
       plan.data.gameSessions,

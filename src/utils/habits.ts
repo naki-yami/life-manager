@@ -1,5 +1,8 @@
 import type { Habit, HabitSchedule } from '../types';
-import { addDays, dayKeyOf, daysBetween, todayKey } from './date';
+import { addDays, dayKeyOf, daysBetween, isDayKey, todayKey } from './date';
+
+// 日期键校验是通用工具，实现在 date.ts；这里转出去，避免调用方多记一个来源
+export { isDayKey };
 
 /**
  * 习惯的「强度分数」模型（参考 uhabits）。
@@ -19,15 +22,8 @@ export const HABIT_WEEK_WINDOW = 6;
 const MAX_LOOKBACK_DAYS = 3650;
 const MAX_LOOKBACK_WEEKS = 520;
 
-const DATE_KEY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
-
 /** 打卡量的上限：脏数据不至于把进度条算成天文数字 */
 export const MAX_HABIT_AMOUNT = 9999;
-
-/** 是否是合法的日期键（YYYY-MM-DD），也是打卡入口的第一道闸 */
-export function isDayKey(value: string): boolean {
-  return DATE_KEY_PATTERN.test(value);
-}
 
 /**
  * 清洗打卡日志：只保留合法日期键与正数，并把数值取整。

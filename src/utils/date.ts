@@ -15,6 +15,17 @@ export function todayKey(date: Date = new Date()): string {
 const DATE_KEY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 /**
+ * 是否是合法的日期键（YYYY-MM-DD）。
+ *
+ * 放在这里而不是散在各模块：所有「按天存数据」的入口（打卡、身体指标…）
+ * 都需要同一道闸，只认本地日历口径的裸日期，顺手把 `2026-9-29` 和
+ * `2026-09-29T10:00:00Z` 这类会被误当日期解析的写法挡在外面。
+ */
+export function isDayKey(value: string): boolean {
+  return DATE_KEY_PATTERN.test(value);
+}
+
+/**
  * 时间戳 → 本地日期键。
  *
  * 记录上的 `createdAt` / `completedAt` / `startedAt` 存的是完整 ISO 时间（UTC），

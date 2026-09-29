@@ -4,6 +4,7 @@ import { Button } from './ui';
 import { useTaskStore } from '../store/taskStore';
 import { useBookStore } from '../store/bookStore';
 import { useHabitStore } from '../store/habitStore';
+import { useBodyStore } from '../store/bodyStore';
 import { useDevStore } from '../store/devStore';
 import { useWritingStore } from '../store/writingStore';
 import { useFitnessStore } from '../store/fitnessStore';
@@ -65,6 +66,7 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
         writingProjects: safeRead(() => useWritingStore.getState().projects, [], '写作'),
         fitnessPlans: safeRead(() => useFitnessStore.getState().plans, [], '健身计划'),
         fitnessRecords: safeRead(() => useFitnessStore.getState().records, [], '健身记录'),
+        bodyMetrics: safeRead(() => useBodyStore.getState().records, [], '身体指标'),
         dietRecords: safeRead(() => useDietStore.getState().records, [], '饮食'),
         games: safeRead(() => useGameStore.getState().games, [], '游戏'),
         gameSessions: safeRead(() => useGameStore.getState().sessions, [], '游玩记录'),

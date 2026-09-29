@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { normalizeTags } from '../utils/tags';
 import { normalizeSchedule, sanitizeHabitLogs } from '../utils/habits';
+import { readMetric, sanitizeMeasurements } from '../utils/body';
 import type { HabitSchedule } from '../types';
 
 /**
@@ -16,8 +17,9 @@ export const APP_ID = 'life-manager';
  *     `tags` 字段；旧文件里没有它，导入时补空数组。
  * 12：新增「习惯」模块（含打卡日志）；旧文件里没有它，导入时视为缺失，
  *     不会清空用户现在的习惯。
+ * 13：新增「身体指标」模块（体重 / 体脂 / 围度）；同样按缺失处理，不清空现有记录。
  */
-export const BACKUP_SCHEMA_VERSION = 12;
+export const BACKUP_SCHEMA_VERSION = 13;
 
 const isoDateString = z.string();
 const percent = z.number().min(0).max(100).catch(0);
@@ -210,6 +212,41 @@ export const fitnessPlanSchema = z.object({
   createdAt: isoDateString.default(() => new Date().toISOString()),
 });
 
+// ---------- 身体指标 ----------
+/**
+ * 日期键（YYYY-MM-DD）。
+ * 身体指标一天一条，date 就是它的身份：日期坏了这条记录就没法定位，
+ * 所以直接判为无效（交给归一化层丢弃），而不是补一个空串在库里飘着。
+ */
+const dayKey = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, '应为 YYYY-MM-DD 日期');
+
+/**
+ * 可选读数：非数字、非正数一律当作「那天没记这一项」。
+ *
+ * 不能写成 `.catch(0)` —— 那会把 0 当成有效读数，趋势图上凭空多出一个 0kg 的点，
+ * 「较上次」也会因此算出一个假的差值。
+ */
+const optionalReading = (key: 'weight' | 'bodyFat') =>
+  z
+    .union([z.number(), z.null(), z.undefined()])
+    .transform((value) => readMetric(value, key))
+    .optional();
+
+/** 围度表：键是部位，单位统一 cm；非法内容由 sanitizeMeasurements 统一清洗 */
+const measurements = z
+  .record(z.string(), z.number().catch(0))
+  .default({})
+  .transform((value) => sanitizeMeasurements(value));
+
+export const bodyMetricSchema = z.object({
+  id: z.string().min(1),
+  date: dayKey,
+  weight: optionalReading('weight'),
+  bodyFat: optionalReading('bodyFat'),
+  measurements,
+  createdAt: isoDateString.default(() => new Date().toISOString()),
+});
+
 // ---------- 饮食 ----------
 export const foodItemSchema = z.object({
   id: z.string().optional(),
@@ -325,6 +362,7 @@ export const backupDataSchema = z.object({
   writingProjects: z.array(writingProjectSchema).default([]),
   fitnessPlans: z.array(fitnessPlanSchema).default([]),
   fitnessRecords: z.array(workoutRecordSchema).default([]),
+  bodyMetrics: z.array(bodyMetricSchema).default([]),
   dietRecords: z.array(mealRecordSchema).default([]),
   games: z.array(gameSchema).default([]),
   gameSessions: z.array(gameSessionSchema).default([]),
@@ -344,6 +382,7 @@ export const BACKUP_MODULES = [
   'writingProjects',
   'fitnessPlans',
   'fitnessRecords',
+  'bodyMetrics',
   'dietRecords',
   'games',
   'gameSessions',
@@ -362,6 +401,7 @@ export const MODULE_LABELS: Record<BackupModule, string> = {
   writingProjects: '写作项目',
   fitnessPlans: '训练计划',
   fitnessRecords: '训练记录',
+  bodyMetrics: '身体指标',
   dietRecords: '饮食记录',
   games: '游戏',
   gameSessions: '游玩记录',
