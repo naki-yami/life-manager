@@ -14,7 +14,8 @@ import {
   restoreAutoSnapshot,
   serializeBackup,
 } from './backup';
-import { clearAppStorage, STORAGE_KEYS } from '../utils/storageKeys';
+import { clearAppData } from '../store/storage';
+import { STORAGE_KEYS } from '../utils/storageKeys';
 
 /** 一份覆盖所有模块的完整数据，用于往返测试 */
 function sampleData(): BackupData {
@@ -1050,37 +1051,37 @@ describe('导入模式', () => {
 });
 
 describe('自动备份快照', () => {
-  it('创建快照后可以列出，恢复时把数据写回本应用的 key', () => {
+  it('创建快照后可以列出，恢复时把数据写回本应用的 key', async () => {
     localStorage.clear();
     localStorage.setItem('lm:tasks', '{"state":{"tasks":[]},"version":3}');
-    const key = createAutoSnapshot('测试前');
+    const key = await createAutoSnapshot('测试前');
     expect(key).not.toBeNull();
 
     localStorage.setItem('lm:tasks', '{"state":{"tasks":[{"id":"x"}]},"version":3}');
 
-    const snapshots = listAutoSnapshots();
+    const snapshots = await listAutoSnapshots();
     expect(snapshots).toHaveLength(1);
     expect(snapshots[0]!.reason).toBe('测试前');
 
-    expect(restoreAutoSnapshot(key!)).toBe(true);
+    expect(await restoreAutoSnapshot(key!)).toBe(true);
     expect(localStorage.getItem('lm:tasks')).toBe('{"state":{"tasks":[]},"version":3}');
   });
 
-  it('clearAutoSnapshots 会删掉全部快照，且不动普通数据', () => {
+  it('clearAutoSnapshots 会删掉全部快照，且不动普通数据', async () => {
     localStorage.clear();
     localStorage.setItem('lm:books', '{"state":{"books":[]},"version":3}');
-    createAutoSnapshot('一');
-    createAutoSnapshot('二');
-    expect(listAutoSnapshots()).toHaveLength(2);
+    await createAutoSnapshot('一');
+    await createAutoSnapshot('二');
+    expect(await listAutoSnapshots()).toHaveLength(2);
 
-    const removed = clearAutoSnapshots();
+    const removed = await clearAutoSnapshots();
 
     expect(removed).toHaveLength(2);
-    expect(listAutoSnapshots()).toHaveLength(0);
+    expect(await listAutoSnapshots()).toHaveLength(0);
     expect(localStorage.getItem('lm:books')).not.toBeNull();
   });
 
-  it('清除全部数据后，能从快照把数据完整恢复回来', () => {
+  it('清除全部数据后，能从快照把数据完整恢复回来', async () => {
     localStorage.clear();
     // 走一遍真实链路：数据落盘 → 留快照 → 清除数据 → 回滚
     localStorage.setItem(
@@ -1096,24 +1097,24 @@ describe('自动备份快照', () => {
       books: localStorage.getItem(STORAGE_KEYS.books),
     };
 
-    const key = createAutoSnapshot('清除所有数据前');
+    const key = await createAutoSnapshot('清除所有数据前');
     expect(key).not.toBeNull();
 
     // 「清除数据」会删掉 lm:* 的普通 key，但快照必须留着 —— 否则就没得回滚了
-    clearAppStorage();
+    await clearAppData();
     expect(localStorage.getItem(STORAGE_KEYS.tasks)).toBeNull();
     expect(localStorage.getItem(STORAGE_KEYS.books)).toBeNull();
-    expect(listAutoSnapshots()).toHaveLength(1);
+    expect(await listAutoSnapshots()).toHaveLength(1);
 
-    expect(restoreAutoSnapshot(key!)).toBe(true);
+    expect(await restoreAutoSnapshot(key!)).toBe(true);
     expect(localStorage.getItem(STORAGE_KEYS.tasks)).toBe(before.tasks);
     expect(localStorage.getItem(STORAGE_KEYS.books)).toBe(before.books);
   });
 
-  it('快照损坏时恢复会失败而不是抛错', () => {
+  it('快照损坏时恢复会失败而不是抛错', async () => {
     localStorage.clear();
     localStorage.setItem('lm:backup:auto:broken', 'not-json');
-    expect(restoreAutoSnapshot('lm:backup:auto:broken')).toBe(false);
+    expect(await restoreAutoSnapshot('lm:backup:auto:broken')).toBe(false);
   });
 });
 
@@ -1125,52 +1126,52 @@ describe('每日自动备份', () => {
     );
   };
 
-  it('有数据时每天第一次打开会留一份快照', () => {
+  it('有数据时每天第一次打开会留一份快照', async () => {
     localStorage.clear();
     seedTasks();
 
-    const key = ensureDailySnapshot();
+    const key = await ensureDailySnapshot();
 
     expect(key).not.toBeNull();
-    const snapshots = listAutoSnapshots();
+    const snapshots = await listAutoSnapshots();
     expect(snapshots).toHaveLength(1);
     expect(snapshots[0]!.reason).toBe(DAILY_SNAPSHOT_REASON);
   });
 
-  it('同一天再打开不会重复创建', () => {
+  it('同一天再打开不会重复创建', async () => {
     localStorage.clear();
     seedTasks();
 
-    expect(ensureDailySnapshot()).not.toBeNull();
-    expect(ensureDailySnapshot()).toBeNull();
-    expect(listAutoSnapshots()).toHaveLength(1);
+    expect(await ensureDailySnapshot()).not.toBeNull();
+    expect(await ensureDailySnapshot()).toBeNull();
+    expect(await listAutoSnapshots()).toHaveLength(1);
   });
 
-  it('跨到第二天会再留一份', () => {
+  it('跨到第二天会再留一份', async () => {
     localStorage.clear();
     seedTasks();
 
-    ensureDailySnapshot();
+    await ensureDailySnapshot();
     const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);
-    expect(ensureDailySnapshot(tomorrow)).not.toBeNull();
-    expect(listAutoSnapshots()).toHaveLength(2);
+    expect(await ensureDailySnapshot(tomorrow)).not.toBeNull();
+    expect(await listAutoSnapshots()).toHaveLength(2);
   });
 
-  it('空库不占快照位', () => {
+  it('空库不占快照位', async () => {
     localStorage.clear();
     localStorage.setItem(
       STORAGE_KEYS.tasks,
       JSON.stringify({ state: { tasks: [], memos: [] }, version: 11 }),
     );
 
-    expect(ensureDailySnapshot()).toBeNull();
-    expect(listAutoSnapshots()).toHaveLength(0);
+    expect(await ensureDailySnapshot()).toBeNull();
+    expect(await listAutoSnapshots()).toHaveLength(0);
   });
 
-  it('数据整个坏掉时不会抛错', () => {
+  it('数据整个坏掉时不会抛错', async () => {
     localStorage.clear();
     localStorage.setItem(STORAGE_KEYS.tasks, 'not-json');
 
-    expect(() => ensureDailySnapshot()).not.toThrow();
+    await expect(ensureDailySnapshot()).resolves.toBeNull();
   });
 });

@@ -99,12 +99,14 @@ describe('reviewStore 写入', () => {
     expect(store().reviews).toHaveLength(1);
   });
 
-  it('数据落在 lm:review 上', () => {
+  it('数据落在 lm:review 上', async () => {
     store().saveReview('day', '2026-09-29', answers('写进存储'));
 
-    const raw = localStorage.getItem(STORAGE_KEYS.review);
-    expect(raw).toBeTruthy();
-    expect(raw).toContain('写进存储');
+    await vi.waitFor(() => {
+      const raw = localStorage.getItem(STORAGE_KEYS.review);
+      expect(raw).toBeTruthy();
+      expect(raw).toContain('写进存储');
+    });
   });
 });
 

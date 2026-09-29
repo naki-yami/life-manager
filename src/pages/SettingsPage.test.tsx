@@ -262,7 +262,8 @@ describe('SettingsPage', () => {
     useBookStore.getState().addBook('人类简史', 'Harari', '历史');
 
     renderSettings();
-    expect(screen.getByText('还没有快照')).toBeInTheDocument();
+    // 快照在异步后端里，要先读回来
+    expect(await screen.findByText('还没有快照')).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('button', { name: '清除所有数据' }));
     const clearDialog = screen.getByRole('dialog', { name: '清除所有数据' });
@@ -293,7 +294,7 @@ describe('SettingsPage', () => {
     await userEvent.click(within(dialog).getByRole('button', { name: '删除快照' }));
 
     expect(await screen.findByText('已删除全部快照')).toBeInTheDocument();
-    expect(screen.getByText('还没有快照')).toBeInTheDocument();
+    expect(await screen.findByText('还没有快照')).toBeInTheDocument();
   });
 
   it('组件预览入口可以跳到 /ui', async () => {

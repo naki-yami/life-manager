@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useHabitStore } from './habitStore';
 import { STORAGE_KEYS } from '../utils/storageKeys';
 import { MAX_HABIT_AMOUNT } from '../utils/habits';
@@ -148,14 +148,16 @@ describe('打卡（点格子）', () => {
 });
 
 describe('持久化与归一化', () => {
-  it('写入 lm:habits，日志随习惯一起落盘', () => {
+  it('写入 lm:habits，日志随习惯一起落盘', async () => {
     store().addHabit({ name: '晨跑' });
     store().toggleHabitLog(first().id, '2026-09-29');
 
-    const raw = localStorage.getItem(STORAGE_KEYS.habits);
-    expect(raw).not.toBeNull();
-    const parsed = JSON.parse(raw!) as { state: { habits: Array<{ logs: unknown }> } };
-    expect(parsed.state.habits[0]!.logs).toEqual({ '2026-09-29': 1 });
+    await vi.waitFor(() => {
+      const raw = localStorage.getItem(STORAGE_KEYS.habits);
+      expect(raw).not.toBeNull();
+      const parsed = JSON.parse(raw!) as { state: { habits: Array<{ logs: unknown }> } };
+      expect(parsed.state.habits[0]!.logs).toEqual({ '2026-09-29': 1 });
+    });
   });
 
   it('旧数据缺字段时按 schema 补齐（节奏 / 日志 / 单位）', async () => {

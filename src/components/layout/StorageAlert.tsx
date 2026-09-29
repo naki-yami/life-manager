@@ -7,11 +7,13 @@ import {
 } from '../../store/storage';
 
 /**
- * 写入本地存储失败时的兜底提示。
+ * 本地存储出问题时的兜底提示。
  *
- * 失败时应用仍然能继续用（数据留在内存里），但刷新就会丢 —— 所以这里不能只写
- * 「保存失败」，而要明确告诉用户「现在去导出备份」。提示可以关闭，但下一次新的
- * 写入失败会重新弹出来。
+ * 写失败时应用仍然能继续用（数据留在内存里），但刷新就会丢 —— 所以这里不能只写
+ * 「保存失败」，而要明确告诉用户「现在去导出备份」。读失败是另一码事：那说明本地
+ * 那份数据已经坏了，界面上的空白并不是「你没有录过」。
+ *
+ * 提示可以关闭，但下一次新的失败会重新弹出来。
  */
 export const StorageAlert: React.FC = () => {
   const [failure, setFailure] = useState<StorageFailure | null>(() => getStorageFailure());
@@ -20,6 +22,22 @@ export const StorageAlert: React.FC = () => {
   useEffect(() => subscribeStorageFailure(setFailure), []);
 
   if (!failure || dismissedAt === failure.at) return null;
+
+  if (failure.kind === 'read') {
+    return (
+      <Alert
+        tone="danger"
+        title="本地数据读不出来"
+        onDismiss={() => setDismissedAt(failure.at)}
+        className="mb-4"
+      >
+        保存的内容没能解析成功（可能已经损坏），这一块已经按空白启动了 ——
+        也就是说，现在看到的「没有数据」
+        并不代表你没录过。先别继续录入：立即导出一份备份，再到「数据与设置 →
+        自动备份」回滚到之前的状态。
+      </Alert>
+    );
+  }
 
   return (
     <Alert

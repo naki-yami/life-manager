@@ -220,7 +220,7 @@ const CommandPaletteInner: React.FC<{ onClose: () => void }> = ({ onClose }) => 
     try {
       // 备份模块按需加载，不进首屏包
       const { createAutoSnapshot } = await import('../../services/backup');
-      const key = createAutoSnapshot('命令面板备份');
+      const key = await createAutoSnapshot('命令面板备份');
       toastContext?.toast({
         tone: 'success',
         title: key ? '已留一份快照' : '快照空间已满',

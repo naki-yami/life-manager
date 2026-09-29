@@ -4,17 +4,31 @@ import App from './App';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { ToastProvider } from './components/ui';
 import { registerOfflineShell } from './services/pwa';
+import { hydrateAllStores } from './store/hydrate';
 import './styles/index.css';
 
-ReactDOM.createRoot(document.getElementById('root')!).render(
-  <React.StrictMode>
-    <ErrorBoundary>
-      <ToastProvider>
-        <App />
-      </ToastProvider>
-    </ErrorBoundary>
-  </React.StrictMode>,
-);
+/**
+ * 先把本地数据读回内存，再渲染第一次。
+ *
+ * 数据现在可能在 IndexedDB 里，读取是异步的；不等的话首屏会先画一帧「空数据」，
+ * 几十毫秒后才被真数据替换（详见 store/hydrate.ts）。读取超时也会照常渲染，
+ * 不会把用户挡在白屏上。
+ */
+async function boot(): Promise<void> {
+  await hydrateAllStores();
+
+  ReactDOM.createRoot(document.getElementById('root')!).render(
+    <React.StrictMode>
+      <ErrorBoundary>
+        <ToastProvider>
+          <App />
+        </ToastProvider>
+      </ErrorBoundary>
+    </React.StrictMode>,
+  );
+}
+
+void boot();
 
 /*
  * 注册离线壳：装成 PWA 之后断网也能打开。
@@ -32,5 +46,5 @@ void registerOfflineShell({
  * 出错不打扰用户 —— 真的写不进去时，StorageAlert 会给出提示。
  */
 void import('./services/backup').then(({ ensureDailySnapshot }) => {
-  ensureDailySnapshot();
+  void ensureDailySnapshot();
 });

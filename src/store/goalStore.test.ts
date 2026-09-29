@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useGoalStore } from './goalStore';
 import { STORAGE_KEYS } from '../utils/storageKeys';
 
@@ -80,12 +80,14 @@ describe('goalStore 增删改', () => {
 });
 
 describe('goalStore 持久化', () => {
-  it('数据落在 lm:goals 上', () => {
+  it('数据落在 lm:goals 上', async () => {
     store().addGoal({ metric: 'fitness.sessions', period: 'week', target: 4 });
 
-    const raw = localStorage.getItem(STORAGE_KEYS.goals);
-    expect(raw).toBeTruthy();
-    expect(raw).toContain('fitness.sessions');
+    await vi.waitFor(() => {
+      const raw = localStorage.getItem(STORAGE_KEYS.goals);
+      expect(raw).toBeTruthy();
+      expect(raw).toContain('fitness.sessions');
+    });
   });
 
   it('旧数据缺字段时补齐成当前结构', async () => {

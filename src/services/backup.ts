@@ -4,12 +4,18 @@ import {
   BACKUP_KEY_PREFIX,
   DATA_STORAGE_KEYS,
   MAX_AUTO_BACKUPS,
-  appStorageKeys,
-  clearAppStorage,
   isAppStorageKey,
 } from '../utils/storageKeys';
 import { todayKey } from '../utils/date';
-import { reportStorageFailure } from '../store/storage';
+import {
+  clearAppData,
+  readAppStateEntries,
+  readAppValue,
+  readStoredEntries,
+  removeAppValue,
+  reportStorageFailure,
+  writeAppValue,
+} from '../store/storage';
 import {
   APP_ID,
   BACKUP_MODULES,
@@ -424,32 +430,26 @@ export interface AutoSnapshot {
   size: number;
 }
 
-function safeStorage(): Storage | null {
-  try {
-    return typeof localStorage === 'undefined' ? null : localStorage;
-  } catch {
-    return null;
-  }
-}
-
-/** 在任何破坏性操作前保存一份快照，便于回滚 */
-export function createAutoSnapshot(reason: string): string | null {
-  const storage = safeStorage();
-  if (!storage) return null;
-
-  const entries: Record<string, string> = {};
-  for (const key of appStorageKeys()) {
-    const value = storage.getItem(key);
-    if (value !== null) entries[key] = value;
-  }
+/**
+ * 在任何破坏性操作前保存一份快照，便于回滚；写不进去时返回 null 并上报失败。
+ *
+ * 快照也走统一的存储层（IndexedDB 可用时就落在 IndexedDB 里）。
+ * 这是必须的：一份快照就是一份全量副本，数据搬进 IndexedDB 之后，
+ * 快照若还挤在 localStorage 那 5MB 里，几份就把池子撑满了。
+ */
+export async function createAutoSnapshot(reason: string): Promise<string | null> {
+  const entries = Object.fromEntries(await readAppStateEntries());
 
   // 先按上限裁剪再写入：快照自己也占空间，空间紧张时先腾地方成功率更高
-  pruneAutoSnapshots();
+  await pruneAutoSnapshots();
 
   // 同一毫秒内连续快照（例如批量操作）也要各自独立，所以后缀带上随机片段
   const key = `${BACKUP_KEY_PREFIX}${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   try {
-    storage.setItem(key, JSON.stringify({ createdAt: new Date().toISOString(), reason, entries }));
+    await writeAppValue(
+      key,
+      JSON.stringify({ createdAt: new Date().toISOString(), reason, entries }),
+    );
   } catch (error) {
     // 快照写不进去属于可接受的降级（当前数据本身仍在），但要让用户知道存储已经满了
     reportStorageFailure(key, error);
@@ -458,16 +458,9 @@ export function createAutoSnapshot(reason: string): string | null {
   return key;
 }
 
-export function listAutoSnapshots(): AutoSnapshot[] {
-  const storage = safeStorage();
-  if (!storage) return [];
-
+export async function listAutoSnapshots(): Promise<AutoSnapshot[]> {
   const snapshots: AutoSnapshot[] = [];
-  for (let i = 0; i < storage.length; i += 1) {
-    const key = storage.key(i);
-    if (key === null || !key.startsWith(BACKUP_KEY_PREFIX)) continue;
-    const raw = storage.getItem(key);
-    if (raw === null) continue;
+  for (const [key, raw] of await readStoredEntries(BACKUP_KEY_PREFIX)) {
     try {
       const parsed = JSON.parse(raw) as { createdAt?: string; reason?: string };
       snapshots.push({
@@ -484,39 +477,38 @@ export function listAutoSnapshots(): AutoSnapshot[] {
   return snapshots.sort((a, b) => b.key.localeCompare(a.key));
 }
 
-export function pruneAutoSnapshots(max: number = MAX_AUTO_BACKUPS): string[] {
-  const storage = safeStorage();
-  if (!storage) return [];
+export async function pruneAutoSnapshots(max: number = MAX_AUTO_BACKUPS): Promise<string[]> {
   const removed: string[] = [];
-  const snapshots = listAutoSnapshots();
-  for (const snapshot of snapshots.slice(max)) {
-    storage.removeItem(snapshot.key);
+  for (const snapshot of (await listAutoSnapshots()).slice(max)) {
+    await removeAppValue(snapshot.key);
     removed.push(snapshot.key);
   }
   return removed;
 }
 
 /** 删除全部自动备份快照，返回被删掉的 key（「清除数据」默认保留快照，这里是显式清空入口） */
-export function clearAutoSnapshots(): string[] {
-  const storage = safeStorage();
-  if (!storage) return [];
-  const removed = listAutoSnapshots().map((snapshot) => snapshot.key);
-  for (const key of removed) storage.removeItem(key);
+export async function clearAutoSnapshots(): Promise<string[]> {
+  const removed = (await listAutoSnapshots()).map((snapshot) => snapshot.key);
+  for (const key of removed) await removeAppValue(key);
   return removed;
 }
-/** 把某个快照写回 localStorage（仅覆盖本应用的 key），调用方负责重新加载页面 */
-export function restoreAutoSnapshot(key: string): boolean {
-  const storage = safeStorage();
-  if (!storage) return false;
-  const raw = storage.getItem(key);
+
+/**
+ * 把某个快照写回存储（仅覆盖本应用的 key），调用方负责重新加载页面。
+ *
+ * 先清干净再写回：只覆盖不清理的话，快照里没有的 key 会残留成「回滚前的新数据」，
+ * 回滚出来的就是两份数据的混合体。
+ */
+export async function restoreAutoSnapshot(key: string): Promise<boolean> {
+  const raw = await readAppValue(key);
   if (raw === null) return false;
 
   try {
     const parsed = JSON.parse(raw) as { entries?: Record<string, string> };
     const entries = parsed.entries ?? {};
-    for (const targetKey of appStorageKeys()) storage.removeItem(targetKey);
+    await clearAppData();
     for (const [entryKey, entryValue] of Object.entries(entries)) {
-      if (isAppStorageKey(entryKey)) storage.setItem(entryKey, entryValue);
+      if (isAppStorageKey(entryKey)) await writeAppValue(entryKey, entryValue);
     }
     return true;
   } catch {
@@ -540,13 +532,10 @@ function isNonEmptyObject(value: unknown): boolean {
 }
 
 /** 本地是否已经有真实数据。空库不占快照位，免得新用户一进来就攒一堆空快照 */
-function hasUserData(): boolean {
-  const storage = safeStorage();
-  if (!storage) return false;
-
-  for (const key of DATA_STORAGE_KEYS) {
-    const raw = storage.getItem(key);
-    if (raw === null) continue;
+async function hasUserData(): Promise<boolean> {
+  const dataKeys = new Set(DATA_STORAGE_KEYS);
+  for (const [key, raw] of await readAppStateEntries()) {
+    if (!dataKeys.has(key)) continue;
     try {
       const parsed = JSON.parse(raw) as { state?: Record<string, unknown> };
       const state = parsed?.state;
@@ -569,18 +558,14 @@ function hasUserData(): boolean {
  * 按次写会把池子冲干净，反而失去「回到上周某天」的能力。而真正要防的是
  * 「清缓存 / 误操作」这类低频事故，一天一份就够了。
  */
-export function ensureDailySnapshot(now: Date = new Date()): string | null {
-  if (!safeStorage()) return null;
-
+export async function ensureDailySnapshot(now: Date = new Date()): Promise<string | null> {
   const day = todayKey(now);
-  const already = listAutoSnapshots().some(
+  const already = (await listAutoSnapshots()).some(
     (snapshot) =>
       snapshot.reason === DAILY_SNAPSHOT_REASON && snapshotDay(snapshot.createdAt) === day,
   );
   if (already) return null;
-  if (!hasUserData()) return null;
+  if (!(await hasUserData())) return null;
 
   return createAutoSnapshot(DAILY_SNAPSHOT_REASON);
 }
-
-export { clearAppStorage };

@@ -3,8 +3,6 @@ import {
   LEGACY_STORAGE_KEYS,
   STORAGE_KEYS,
   appStorageKeys,
-  clearAppStorage,
-  estimateStorageBytes,
   isAppStorageKey,
   migrateLegacyStorageKeys,
 } from './storageKeys';
@@ -43,45 +41,6 @@ describe('migrateLegacyStorageKeys', () => {
       expect(legacy.endsWith('-storage')).toBe(true);
       expect(next.startsWith('lm:')).toBe(true);
     }
-  });
-});
-
-describe('clearAppStorage', () => {
-  it('只删除本应用的 key，绝不影响同源下的其他数据', () => {
-    localStorage.setItem(STORAGE_KEYS.tasks, 'app');
-    localStorage.setItem(STORAGE_KEYS.theme, 'app');
-    localStorage.setItem('some-other-project', '别人的数据');
-    localStorage.setItem('vite-plugin-react', '工具数据');
-
-    const removed = clearAppStorage();
-
-    expect(removed).toHaveLength(2);
-    expect(localStorage.getItem(STORAGE_KEYS.tasks)).toBeNull();
-    // 回归守卫：旧实现用的是 localStorage.clear()，会把下面这些一起清掉
-    expect(localStorage.getItem('some-other-project')).toBe('别人的数据');
-    expect(localStorage.getItem('vite-plugin-react')).toBe('工具数据');
-  });
-
-  // 回归守卫：快照必须撑过「清除数据」，否则「清除后可回滚」直接失效
-  it('保留自动备份快照，保证清除后仍能回滚', () => {
-    localStorage.setItem(STORAGE_KEYS.tasks, 'app');
-    localStorage.setItem('lm:backup:auto:1759000000000', '{"entries":{}}');
-
-    const removed = clearAppStorage();
-
-    expect(removed).toEqual([STORAGE_KEYS.tasks]);
-    expect(localStorage.getItem(STORAGE_KEYS.tasks)).toBeNull();
-    expect(localStorage.getItem('lm:backup:auto:1759000000000')).not.toBeNull();
-  });
-});
-
-describe('estimateStorageBytes', () => {
-  it('只统计本应用的 key', () => {
-    localStorage.setItem(STORAGE_KEYS.tasks, 'abcd');
-    localStorage.setItem('unrelated', 'x'.repeat(1000));
-
-    // key 'lm:tasks'(8) + value(4) = 12 字符 -> 24 字节（UTF-16）
-    expect(estimateStorageBytes()).toBe((STORAGE_KEYS.tasks.length + 4) * 2);
   });
 });
 

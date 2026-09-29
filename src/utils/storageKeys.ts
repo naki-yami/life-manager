@@ -1,9 +1,12 @@
 /**
- * 应用内所有 localStorage key 的统一定义。
+ * 应用内所有存储 key 的统一定义，以及旧 key 迁移。
  *
  * 全部使用 `lm:` 前缀，好处：
  * 1. "清除数据" 可以精确地只删除本应用的 key，不会误伤同源下的其他项目；
- * 2. 统计存储占用时可以按前缀扫描。
+ * 2. 读写与统计都可以按前缀扫描（实现在 store/storage.ts 与 store/kv.ts）。
+ *
+ * 这里**不碰**实际存储：只放常量与迁移。真正的读写入口在 store/ 下，
+ * 免得常量模块反过来依赖存储实现，绕成一圈。
  */
 export const LM_PREFIX = 'lm:';
 
@@ -68,6 +71,7 @@ export function appStorageKeys(): string[] {
 export const BACKUP_KEY_PREFIX = 'lm:backup:auto:';
 export const MAX_AUTO_BACKUPS = 10;
 
+/** 刻意与 store/kv.ts 的同名函数各留一份：那边要依赖本模块的 key 定义，反向 import 会成环 */
 function safeLocalStorage(): Storage | null {
   try {
     return typeof localStorage === 'undefined' ? null : localStorage;
@@ -96,60 +100,8 @@ export function migrateLegacyStorageKeys(): string[] {
   return migrated;
 }
 
-/** 估算本应用占用的 localStorage 字节数（UTF-16，每字符 2 字节） */
-export function estimateStorageBytes(): number {
-  const storage = safeLocalStorage();
-  if (!storage) return 0;
-  let bytes = 0;
-  for (let i = 0; i < storage.length; i += 1) {
-    const key = storage.key(i);
-    if (key === null || !isAppStorageKey(key)) continue;
-    bytes += (key.length + (storage.getItem(key)?.length ?? 0)) * 2;
-  }
-  return bytes;
-}
-
 export function isAppStorageKey(key: string): boolean {
   return key.startsWith(LM_PREFIX);
-}
-
-export type StorageLevel = 'ok' | 'warning';
-
-export interface StorageUsage {
-  bytes: number;
-  level: StorageLevel;
-}
-
-/**
- * 存储占用与告警级别。
- *
- * 这里不用 navigator.storage.estimate()：它返回的是整个 origin 的配额
- * （主要服务于 IndexedDB / Cache Storage），对 localStorage 的约 5MB 上限没有参考价值。
- */
-export function getStorageUsage(): StorageUsage {
-  const bytes = estimateStorageBytes();
-  return { bytes, level: bytes >= STORAGE_WARN_BYTES ? 'warning' : 'ok' };
-}
-
-/**
- * 只清空本应用的数据，绝不使用 localStorage.clear()。
- *
- * 自动备份快照（lm:backup:auto:）会被保留：快照是「清除之后还能回滚」的唯一依靠，
- * 如果连它一起删掉，界面上的「可通过自动备份回滚」就是一句空话。
- * 想连快照一起清掉，用 clearAutoSnapshots()。
- */
-export function clearAppStorage(): string[] {
-  const storage = safeLocalStorage();
-  if (!storage) return [];
-  const removed: string[] = [];
-  for (let i = storage.length - 1; i >= 0; i -= 1) {
-    const key = storage.key(i);
-    if (key === null || !isAppStorageKey(key)) continue;
-    if (key.startsWith(BACKUP_KEY_PREFIX)) continue;
-    storage.removeItem(key);
-    removed.push(key);
-  }
-  return removed;
 }
 
 /*

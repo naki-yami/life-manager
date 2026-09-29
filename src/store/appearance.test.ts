@@ -61,9 +61,13 @@ describe('themeStore', () => {
     expect(useThemeStore.getState().themeMode).toBe('system');
   });
 
-  it('切换后持久化到 lm:theme', () => {
+  it('切换后持久化到 lm:theme', async () => {
     useThemeStore.getState().setThemeMode('dark');
-    expect(persistedState(STORAGE_KEYS.theme)?.themeMode).toBe('dark');
+
+    // 落盘是异步的（数据可能写进 IndexedDB），断言存储前先等它写完
+    await vi.waitFor(() => {
+      expect(persistedState(STORAGE_KEYS.theme)?.themeMode).toBe('dark');
+    });
   });
 
   it('旧 API setTheme 等价于设定具体模式', () => {
@@ -106,13 +110,15 @@ describe('themeStore', () => {
 });
 
 describe('uiStore', () => {
-  it('折叠状态与密度都会持久化', () => {
+  it('折叠状态与密度都会持久化', async () => {
     useUiStore.getState().toggleSidebar();
     useUiStore.getState().toggleDensity();
 
-    const state = persistedState(STORAGE_KEYS.ui);
-    expect(state?.sidebarCollapsed).toBe(true);
-    expect(state?.density).toBe('compact');
+    await vi.waitFor(() => {
+      const state = persistedState(STORAGE_KEYS.ui);
+      expect(state?.sidebarCollapsed).toBe(true);
+      expect(state?.density).toBe('compact');
+    });
   });
 
   it('密度在两种取值之间来回切换', () => {

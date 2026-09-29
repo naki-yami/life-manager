@@ -166,13 +166,15 @@ describe('uiStore 仪表盘', () => {
     expect(useUiStore.getState().dashboard).toEqual(defaultDashboard());
   });
 
-  it('排布会跟着侧栏 / 密度一起写进 lm:ui', () => {
+  it('排布会跟着侧栏 / 密度一起写进 lm:ui', async () => {
     useUiStore.getState().setWidgetSize('focus', 'lg');
     useUiStore.getState().setWidgetHidden('todos', true);
 
-    const persisted = persistedDashboard();
-    expect(persisted.find((widget) => widget.id === 'focus')?.size).toBe('lg');
-    expect(persisted.find((widget) => widget.id === 'todos')?.hidden).toBe(true);
+    await vi.waitFor(() => {
+      const persisted = persistedDashboard();
+      expect(persisted.find((widget) => widget.id === 'focus')?.size).toBe('lg');
+      expect(persisted.find((widget) => widget.id === 'todos')?.hidden).toBe(true);
+    });
   });
 
   it('重新载入时把脏数据归一化成当前结构', async () => {

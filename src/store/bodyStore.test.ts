@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useBodyStore } from './bodyStore';
 import { STORAGE_KEYS } from '../utils/storageKeys';
 import { MAX_BODY_READING } from '../utils/body';
@@ -101,16 +101,19 @@ describe('bodyStore 按日期写入', () => {
 });
 
 describe('持久化与归一化', () => {
-  it('写入 lm:body，读数与围度一起落盘', () => {
+  it('写入 lm:body，读数与围度一起落盘', async () => {
     store().saveRecord({ date: '2026-09-29', weight: 70.4, measurements: { waist: 80 } });
 
-    const raw = localStorage.getItem(STORAGE_KEYS.body);
-    expect(raw).not.toBeNull();
-    const parsed = JSON.parse(raw!) as {
-      state: { records: Array<{ weight: number; measurements: Record<string, number> }> };
-    };
-    expect(parsed.state.records[0]!.weight).toBe(70.4);
-    expect(parsed.state.records[0]!.measurements).toEqual({ waist: 80 });
+    // 落盘是异步的（数据可能写进 IndexedDB），断言存储前先等它写完
+    await vi.waitFor(() => {
+      const raw = localStorage.getItem(STORAGE_KEYS.body);
+      expect(raw).not.toBeNull();
+      const parsed = JSON.parse(raw!) as {
+        state: { records: Array<{ weight: number; measurements: Record<string, number> }> };
+      };
+      expect(parsed.state.records[0]!.weight).toBe(70.4);
+      expect(parsed.state.records[0]!.measurements).toEqual({ waist: 80 });
+    });
   });
 
   it('旧数据缺字段时按 schema 补齐', async () => {

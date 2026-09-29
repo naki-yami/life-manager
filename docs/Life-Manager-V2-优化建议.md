@@ -86,6 +86,7 @@ V1 的**地基**已经超出个人项目的平均水准：语义化设计令牌 
 **短板三：数据托底不足**
 
 - 9 个 `persist()`（task / book / dev / writing / fitness / diet / game / theme / ui）都只传了 `name` + `version` + `migrate`，**没有 `onError`**；localStorage 写入超限（5MB 上限、Safari 隐私模式）时用户不会收到任何提示。
+  —— **进度（2026-09-29）**：✅ 写入失败已分「读失败 / 写失败」两类提示，且数据主体已搬到 IndexedDB（配额按磁盘算，不再是 5MB），见 §9「V2.1 第八阶段：IndexedDB 存储层」。
 - `public/` 目录为空：无 manifest、无图标、无 service worker → 不能安装成桌面/手机应用，断网不可用。
   —— **进度（2026-09-29）**：✅ 已补上，见 §9「V2.1 第七阶段：PWA 可安装与离线壳」。
 - `migrateState()` 是**顶层浅合并**：只能补"store 根级"的缺失字段。数组内单条记录新增的字段（例如给 `Task` 加 `subtasks`）不会被回填，只能靠各页面写 `task.subtasks ?? []` 兜底——这就是 `src/types/index.ts` 里到处是"旧数据可能没有"注释的根因。
@@ -357,14 +358,14 @@ V1 缺：时间盒、专注计时、每日总结、每周复盘、目标与达�
 
 ### V2.0 地基与入口（建议 4–6 周）
 
-> **进度（2026-09-29）**：D2 / D3 / D4 / D6 / D7 / F1 / F2 / U1 / U3 已完成；U2 的双栏组件已落地并接入读书 / 任务 / 开发 / 游戏 / 写作五个页面 —— V2.0 至此全部完成。V2.1 已开工：F4 习惯养成、F5 身体指标、F3 时间盒与专注计时（各含数据层 + 页面 + 首页卡片）已完成，见 §9。
+> **进度（2026-09-29）**：D2 / D3 / D4 / D6 / D7 / F1 / F2 / U1 / U3 已完成；U2 的双栏组件已落地并接入读书 / 任务 / 开发 / 游戏 / 写作五个页面 —— V2.0 至此全部完成。V2.1 已开工：F4 习惯养成、F5 身体指标、F3 时间盒与专注计时（各含数据层 + 页面 + 首页卡片）、D1 存储层迁移到 IndexedDB 均已完成，见 §9。
 
 范围：D1 存储升级、D2 写入可靠性、D3 自动备份、D4 归一化与 store 工厂、D6 CI、D7 README；F6 一起完成；F1 快速捕获、F2 标签与全局搜索、U1 首页仪表盘、U2 双栏布局、U3 命令面板。
 
 **验收**
 
 - [x] 清除浏览器数据后，能从自动备份或导出的文件完整恢复（ackup.test.ts 有一条端到端用例：留快照 → 清除 → 回滚，数据逐字节一致）
-- [x] 写入失败、配额紧张都有明确提示，不再静默失败（storage.test.ts 5 条 + StorageAlert.test.tsx 4 条）
+- [x] 写入失败、配额紧张都有明确提示，不再静默失败（storage.test.ts 20+ 条 + kv.test.ts 20 条 + hydrate.test.ts 2 条 + StorageAlert.test.tsx 5 条）
 - [x] ⌘K 能搜到并创建 8 类实体（任务 / 书 / 开发项目 / 写作 / 训练 / 饮食 / 游戏 / 备忘），一次输入完成录入
 - [x] 首页卡片可隐藏 / 重排 / 调尺寸，刷新后保持
 - [x] 桌面端（≥1280px）读书页用双栏替代弹窗，窄屏仍走抽屉
@@ -420,12 +421,7 @@ pm run size）≤ 300KB ✅
 | D4 归一化层 + 统一 store 工厂 | ✅     | `persistOptions()` + `src/store/normalize.ts`，9 个 store 全部迁移；修好了「逐条补字段写在 `migrate` 里、版本号升到头之后就再也不执行」的老问题 |
 | D3 自动备份（部分）           | ✅     | 每日首次打开自动快照 `ensureDailySnapshot()`，空库不占快照位；快照写入也纳入配额保护。**未做**：导出到指定文件夹（File System Access API）      |
 | D2 容量告警                   | ✅     | 占用集中到 `getStorageUsage()`，设置页超过 3MB 预警                                                                                             |
-| D1 存储层迁移到 IndexedDB     | ⏸ 推迟 | 见下方说明                                                                                                                                      |
-
-**D1 为什么推迟**：`persist` 读 IndexedDB 是异步的，而 `index.html` 里的首屏防闪烁脚本、以及全部
-400+ 个单测，都依赖「同步水合完成后再渲染」。直接切换会让首屏闪一下空状态，并把大量测试改成异步等待；
-而容量（约 5MB）目前并不是瓶颈。后端已经收敛到 `src/store/storage.ts` 一处，
-等容量真正吃紧时，只需要改这一个文件再加一个 `hasHydrated` 门控。
+| D1 存储层迁移到 IndexedDB     | ✅     | 数据与快照改走 IndexedDB（`src/store/kv.ts`），localStorage 只留「主题 / 密度」两个同步键；老数据首启只写不删地搬家，首屏用 `hydrateAllStores()` 门控。见 §9「V2.1 第八阶段」 |
 
 **顺带修掉的问题**
 
@@ -867,6 +863,42 @@ pm run size）≤ 300KB ✅
 `sw.js` 的预缓存清单覆盖 manifest 与全部图标、缓存名带版本号、代码里没有 `localStorage`、
 导航走网络优先、assets 走缓存优先、`index.html` 的各项接线指向真实存在的文件。
 测试总数 980 → **996**（62 → **64** 个测试文件）。首屏 gzip 152.4 → **152.5 KB**（离线壳与 manifest 不进 JS 包）。
+
+---
+
+### V2.1 第八阶段：IndexedDB 存储层（已完成）
+
+| 项               | 状态 | 说明                                                                                                                                                               |
+| ---------------- | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 存储后端         | ✅   | 新 `src/store/kv.ts`：`AsyncKeyValueStore` 抽象（get / set / remove / entries），主后端 IndexedDB（库 `life-manager`、object store `kv`），打不开就返回 `null` 自动退回 localStorage |
+| 首启搬家         | ✅   | IndexedDB 里查不到某 key 时，把 localStorage 的同名老数据**只写不删**地搬过去（`readAppValue()`）；搬完老数据仍在，回滚到 V2.0 版本依旧读得出来                     |
+| 写失败分两类     | ✅   | `src/store/storageFailure.ts` 的 `StorageFailure` 增加 `kind: 'read' \| 'write'`；`StorageAlert` 给「读不出来」与「写不进去」两套文案，读失败明确告诉用户「现在看到的空不代表你没录过」 |
+| 首屏等待         | ✅   | `hydrateAllStores()` 等 14 个 store 的 `persist.hasHydrated()`，上限 1.5s（`BOOT_TIMEOUT_MS`）后无论读完没有都渲染，不会因为一次卡住的读请求白屏                              |
+| 快照跟数据同后端 | ✅   | `services/backup.ts` 的快照读写与业务数据共用同一后端、同一把 key 前缀，不再单独依赖 localStorage                                                                    |
+| 容量告警         | ✅   | `measureAppStorage()` 在 IndexedDB 下读 `navigator.storage.estimate()`，用掉 ≥70% 才告警；退回 localStorage 时仍按 3MB 阈值                                        |
+| 删除策略         | ✅   | `clearAppData()` 两个后端都清（默认保留快照），删除失败会抛异常，而不是假装清干净                                                                                    |
+
+**几个刻意的选择**
+
+- **手写 `kv.ts`，不引 `idb-keyval` / Dexie**：这两个库加起来能替我们省下的代码不到一百行，但语义（多后端合并、首启搬家、
+  打不开就降级）还是得自己写；「本地优先、依赖克制」的项目不值得为这点胶水拉一条依赖，更别说这条依赖要是坏了，坏的是数据层。
+- **主题 / 密度仍留在 localStorage**：`index.html` 里那段首屏防闪烁脚本是**同步内联**的，必须能在第一次绘制前读到值。
+  IndexedDB 只有异步 API，把主题放进去等于每次刷新先闪一下默认色。所以 `SYNC_KEYS = ['theme', 'ui']` 显式留在同步后端，其余全搬。
+- **老数据只写不删**：搬家时把 localStorage 那份原样留着，代价是同一份数据在迁移期占两份空间，收益是「新版本读到脏数据」或
+  「用户想退回旧版本」都有退路。等哪天确认不再需要，再单独做一次显式清理，而不是在搬家那一刻顺手删掉。
+- **首屏等待封顶 1.5s**：纯等 `hasHydrated()` 在正常情况下是毫秒级，但只要有一次 IndexedDB 打开被阻塞（隐私模式、磁盘满、
+  另一个标签页占着升级锁），就会无限等下去。宁可 1.5s 后先把界面画出来、让后到的数据再补进来，也不留一个「永远转圈」的可能。
+- **`measureAppStorage()` 只统计主后端**：迁移期 localStorage 里那份是历史副本，把它算进占用会让数字凭空翻倍，
+  用户会以为「我明明没存多少怎么占这么多」。占用说的是「真实生效的那份」，历史副本不该计入。
+- **`setItem` 不透出 promise**：zustand 的 `persist` 用 `(...args) => { set(...args); return setItem(); }` 包住 set，
+  返回值会变成**每个 action 的返回值**。一旦这里透出 promise，所有 action 都变成「返回 promise 的 action」，
+  React 的 `act()` 会把它们当异步动作处理，测试时序全乱。所以 `persistStorage.setItem` 返回 `void`，async 实现单独抽成 `writePersisted()`。
+
+**新增测试**：`src/store/kv.test.ts` 20 条（内存假后端 + 极简 IndexedDB 替身 `stubIndexedDb()`：key→后端路由、首启搬家、
+两端合并读取、写入前先等首次读取、IndexedDB 往返、打不开时返回 `null`）；`src/store/hydrate.test.ts` 2 条
+（全读完立刻 resolve、有 store 挂在读取上时不 resolve）；`storage.test.ts` / `backup.test.ts` 全部改异步并补读失败、读取抛错、
+`readAppStateEntries`、`measureAppStorage`、`clearAppData` 各组用例；`StorageAlert.test.tsx` 补读失败文案 1 条。
+测试总数 996 → **1018**（64 → **66** 个测试文件）。首屏 gzip 152.5 → **154.0 KB**（预算 300KB 的 51%）。
 
 ---
 

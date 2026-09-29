@@ -37,7 +37,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenNav }) => {
   const [saving, setSaving] = React.useState(false);
 
   /**
-   * 手动保存：所有数据本来就随每次改动自动写入 localStorage，
+   * 手动保存：所有数据本来就随每次改动自动写入本地存储，
    * 这里额外留一份带说明的快照（可在设置页回滚），并给出明确反馈。
    * 备份模块按需加载，不进首屏包。
    */
@@ -46,7 +46,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenNav }) => {
     setSaving(true);
     try {
       const { createAutoSnapshot } = await import('../../services/backup');
-      const key = createAutoSnapshot('手动保存');
+      const key = await createAutoSnapshot('手动保存');
       toast({
         tone: 'success',
         title: '已保存到本地',

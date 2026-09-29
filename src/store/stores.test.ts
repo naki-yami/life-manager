@@ -174,21 +174,26 @@ describe('taskStore', () => {
 });
 
 describe('持久化 key', () => {
-  it('写入 lm: 前缀的 key，且不再使用旧的 tasks-storage', () => {
+  it('写入 lm: 前缀的 key，且不再使用旧的 tasks-storage', async () => {
     useTaskStore.getState().addTask('任务', '', 'low', '');
 
-    const raw = localStorage.getItem(STORAGE_KEYS.tasks);
-    expect(raw).not.toBeNull();
-    expect(JSON.parse(raw!).state.tasks).toHaveLength(1);
-    expect(localStorage.getItem('tasks-storage')).toBeNull();
+    // 落盘是异步的（数据可能写进 IndexedDB），断言存储前先等它写完
+    await vi.waitFor(() => {
+      const raw = localStorage.getItem(STORAGE_KEYS.tasks);
+      expect(raw).not.toBeNull();
+      expect(JSON.parse(raw!).state.tasks).toHaveLength(1);
+      expect(localStorage.getItem('tasks-storage')).toBeNull();
+    });
   });
 
-  it('各 store 使用各自独立的 key', () => {
+  it('各 store 使用各自独立的 key', async () => {
     useBookStore.getState().addBook('书名', '作者', '分类');
     useThemeStore.getState().setTheme('dark');
 
-    expect(JSON.parse(localStorage.getItem(STORAGE_KEYS.books)!).state.books).toHaveLength(1);
-    expect(JSON.parse(localStorage.getItem(STORAGE_KEYS.theme)!).state.themeMode).toBe('dark');
+    await vi.waitFor(() => {
+      expect(JSON.parse(localStorage.getItem(STORAGE_KEYS.books)!).state.books).toHaveLength(1);
+      expect(JSON.parse(localStorage.getItem(STORAGE_KEYS.theme)!).state.themeMode).toBe('dark');
+    });
   });
 });
 
@@ -473,6 +478,12 @@ describe('旧版数据迁移（端到端）', () => {
     // 模拟真实的启动顺序：全新的模块图 -> 加载 store
     const freshTaskStore = (await import('./taskStore')).useTaskStore;
     const freshBookStore = (await import('./bookStore')).useBookStore;
+
+    // 反序列化是异步的（数据可能落在 IndexedDB 里），等两份 store 都读回来
+    await vi.waitFor(() => {
+      expect(freshTaskStore.getState().tasks).toHaveLength(1);
+      expect(freshBookStore.getState().books).toHaveLength(1);
+    });
 
     expect(freshTaskStore.getState().tasks).toHaveLength(1);
     expect(freshTaskStore.getState().tasks[0]!.id).toBe('old-task');

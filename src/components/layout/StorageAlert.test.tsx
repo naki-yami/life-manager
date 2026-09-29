@@ -43,6 +43,18 @@ describe('StorageAlert', () => {
     expect(screen.getByText(/隐私模式/)).toBeInTheDocument();
   });
 
+  it('读不出来时说明「空白不等于你没录过」，并引导回滚', () => {
+    render(<StorageAlert />);
+
+    act(() => {
+      reportStorageFailure('lm:tasks', new Error('不是合法 JSON'), 'read');
+    });
+
+    expect(screen.getByText('本地数据读不出来')).toBeInTheDocument();
+    expect(screen.getByText(/并不代表你没录过/)).toBeInTheDocument();
+    expect(screen.getByText(/自动备份/)).toBeInTheDocument();
+  });
+
   it('可以手动关掉', async () => {
     render(<StorageAlert />);
     act(() => {

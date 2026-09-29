@@ -1,7 +1,7 @@
 import '@testing-library/jest-dom/vitest';
 import { afterEach, beforeEach, vi } from 'vitest';
 import { cleanup } from '@testing-library/react';
-import { clearAppStorage } from '../utils/storageKeys';
+import { clearAppData } from '../store/storage';
 
 /*
  * jsdom 没有实现 matchMedia。
@@ -30,8 +30,9 @@ function createMediaQueryList(query: string): MediaQueryList {
   } as unknown as MediaQueryList;
 }
 
-beforeEach(() => {
-  clearAppStorage();
+beforeEach(async () => {
+  // 走应用自己的清理入口，顺带保证测试与线上是同一条清除路径
+  await clearAppData();
   localStorage.clear();
   vi.stubGlobal('matchMedia', (query: string) => createMediaQueryList(query));
   window.matchMedia = globalThis.matchMedia as typeof window.matchMedia;

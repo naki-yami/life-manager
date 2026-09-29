@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Database,
@@ -57,8 +57,10 @@ import {
   planTotals,
   restoreAutoSnapshot,
 } from '../services/backup';
-import type { ImportMode, ImportPlan, ParseIssue } from '../services/backup';
-import { MAX_AUTO_BACKUPS, clearAppStorage, getStorageUsage } from '../utils/storageKeys';
+import type { AutoSnapshot, ImportMode, ImportPlan, ParseIssue } from '../services/backup';
+import { MAX_AUTO_BACKUPS } from '../utils/storageKeys';
+import { clearAppData, measureAppStorage } from '../store/storage';
+import type { AppStorageUsage } from '../store/storage';
 import { Kbd } from '../components/ui';
 
 /** 快捷键说明表的数据；与 useShortcuts 里真正实现的按键保持一致 */
@@ -131,7 +133,7 @@ function applyPlan(data: Partial<BackupData>): void {
   }
 }
 
-/** 只清空各 store 的内存状态（不清 localStorage，localStorage 由 clearAppStorage 负责） */
+/** 只清空各 store 的内存状态（落盘那一步由 clearAppData 负责，这里不碰存储） */
 function resetStores(): void {
   useTaskStore.getState().replaceTasks([]);
   useTaskStore.getState().replaceMemos([]);
@@ -185,8 +187,28 @@ export const SettingsPage: React.FC = () => {
   const [parsed, setParsed] = useState<{ plan: ImportPlan; warnings: ParseIssue[] } | null>(null);
   const [importing, setImporting] = useState(false);
   const [importErrors, setImportErrors] = useState<ParseIssue[]>([]);
-  const [snapshots, setSnapshots] = useState(() => listAutoSnapshots());
+  const [snapshots, setSnapshots] = useState<AutoSnapshot[]>([]);
+  const [usage, setUsage] = useState<AppStorageUsage | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  /**
+   * 重新读一遍存储占用与快照。
+   *
+   * 数据现在可能落在 IndexedDB 里，读取是异步的，不能再像以前那样在渲染里同步取值；
+   * 读不出来也只影响这两块显示，不该把整个设置页拖下水。
+   */
+  const refreshStorage = useCallback(async (): Promise<void> => {
+    try {
+      const [nextUsage, nextSnapshots] = await Promise.all([
+        measureAppStorage(),
+        listAutoSnapshots(),
+      ]);
+      setUsage(nextUsage);
+      setSnapshots(nextSnapshots);
+    } catch (error) {
+      console.error('[Life Manager] 读取本地存储状态失败。', error);
+    }
+  }, []);
 
   // 用选择器订阅各模块条数：数据变化时概览会自动刷新，且不会引起无关重渲染
   const taskCount = useTaskStore((state) => state.tasks.length);
@@ -228,7 +250,11 @@ export const SettingsPage: React.FC = () => {
   ];
 
   const totalEntries = counts.reduce((sum, item) => sum + item.count, 0);
-  const usage = getStorageUsage();
+
+  // 条数一变就重算占用（导入、清除之后的刷新也走这条路径）
+  useEffect(() => {
+    void refreshStorage();
+  }, [refreshStorage, totalEntries]);
 
   const handleExport = useCallback((): void => {
     const fileName = downloadBackup(readAllData());
@@ -274,13 +300,14 @@ export const SettingsPage: React.FC = () => {
     reader.readAsText(file);
   };
 
-  const handleConfirmImport = (): void => {
+  const handleConfirmImport = async (): Promise<void> => {
     if (!parsed) return;
-    createAutoSnapshot('导入备份前');
+    // 必须先落快照再写入：快照要的是「导入前」的状态，慢一步就成了导入后的
+    await createAutoSnapshot('导入备份前');
     applyPlan(parsed.plan.data);
     const totals = planTotals(parsed.plan.stats);
     setParsed(null);
-    setSnapshots(listAutoSnapshots());
+    await refreshStorage();
     toast({
       title: '导入完成',
       description: `新增 ${totals.added} 条，跳过重复 ${totals.skipped} 条`,
@@ -288,12 +315,23 @@ export const SettingsPage: React.FC = () => {
     });
   };
 
-  const handleClearAll = (): void => {
-    createAutoSnapshot('清除所有数据前');
-    clearAppStorage();
+  const handleClearAll = async (): Promise<void> => {
+    await createAutoSnapshot('清除所有数据前');
+    try {
+      await clearAppData();
+    } catch {
+      // 没清干净就别说「已清除」，更别把界面上的数据抹掉 —— 那会变成两处对不上
+      setShowClearDialog(false);
+      toast({
+        title: '清除失败',
+        description: '浏览器拒绝写入本地存储，请先导出备份后重试。',
+        tone: 'danger',
+      });
+      return;
+    }
     resetStores();
     setShowClearDialog(false);
-    setSnapshots(listAutoSnapshots());
+    await refreshStorage();
     toast({
       title: '已清除全部数据',
       description: '需要恢复的话，可以在「自动备份」里回滚。',
@@ -301,10 +339,10 @@ export const SettingsPage: React.FC = () => {
     });
   };
 
-  const handleClearSnapshots = (): void => {
-    const removed = clearAutoSnapshots();
+  const handleClearSnapshots = async (): Promise<void> => {
+    const removed = await clearAutoSnapshots();
     setShowClearSnapshotsDialog(false);
-    setSnapshots(listAutoSnapshots());
+    await refreshStorage();
     toast({
       title: '已删除全部快照',
       description: `${removed.length} 份快照已清除，之后无法再回滚（当前数据不受影响）。`,
@@ -312,10 +350,10 @@ export const SettingsPage: React.FC = () => {
     });
   };
 
-  const handleConfirmRestore = (): void => {
+  const handleConfirmRestore = async (): Promise<void> => {
     const key = restoreKey;
     setRestoreKey(null);
-    if (!key || !restoreAutoSnapshot(key)) {
+    if (!key || !(await restoreAutoSnapshot(key))) {
       toast({ title: '回滚失败', description: '快照可能已损坏。', tone: 'danger' });
       return;
     }
@@ -332,7 +370,7 @@ export const SettingsPage: React.FC = () => {
         icon={SettingsIcon}
         meta={
           <Badge tone="default">
-            共 {totalEntries} 条数据 · 占用 {formatBytes(usage.bytes)}
+            共 {totalEntries} 条数据 · 占用 {usage ? formatBytes(usage.bytes) : '—'}
           </Badge>
         }
       />
@@ -397,12 +435,21 @@ export const SettingsPage: React.FC = () => {
       <Card>
         <CardHeader
           title="数据概览"
-          subtitle={`本应用占用本地存储约 ${formatBytes(usage.bytes)}`}
+          subtitle={
+            usage === null
+              ? '正在读取存储占用…'
+              : `本应用占用${
+                  usage.backend === 'indexeddb' ? '浏览器存储（IndexedDB）' : '本地存储'
+                }约 ${formatBytes(usage.bytes)}`
+          }
         />
         <CardBody>
-          {usage.level === 'warning' && (
-            <Alert tone="warning" title="本地存储快满了" className="mb-3">
-              已用 {formatBytes(usage.bytes)}，接近浏览器给单个站点的上限（约 5MB）。
+          {usage?.level === 'warning' && (
+            <Alert tone="warning" title="存储空间快满了" className="mb-3">
+              已用 {formatBytes(usage.bytes)}，
+              {usage.backend === 'indexeddb'
+                ? '浏览器给本站点的配额已经用掉七成以上。'
+                : '接近浏览器给单个站点的上限（约 5MB）。'}
               建议先在上方导出备份，再到下面删除不需要的自动快照。
             </Alert>
           )}

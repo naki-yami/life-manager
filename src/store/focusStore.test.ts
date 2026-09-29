@@ -146,12 +146,14 @@ describe('focusStore 记录管理', () => {
     expect(store().sessions).toEqual([]);
   });
 
-  it('数据落在 lm:focus 上，进行中的专注也会一起存', () => {
+  it('数据落在 lm:focus 上，进行中的专注也会一起存', async () => {
     startFocus();
 
-    const raw = localStorage.getItem(STORAGE_KEYS.focus);
-    expect(raw).toBeTruthy();
-    expect(raw).toContain('写方案');
-    expect(raw).toContain('"active"');
+    await vi.waitFor(() => {
+      const raw = localStorage.getItem(STORAGE_KEYS.focus);
+      expect(raw).toBeTruthy();
+      expect(raw).toContain('写方案');
+      expect(raw).toContain('"active"');
+    });
   });
 });
