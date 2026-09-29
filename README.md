@@ -7,7 +7,8 @@
 
 个人数据（读了什么书、写了多少字、练了什么、吃了什么）不需要经过别人的服务器。所以这个项目：
 
-- **没有后端**：`npm run preview` 出的静态文件丢到任何地方都能跑，断网也能用。
+- **没有后端**：`npm run preview` 出的静态文件丢到任何地方都能跑。
+- **断网也能用**：装了 service worker，首次打开之后断网照常使用，也可以装成桌面 / 手机应用。
 - **没有账号**：打开即用，没有登录、没有同步、没有遥测。
 - **数据可带走**：一键导出 JSON，导入时还能选「合并」或「覆盖」。
 - **不吞数据**：任何破坏性操作前都会自动留快照；「清除数据」也保留快照，随时能回滚。
@@ -32,6 +33,19 @@
 
 React 18 + TypeScript（严格模式，禁用 `any`）+ Vite 6 + Tailwind CSS 3 + zustand（`persist`）+ react-router + zod + @dnd-kit。
 依赖刻意保持克制：没有 UI 组件库、没有图表库、没有日期库的重度封装，图表与设计系统都是自己写的。
+PWA 也没引 workbox —— 离线壳是一个手写的 service worker（`public/sw.js`，约 100 行），
+图标由 `scripts/generate-icons.mjs` 用 Node 自带的 zlib 直接生成 PNG，同样没有引入原生依赖。
+
+## 装成应用（PWA）
+
+`npm run build && npm run preview`，用浏览器打开预览地址，地址栏右侧会出现「安装」按钮；
+手机浏览器里是「添加到主屏幕」。装完之后：
+
+- 独立窗口运行，没有浏览器地址栏；
+- 断网可用（数据本来就在本地，service worker 只负责把页面壳也缓存下来）；
+- 换新版：导航请求走网络优先，重新打开就会拿到新版本，不用手动清缓存。
+
+离线壳只缓存 HTML / CSS / JS / 图标，**不碰任何用户数据**（既不读也不写 localStorage）。
 
 ## 快速开始
 
@@ -58,8 +72,9 @@ src/
   services/    备份、导入导出、schema 校验
   utils/       日期、统计、搜索、标签、快捷语法解析…
   test/        vitest 启动配置与测试工具
+public/        静态资源：favicon、PWA 图标、manifest 与离线壳 sw.js
 docs/          设计文档与优化路线图
-scripts/       构建产物体积预算等小工具
+scripts/       构建产物体积预算、PWA 图标生成等小工具
 ```
 
 ## 数据与隐私

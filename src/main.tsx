@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client';
 import App from './App';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { ToastProvider } from './components/ui';
+import { registerOfflineShell } from './services/pwa';
 import './styles/index.css';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
@@ -14,6 +15,16 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     </ErrorBoundary>
   </React.StrictMode>,
 );
+
+/*
+ * 注册离线壳：装成 PWA 之后断网也能打开。
+ * 静态导入，不用动态 import —— 这只有一个几十字节的判断，
+ * 而离线能力本身是首屏就要生效的。
+ */
+void registerOfflineShell({
+  isProduction: import.meta.env.PROD,
+  serviceWorker: typeof navigator === 'undefined' ? undefined : navigator.serviceWorker,
+});
 
 /*
  * 每天第一次打开时自动留一份快照（D3）。

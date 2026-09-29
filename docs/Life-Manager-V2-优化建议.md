@@ -87,6 +87,7 @@ V1 的**地基**已经超出个人项目的平均水准：语义化设计令牌 
 
 - 9 个 `persist()`（task / book / dev / writing / fitness / diet / game / theme / ui）都只传了 `name` + `version` + `migrate`，**没有 `onError`**；localStorage 写入超限（5MB 上限、Safari 隐私模式）时用户不会收到任何提示。
 - `public/` 目录为空：无 manifest、无图标、无 service worker → 不能安装成桌面/手机应用，断网不可用。
+  —— **进度（2026-09-29）**：✅ 已补上，见 §9「V2.1 第七阶段：PWA 可安装与离线壳」。
 - `migrateState()` 是**顶层浅合并**：只能补"store 根级"的缺失字段。数组内单条记录新增的字段（例如给 `Task` 加 `subtasks`）不会被回填，只能靠各页面写 `task.subtasks ?? []` 兜底——这就是 `src/types/index.ts` 里到处是"旧数据可能没有"注释的根因。
 
 **短板四：缺"计划—专注—复盘"闭环**
@@ -95,7 +96,8 @@ V1 缺：时间盒、专注计时、每日总结、每周复盘、目标与达�
 
 ### 2.3 文档与实现的两处漂移（顺手修）
 
-- `src/components/layout/navItems.ts` 里健身的描述是"训练记录与身体指标"，但 `src/types/index.ts` 没有任何体重/围度类型，页面上也没有入口。
+- `src/components/layout/navItems.ts` 里健身的描述是"训练记录与身体指标"，但 `src/types/index.ts` 没有任何体重/围度类型，页面上也没有入口。（已在 V2.1 第二阶段补上）
+- `index.html` 的 favicon 指向 `/vite.svg`，而 `public/` 是空的 —— 也就是说不光没图标，那个图标本来就 404。（已在 V2.1 第七阶段换成自带的 `favicon.svg`）
 - `docs/产品设计文档.md` 仍写着"不支持手机端"，但 P6-3-1 已做移动端适配。
 
 ---
@@ -833,6 +835,38 @@ pm run size）≤ 300KB ✅
 `components/layout/layout.test.tsx` 补 `BottomTabBar` 3 条（只放四个高频入口 + 「更多」开抽屉、`aria-current` 与跳转、当前页不在 Tab 上时点亮「更多」）；
 图表侧另有 `charts.test.tsx` 键盘读点 4 条 + `StackedBar` 4 条、`tokens.test.ts` 色板校验 8 条。
 测试总数 958 → **980**（62 个测试文件）。首屏 gzip 151.7 → **152.4 KB**（预算 300KB 的 51%）。
+
+---
+
+### V2.1 第七阶段：PWA 可安装与离线壳（已完成）
+
+| 项              | 状态 | 说明                                                                                                                                                     |
+| --------------- | ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 图标 + favicon  | ✅   | `scripts/generate-icons.mjs` 生成 `icon-192` / `icon-512` / `icon-maskable-512` 与 `favicon.svg`；顺手修掉 `index.html` 里一直 404 的 `/vite.svg`          |
+| manifest        | ✅   | `public/manifest.webmanifest`：`display: standalone`、`start_url: /`、独立的 `any` 与 `maskable` 图标，亮暗两套 `theme-color`                            |
+| 离线壳          | ✅   | `public/sw.js`：导航网络优先并回退到 `/index.html`；`/assets/` 下的哈希文件名走缓存优先；其余同源 GET 网络优先，跨域直接放行                            |
+| 注册            | ✅   | `src/services/pwa.ts` 的 `registerOfflineShell()`，只在生产构建注册；失败一律吞掉，不影响任何功能                                                       |
+| `index.html`    | ✅   | manifest / `apple-touch-icon` / 亮暗两套 `theme-color` / `apple-mobile-web-app-*`                                                                       |
+
+**几个刻意的选择**
+
+- **不引 workbox、也不上 `vite-plugin-pwa`**：这两个都会给一个「本地优先、依赖克制」的项目拉进一棵不小的依赖树，
+  而我们要的东西（预缓存壳 + 网络优先的导航 + 哈希资源缓存优先）本身不到 100 行，读一遍就能改。
+- **只缓存壳，绝不碰数据**：Service Worker 里没有 `localStorage` / `indexedDB` 的任何读写。
+  缓存策略写错的代价是「页面旧了」，而不是「数据丢了」，这条边界必须守死。
+- **导航请求是网络优先，不是缓存优先**：缓存优先在本地优先应用里很常见，但会让「部署了新版、用户却还在用旧版」持续到手动清缓存为止。
+  这里让 `index.html` 每次先问网络，断网才回退缓存 —— 代价是离线首屏多一次失败的请求，收益是版本不会卡住。
+- **maskable 单独出一张图**：Android 会把 maskable 图标按系统形状裁剪，直接拿普通图标去裁，圆角会被啃掉一块。
+  所以 `generate-icons.mjs` 对 maskable 变体铺满画布、并把字形缩进安全区。
+- **不装 `sharp` / `canvas` 画图标**：为了三个纯色几何图形拉进原生编译依赖不值当。
+  `scripts/generate-icons.mjs` 用 Node 自带的 `zlib` 手写 PNG（RGBA + filter 0），4 倍超采样再降采样做抗锯齿，产物确定、可复现。
+- **`start_url` 与 `scope` 都是 `/`**：这是个单页应用，没有需要隔离的子路径。
+
+**新增测试**：`services/pwa.test.ts` 4 条（生产注册 `/sw.js`、开发不注册、不支持 SW 时跳过、注册失败不抛错）；
+`test/pwaAssets.test.ts` 12 条 —— manifest 字段与图标尺寸（读 PNG 的 IHDR 核对真实宽高，防止「改了扩展名的假图」）、
+`sw.js` 的预缓存清单覆盖 manifest 与全部图标、缓存名带版本号、代码里没有 `localStorage`、
+导航走网络优先、assets 走缓存优先、`index.html` 的各项接线指向真实存在的文件。
+测试总数 980 → **996**（62 → **64** 个测试文件）。首屏 gzip 152.4 → **152.5 KB**（离线壳与 manifest 不进 JS 包）。
 
 ---
 
