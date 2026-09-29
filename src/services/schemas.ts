@@ -7,7 +7,7 @@ import { z } from 'zod';
  */
 
 export const APP_ID = 'life-manager';
-export const BACKUP_SCHEMA_VERSION = 9;
+export const BACKUP_SCHEMA_VERSION = 10;
 
 const isoDateString = z.string();
 const percent = z.number().min(0).max(100).catch(0);
@@ -85,6 +85,23 @@ export const devTaskSchema = z.object({
   title: z.string(),
   status: z.enum(['todo', 'in-progress', 'done']).default('todo'),
   priority: z.enum(['high', 'medium', 'low']).default('medium'),
+  /** v10：工作项分类；旧备份缺省按「功能」处理 */
+  type: z.enum(['feature', 'requirement', 'bug', 'tech']).default('feature'),
+  createdAt: isoDateString.default(() => new Date().toISOString()),
+});
+
+export const devMilestoneSchema = z.object({
+  id: z.string().min(1),
+  title: z.string(),
+  dueDate: z.string().optional(),
+  done: z.boolean().default(false),
+  createdAt: isoDateString.default(() => new Date().toISOString()),
+});
+
+export const devLogEntrySchema = z.object({
+  id: z.string().min(1),
+  date: z.string().default(''),
+  content: z.string(),
   createdAt: isoDateString.default(() => new Date().toISOString()),
 });
 
@@ -102,6 +119,9 @@ export const devProjectSchema = z.object({
   startDate: isoDateString.optional(),
   endDate: isoDateString.optional(),
   archived: z.boolean().default(false),
+  /** v10：里程碑与开发日志；旧备份缺省补空数组 */
+  milestones: z.array(devMilestoneSchema).default([]),
+  logs: z.array(devLogEntrySchema).default([]),
   createdAt: isoDateString.default(() => new Date().toISOString()),
 });
 

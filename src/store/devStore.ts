@@ -1,6 +1,14 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { DevProject, DevProjectStatus, DevTask, DevTaskStatus, Priority, WorkSession } from '../types';
+import {
+  DevItemType,
+  DevProject,
+  DevProjectStatus,
+  DevTask,
+  DevTaskStatus,
+  Priority,
+  WorkSession,
+} from '../types';
 import { createId } from '../utils/id';
 import { STORAGE_KEYS } from '../utils/storageKeys';
 import { STORE_VERSION, migrateState } from './persist';
@@ -14,11 +22,16 @@ interface DevState {
   updateProject: (id: string, updates: Partial<DevProject>) => void;
   deleteProject: (id: string) => void;
   updateProjectStatus: (id: string, status: DevProjectStatus) => void;
-  addTask: (projectId: string, title: string, priority: Priority) => void;
+  addTask: (projectId: string, title: string, priority: Priority, type?: DevItemType) => void;
   updateTaskStatus: (projectId: string, taskId: string, status: DevTaskStatus) => void;
   deleteTask: (projectId: string, taskId: string) => void;
   /** 看板拖拽后整表写回某个项目的任务（顺序与状态一起定） */
   reorderTasks: (projectId: string, tasks: DevTask[]) => void;
+  addMilestone: (projectId: string, title: string, dueDate?: string) => void;
+  toggleMilestone: (projectId: string, milestoneId: string) => void;
+  deleteMilestone: (projectId: string, milestoneId: string) => void;
+  addLog: (projectId: string, date: string, content: string) => void;
+  deleteLog: (projectId: string, logId: string) => void;
   /** 记一次工时：写流水的同时把工时累加到项目上 */
   addSession: (projectId: string, date: string, hours: number, note: string) => void;
   deleteSession: (id: string) => void;
@@ -46,6 +59,8 @@ export const useDevStore = create<DevState>()(
           techStack: [],
           repoUrl: '',
           archived: false,
+          milestones: [],
+          logs: [],
           createdAt: new Date().toISOString(),
         };
         set((state) => ({ projects: [...state.projects, project] }));
@@ -61,7 +76,7 @@ export const useDevStore = create<DevState>()(
         set((state) => ({
           projects: state.projects.map((p) => (p.id === id ? { ...p, status } : p)),
         })),
-      addTask: (projectId, title, priority) =>
+      addTask: (projectId, title, priority, type) =>
         set((state) => ({
           projects: state.projects.map((p) =>
             p.id === projectId
@@ -74,6 +89,7 @@ export const useDevStore = create<DevState>()(
                       title,
                       status: 'todo' as DevTaskStatus,
                       priority,
+                      type: type ?? 'feature',
                       createdAt: new Date().toISOString(),
                     },
                   ],
@@ -98,6 +114,67 @@ export const useDevStore = create<DevState>()(
       reorderTasks: (projectId, tasks) =>
         set((state) => ({
           projects: state.projects.map((p) => (p.id === projectId ? { ...p, tasks } : p)),
+        })),
+      addMilestone: (projectId, title, dueDate) =>
+        set((state) => ({
+          projects: state.projects.map((p) =>
+            p.id === projectId
+              ? {
+                  ...p,
+                  milestones: [
+                    ...p.milestones,
+                    {
+                      id: createId(),
+                      title,
+                      done: false,
+                      ...(dueDate ? { dueDate } : {}),
+                      createdAt: new Date().toISOString(),
+                    },
+                  ],
+                }
+              : p,
+          ),
+        })),
+      toggleMilestone: (projectId, milestoneId) =>
+        set((state) => ({
+          projects: state.projects.map((p) =>
+            p.id === projectId
+              ? {
+                  ...p,
+                  milestones: p.milestones.map((m) =>
+                    m.id === milestoneId ? { ...m, done: !m.done } : m,
+                  ),
+                }
+              : p,
+          ),
+        })),
+      deleteMilestone: (projectId, milestoneId) =>
+        set((state) => ({
+          projects: state.projects.map((p) =>
+            p.id === projectId
+              ? { ...p, milestones: p.milestones.filter((m) => m.id !== milestoneId) }
+              : p,
+          ),
+        })),
+      addLog: (projectId, date, content) =>
+        set((state) => ({
+          projects: state.projects.map((p) =>
+            p.id === projectId
+              ? {
+                  ...p,
+                  logs: [
+                    { id: createId(), date, content, createdAt: new Date().toISOString() },
+                    ...p.logs,
+                  ],
+                }
+              : p,
+          ),
+        })),
+      deleteLog: (projectId, logId) =>
+        set((state) => ({
+          projects: state.projects.map((p) =>
+            p.id === projectId ? { ...p, logs: p.logs.filter((l) => l.id !== logId) } : p,
+          ),
         })),
       addSession: (projectId, date, hours, note) =>
         set((state) => ({
@@ -140,7 +217,7 @@ export const useDevStore = create<DevState>()(
       version: STORE_VERSION,
       partialize: (state) => ({ projects: state.projects, sessions: state.sessions }),
       // 旧数据里的项目没有 hoursSpent，补齐成 0，免得界面上出现 NaN；
-      // v6 补齐技术栈 / 仓库地址 / 归档字段
+      // v6 补齐技术栈 / 仓库地址 / 归档；v11 补齐里程碑 / 日志，工作项补分类
       migrate: (persisted) => {
         const state = migrateState(persisted, defaultState);
         return {
@@ -151,6 +228,9 @@ export const useDevStore = create<DevState>()(
             techStack: project.techStack ?? [],
             repoUrl: project.repoUrl ?? '',
             archived: project.archived ?? false,
+            milestones: project.milestones ?? [],
+            logs: project.logs ?? [],
+            tasks: project.tasks.map((task) => ({ ...task, type: task.type ?? 'feature' })),
           })),
         };
       },

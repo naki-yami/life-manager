@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it } from 'vitest';
@@ -117,5 +117,50 @@ describe('DevProjectPage', () => {
 
     expect(screen.getByText(/共 2 条 · 累计 3\.5 小时/)).toBeInTheDocument();
     expect(screen.getByText('第一章')).toBeInTheDocument();
+  });
+
+  it('里程碑可以添加、勾选与显示逾期', async () => {
+    useDevStore.getState().addProject('写作助手', '');
+    const pid = projectId('写作助手');
+    renderAt(`/dev/${pid}`);
+
+    await userEvent.type(screen.getByLabelText('新里程碑'), 'v1.0 发布');
+    fireEvent.change(screen.getByLabelText('目标日期'), { target: { value: '2020-01-01' } });
+    await userEvent.click(screen.getByRole('button', { name: '添加' }));
+
+    expect(useDevStore.getState().projects[0]!.milestones).toHaveLength(1);
+    expect(screen.getByText('v1.0 发布')).toBeInTheDocument();
+    // 2020-01-01 早于今天 → 显示已逾期
+    expect(screen.getByText(/已逾期 2020-01-01/)).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('checkbox', { name: '完成里程碑「v1.0 发布」' }));
+    expect(useDevStore.getState().projects[0]!.milestones[0]!.done).toBe(true);
+  });
+
+  it('开发日志可以记一笔', async () => {
+    useDevStore.getState().addProject('写作助手', '');
+    const pid = projectId('写作助手');
+    renderAt(`/dev/${pid}`);
+
+    await userEvent.type(screen.getByLabelText('今天做了什么'), '完成导入预览');
+    await userEvent.click(screen.getByRole('button', { name: '记一笔' }));
+
+    const logs = useDevStore.getState().projects[0]!.logs;
+    expect(logs).toHaveLength(1);
+    expect(logs[0]!.content).toBe('完成导入预览');
+    expect(screen.getByText('完成导入预览')).toBeInTheDocument();
+  });
+
+  it('工作项默认是功能，看板表单可以选 BUG 分类', async () => {
+    useDevStore.getState().addProject('写作助手', '');
+    const pid = projectId('写作助手');
+    renderAt(`/dev/${pid}`);
+
+    await userEvent.type(screen.getByLabelText('新任务'), '修导出崩溃');
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: '类型' }), 'bug');
+    await userEvent.click(screen.getByRole('button', { name: '添加任务' }));
+
+    expect(useDevStore.getState().projects[0]!.tasks[0]!.type).toBe('bug');
+    expect(screen.getAllByText('BUG').length).toBeGreaterThan(0); // 下拉选项 + 卡片徽章
   });
 });

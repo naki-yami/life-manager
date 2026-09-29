@@ -1,6 +1,15 @@
 import React, { useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, Clock, Code2, ExternalLink, ListChecks, Trash2 } from 'lucide-react';
+import {
+  ArrowLeft,
+  Clock,
+  Code2,
+  ExternalLink,
+  Flag,
+  ListChecks,
+  NotebookPen,
+  Trash2,
+} from 'lucide-react';
 import {
   Badge,
   Button,
@@ -29,6 +38,7 @@ import { formatNumber, formatShortDate, todayKey } from '../utils/date';
 import { seriesByDay } from '../utils/stats';
 import { moveTaskInArray } from '../utils/kanbanMove';
 import {
+  DevItemType,
   DevProject,
   DevProjectStatus,
   DevTask,
@@ -70,6 +80,26 @@ const PRIORITY_TONE: Record<Priority, 'danger' | 'warning' | 'default'> = {
   low: 'default',
 };
 
+/** 工作项分类 */
+const ITEM_TYPE_LABEL: Record<DevItemType, string> = {
+  feature: '功能',
+  requirement: '需求',
+  bug: 'BUG',
+  tech: '技术问题',
+};
+
+const ITEM_TYPE_TONE: Record<DevItemType, 'accent' | 'info' | 'danger' | 'warning'> = {
+  feature: 'accent',
+  requirement: 'info',
+  bug: 'danger',
+  tech: 'warning',
+};
+
+const ITEM_TYPE_OPTIONS = (Object.keys(ITEM_TYPE_LABEL) as DevItemType[]).map((value) => ({
+  value,
+  label: ITEM_TYPE_LABEL[value],
+}));
+
 const KANBAN_COLUMNS: DevTaskStatus[] = ['todo', 'in-progress', 'done'];
 
 /** 活动日志最多列几条流水 */
@@ -93,12 +123,23 @@ export const DevProjectPage: React.FC = () => {
     addSession,
     deleteSession,
     replaceSessions,
+    addMilestone,
+    toggleMilestone,
+    deleteMilestone,
+    addLog,
+    deleteLog,
   } = useDevStore();
   const undoableRemove = useUndoableRemove();
 
-  const [taskForm, setTaskForm] = useState<{ title: string; priority: Priority }>({
-    title: '',
-    priority: 'medium',
+  const [taskForm, setTaskForm] = useState<{
+    title: string;
+    priority: Priority;
+    type: DevItemType;
+  }>({ title: '', priority: 'medium', type: 'feature' });
+  const [milestoneForm, setMilestoneForm] = useState({ title: '', dueDate: '' });
+  const [logForm, setLogForm] = useState<{ date: string; content: string }>({
+    date: todayKey(),
+    content: '',
   });
   const [showSessionModal, setShowSessionModal] = useState(false);
   const [pendingSessionId, setPendingSessionId] = useState<string | null>(null);
@@ -140,8 +181,20 @@ export const DevProjectPage: React.FC = () => {
 
   const handleAddTask = (): void => {
     if (!project || !taskForm.title.trim()) return;
-    addTask(project.id, taskForm.title.trim(), taskForm.priority);
-    setTaskForm({ title: '', priority: 'medium' });
+    addTask(project.id, taskForm.title.trim(), taskForm.priority, taskForm.type);
+    setTaskForm({ title: '', priority: 'medium', type: 'feature' });
+  };
+
+  const handleAddMilestone = (): void => {
+    if (!project || !milestoneForm.title.trim()) return;
+    addMilestone(project.id, milestoneForm.title.trim(), milestoneForm.dueDate || undefined);
+    setMilestoneForm({ title: '', dueDate: '' });
+  };
+
+  const handleAddLog = (): void => {
+    if (!project || !logForm.content.trim()) return;
+    addLog(project.id, logForm.date || today, logForm.content.trim());
+    setLogForm({ date: today, content: '' });
   };
 
   const handleKanbanMove = (move: KanbanMoveResult): void => {
@@ -306,6 +359,118 @@ export const DevProjectPage: React.FC = () => {
 
       <Card>
         <CardHeader
+          title="里程碑"
+          subtitle={
+            project.milestones.length > 0
+              ? `已完成 ${project.milestones.filter((m) => m.done).length}/${project.milestones.length} 个`
+              : '把关键节点列出来，做完一个勾一个'
+          }
+        />
+        <CardBody className="space-y-3">
+          {project.milestones.length === 0 ? (
+            <p className="py-2 text-center text-xs text-content-tertiary">还没有里程碑</p>
+          ) : (
+            <ul className="space-y-1.5">
+              {project.milestones.map((milestone) => {
+                const overdue =
+                  !milestone.done &&
+                  milestone.dueDate !== undefined &&
+                  milestone.dueDate < today;
+                return (
+                  <li
+                    key={milestone.id}
+                    className="flex items-center gap-3 rounded bg-inset px-3 py-2"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={milestone.done}
+                      onChange={() => toggleMilestone(project.id, milestone.id)}
+                      aria-label={`完成里程碑「${milestone.title}」`}
+                      style={{ accentColor: 'var(--lm-accent)' }}
+                      className="h-4 w-4 shrink-0 cursor-pointer rounded-sm border-line focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-line-focus"
+                    />
+                    <span
+                      className={`min-w-0 flex-1 truncate text-sm ${
+                        milestone.done
+                          ? 'text-content-tertiary line-through'
+                          : 'text-content'
+                      }`}
+                    >
+                      {milestone.title}
+                    </span>
+                    {milestone.dueDate && (
+                      <span
+                        className={`text-xs tabular ${
+                          overdue ? 'text-danger' : 'text-content-tertiary'
+                        }`}
+                      >
+                        {overdue ? '已逾期 ' : '目标 '}
+                        {milestone.dueDate}
+                      </span>
+                    )}
+                    <IconButton
+                      label={`删除里程碑「${milestone.title}」`}
+                      size="sm"
+                      icon={<Trash2 size={13} />}
+                      onClick={() => {
+                        const snapshot = projects;
+                        deleteMilestone(project.id, milestone.id);
+                        undoableRemove({
+                          message: `已删除里程碑「${milestone.title}」`,
+                          description: '点「撤销」可以恢复。',
+                          snapshot,
+                          restore: replaceProjects,
+                        });
+                      }}
+                      className="hover:text-danger"
+                    />
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+
+          <form
+            className="flex flex-wrap items-end gap-2"
+            onSubmit={(event) => {
+              event.preventDefault();
+              handleAddMilestone();
+            }}
+          >
+            <div className="min-w-40 flex-1">
+              <Input
+                label="新里程碑"
+                value={milestoneForm.title}
+                onChange={(event) =>
+                  setMilestoneForm({ ...milestoneForm, title: event.target.value })
+                }
+                placeholder="如：v1.0 对外发布"
+              />
+            </div>
+            <div className="w-40">
+              <Input
+                label="目标日期"
+                type="date"
+                value={milestoneForm.dueDate}
+                onChange={(event) =>
+                  setMilestoneForm({ ...milestoneForm, dueDate: event.target.value })
+                }
+              />
+            </div>
+            <Button
+              type="submit"
+              variant="secondary"
+              icon={<Flag size={14} aria-hidden />}
+              disabled={!milestoneForm.title.trim()}
+            >
+              添加
+            </Button>
+          </form>
+        </CardBody>
+      </Card>
+
+      <Card>
+        <CardHeader
           title="任务看板"
           subtitle="按状态分三列流转，在下面直接添加任务"
         />
@@ -333,6 +498,14 @@ export const DevProjectPage: React.FC = () => {
                 options={PRIORITY_OPTIONS}
               />
             </div>
+            <div className="w-28">
+              <Select
+                label="类型"
+                value={taskForm.type}
+                onChange={(value) => setTaskForm({ ...taskForm, type: value as DevItemType })}
+                options={ITEM_TYPE_OPTIONS}
+              />
+            </div>
             <Button type="submit" disabled={!taskForm.title.trim()}>
               添加任务
             </Button>
@@ -343,6 +516,82 @@ export const DevProjectPage: React.FC = () => {
             columns={kanbanColumns}
             onMove={handleKanbanMove}
           />
+        </CardBody>
+      </Card>
+
+      <Card>
+        <CardHeader
+          title="开发日志"
+          subtitle={
+            project.logs.length > 0
+              ? `共 ${project.logs.length} 条`
+              : '按天记流水：今天做了什么、卡在哪里'
+          }
+        />
+        <CardBody className="space-y-3">
+          <form
+            className="flex flex-wrap items-end gap-2"
+            onSubmit={(event) => {
+              event.preventDefault();
+              handleAddLog();
+            }}
+          >
+            <div className="w-40">
+              <Input
+                label="日期"
+                type="date"
+                value={logForm.date}
+                onChange={(event) => setLogForm({ ...logForm, date: event.target.value })}
+              />
+            </div>
+            <div className="min-w-48 flex-1">
+              <Input
+                label="今天做了什么"
+                value={logForm.content}
+                onChange={(event) => setLogForm({ ...logForm, content: event.target.value })}
+                placeholder="如：完成导入预览，卡在时区换算…"
+              />
+            </div>
+            <Button
+              type="submit"
+              variant="secondary"
+              icon={<NotebookPen size={14} aria-hidden />}
+              disabled={!logForm.content.trim()}
+            >
+              记一笔
+            </Button>
+          </form>
+
+          {project.logs.length === 0 ? (
+            <p className="py-2 text-center text-xs text-content-tertiary">还没有日志</p>
+          ) : (
+            <ul className="divide-y divide-line-subtle rounded border border-line-subtle">
+              {project.logs.map((log) => (
+                <li key={log.id} className="flex items-start gap-3 px-3 py-2">
+                  <span className="shrink-0 text-xs text-content-tertiary tabular">
+                    {formatShortDate(log.date)}
+                  </span>
+                  <span className="min-w-0 flex-1 text-sm text-content-secondary">{log.content}</span>
+                  <IconButton
+                    label={`删除 ${formatShortDate(log.date)} 的日志`}
+                    size="sm"
+                    icon={<Trash2 size={13} />}
+                    onClick={() => {
+                      const snapshot = projects;
+                      deleteLog(project.id, log.id);
+                      undoableRemove({
+                        message: '已删除这条开发日志',
+                        description: '点「撤销」可以恢复。',
+                        snapshot,
+                        restore: replaceProjects,
+                      });
+                    }}
+                    className="hover:text-danger"
+                  />
+                </li>
+              ))}
+            </ul>
+          )}
         </CardBody>
       </Card>
 
@@ -491,6 +740,7 @@ const KanbanCard: React.FC<{ task: DevTask; projectId: string }> = ({ task, proj
   return (
     <div>
       <div className="flex items-start gap-2">
+        <Badge tone={ITEM_TYPE_TONE[task.type]}>{ITEM_TYPE_LABEL[task.type]}</Badge>
         <span
           className={`min-w-0 flex-1 text-sm ${
             task.status === 'done' ? 'text-content-tertiary line-through' : 'text-content'

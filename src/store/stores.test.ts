@@ -197,8 +197,8 @@ describe('版本迁移', () => {
     expect(result).toEqual({ tasks: [], futureField: 'keep' });
   });
 
-  it('当前版本号是 10', () => {
-    expect(STORE_VERSION).toBe(10);
+  it('当前版本号是 11', () => {
+    expect(STORE_VERSION).toBe(11);
   });
 
   it('旧项目数据没有 hoursSpent，重新水合时补 0', async () => {
@@ -519,6 +519,44 @@ describe('gameStore 游玩流水', () => {
     expect(useGameStore.getState().sessions).toHaveLength(1);
     useGameStore.getState().replaceSessions([]);
     expect(useGameStore.getState().sessions).toHaveLength(0);
+  });
+});
+
+describe('devStore 里程碑 / 开发日志 / 工作项分类', () => {
+  it('工作项可以带分类创建', () => {
+    useDevStore.getState().addProject('写作助手', '');
+    const pid = useDevStore.getState().projects[0]!.id;
+    useDevStore.getState().addTask(pid, '修导出崩溃', 'high', 'bug');
+    const task = useDevStore.getState().projects[0]!.tasks[0]!;
+    expect(task.type).toBe('bug');
+  });
+
+  it('里程碑可以增删与勾选', () => {
+    useDevStore.getState().addProject('写作助手', '');
+    const pid = useDevStore.getState().projects[0]!.id;
+    const store = useDevStore.getState();
+    store.addMilestone(pid, 'v1.0 发布', '2026-10-31');
+    let project = useDevStore.getState().projects[0]!;
+    expect(project.milestones).toHaveLength(1);
+    expect(project.milestones[0]!.dueDate).toBe('2026-10-31');
+
+    store.toggleMilestone(pid, project.milestones[0]!.id);
+    expect(useDevStore.getState().projects[0]!.milestones[0]!.done).toBe(true);
+
+    useDevStore.getState().deleteMilestone(pid, project.milestones[0]!.id);
+    expect(useDevStore.getState().projects[0]!.milestones).toHaveLength(0);
+  });
+
+  it('开发日志可以追加与删除', () => {
+    useDevStore.getState().addProject('写作助手', '');
+    const pid = useDevStore.getState().projects[0]!.id;
+    useDevStore.getState().addLog(pid, '2026-09-29', '完成导入预览');
+    const project = useDevStore.getState().projects[0]!;
+    expect(project.logs).toHaveLength(1);
+    expect(project.logs[0]!.content).toBe('完成导入预览');
+
+    useDevStore.getState().deleteLog(pid, project.logs[0]!.id);
+    expect(useDevStore.getState().projects[0]!.logs).toHaveLength(0);
   });
 });
 

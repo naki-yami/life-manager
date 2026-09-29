@@ -58,7 +58,25 @@ function sampleData(): BackupData {
             title: '修数据缺陷',
             status: 'done',
             priority: 'high',
+            type: 'bug',
             createdAt: '2026-09-27T04:00:00.000Z',
+          },
+        ],
+        milestones: [
+          {
+            id: 'ms-1',
+            title: 'v1.0 发布',
+            dueDate: '2026-10-31',
+            done: false,
+            createdAt: '2026-09-01T00:00:00.000Z',
+          },
+        ],
+        logs: [
+          {
+            id: 'log-1',
+            date: '2026-09-27',
+            content: '修完存储层缺陷',
+            createdAt: '2026-09-27T18:00:00.000Z',
           },
         ],
         hoursSpent: 12,
@@ -244,7 +262,7 @@ describe('导出 / 导入 往返', () => {
   it('信封结构包含 schemaVersion 与 exportedAt', () => {
     const envelope = buildBackupEnvelope(emptyData(), new Date('2026-09-28T00:00:00.000Z'));
     expect(envelope.app).toBe('life-manager');
-    expect(envelope.schemaVersion).toBe(9);
+    expect(envelope.schemaVersion).toBe(10);
     expect(envelope.exportedAt).toBe('2026-09-28T00:00:00.000Z');
   });
 });
@@ -457,6 +475,26 @@ describe('工时记录的导入兼容', () => {
     const plan = planImport({ workSessions: [session] }, { workSessions: [session] }, 'merge');
     expect(plan.data.workSessions).toHaveLength(1);
     expect(plan.stats.workSessions).toEqual({ incoming: 1, added: 0, skipped: 1 });
+  });
+});
+
+describe('开发项目 v10 字段的导入兼容', () => {
+  it('旧备份缺里程碑 / 日志 / 工作项分类时补默认值', () => {
+    const legacy = sampleData() as Record<string, unknown>;
+    const projects = legacy.devProjects as Array<Record<string, unknown>>;
+    const tasks = projects[0]!.tasks as Array<Record<string, unknown>>;
+    delete projects[0]!.milestones;
+    delete projects[0]!.logs;
+    delete tasks[0]!.type;
+
+    const parsed = parseBackup(JSON.stringify(legacy));
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+
+    const plan = planImport(emptyData(), parsed.backup.modules, 'overwrite');
+    expect(plan.data.devProjects?.[0]?.milestones).toEqual([]);
+    expect(plan.data.devProjects?.[0]?.logs).toEqual([]);
+    expect(plan.data.devProjects?.[0]?.tasks?.[0]?.type).toBe('feature'); // 缺省按「功能」处理
   });
 });
 

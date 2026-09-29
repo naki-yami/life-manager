@@ -40,7 +40,14 @@ import { useUndoableRemove } from '../hooks/useUndoableRemove';
 import { filterByKeyword } from '../utils/search';
 import { formatNumber, formatShortDate, daysBetween, todayKey } from '../utils/date';
 import { seriesByWeek } from '../utils/stats';
-import { DevProject, DevProjectStatus, DevTaskStatus, Priority, WorkSession } from '../types';
+import {
+  DevItemType,
+  DevProject,
+  DevProjectStatus,
+  DevTaskStatus,
+  Priority,
+  WorkSession,
+} from '../types';
 import { useNewEntryShortcut } from '../hooks/useShortcuts';
 
 type ProjectFilter = 'all' | DevProjectStatus | 'archived';
@@ -68,6 +75,26 @@ const TASK_STATUS_LABEL: Record<DevTaskStatus, string> = {
   'in-progress': '进行中',
   done: '已完成',
 };
+
+/** 工作项分类 */
+const ITEM_TYPE_LABEL: Record<DevItemType, string> = {
+  feature: '功能',
+  requirement: '需求',
+  bug: 'BUG',
+  tech: '技术问题',
+};
+
+const ITEM_TYPE_TONE: Record<DevItemType, 'accent' | 'info' | 'danger' | 'warning'> = {
+  feature: 'accent',
+  requirement: 'info',
+  bug: 'danger',
+  tech: 'warning',
+};
+
+const ITEM_TYPE_OPTIONS = (Object.keys(ITEM_TYPE_LABEL) as DevItemType[]).map((value) => ({
+  value,
+  label: ITEM_TYPE_LABEL[value],
+}));
 
 const PRIORITY_OPTIONS = [
   { value: 'high', label: '紧急' },
@@ -131,7 +158,11 @@ export const DevPage: React.FC = () => {
     setShowAddProject(true);
   });
 
-  const [taskForm, setTaskForm] = useState({ title: '', priority: 'medium' as Priority });
+  const [taskForm, setTaskForm] = useState<{
+    title: string;
+    priority: Priority;
+    type: DevItemType;
+  }>({ title: '', priority: 'medium', type: 'feature' });
   const [keyword, setKeyword] = useState('');
   const [filter, setFilter] = useState<ProjectFilter>('all');
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -258,8 +289,8 @@ export const DevPage: React.FC = () => {
 
   const handleAddTask = (): void => {
     if (!taskProjectId || !taskForm.title.trim()) return;
-    addTask(taskProjectId, taskForm.title.trim(), taskForm.priority);
-    setTaskForm({ title: '', priority: 'medium' });
+    addTask(taskProjectId, taskForm.title.trim(), taskForm.priority, taskForm.type);
+    setTaskForm({ title: '', priority: 'medium', type: 'feature' });
     setTaskProjectId(null);
   };
 
@@ -559,7 +590,7 @@ export const DevPage: React.FC = () => {
                         size="sm"
                         icon={<Plus size={16} />}
                         onClick={() => {
-                          setTaskForm({ title: '', priority: 'medium' });
+                          setTaskForm({ title: '', priority: 'medium', type: 'feature' });
                           setTaskProjectId(project.id);
                         }}
                       />
@@ -612,6 +643,9 @@ export const DevPage: React.FC = () => {
                               key={task.id}
                               className="flex items-center gap-3 rounded bg-inset px-3 py-2"
                             >
+                              <Badge tone={ITEM_TYPE_TONE[task.type]}>
+                                {ITEM_TYPE_LABEL[task.type]}
+                              </Badge>
                               <span
                                 className={`min-w-0 flex-1 truncate text-sm ${
                                   task.status === 'done'
@@ -777,12 +811,20 @@ export const DevPage: React.FC = () => {
             placeholder="输入任务标题"
             required
           />
-          <Select
-            label="优先级"
-            value={taskForm.priority}
-            onChange={(value) => setTaskForm({ ...taskForm, priority: value as Priority })}
-            options={PRIORITY_OPTIONS}
-          />
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Select
+              label="优先级"
+              value={taskForm.priority}
+              onChange={(value) => setTaskForm({ ...taskForm, priority: value as Priority })}
+              options={PRIORITY_OPTIONS}
+            />
+            <Select
+              label="类型"
+              value={taskForm.type}
+              onChange={(value) => setTaskForm({ ...taskForm, type: value as DevItemType })}
+              options={ITEM_TYPE_OPTIONS}
+            />
+          </div>
         </div>
       </Modal>
 

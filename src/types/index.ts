@@ -77,11 +77,35 @@ export interface ReadingSession {
 export type DevProjectStatus = 'planning' | 'in-progress' | 'completed' | 'paused';
 export type DevTaskStatus = 'todo' | 'in-progress' | 'done';
 
+/** 工作项分类：功能 / 需求 / BUG / 技术问题 */
+export type DevItemType = 'feature' | 'requirement' | 'bug' | 'tech';
+
 export interface DevTask {
   id: string;
   title: string;
   status: DevTaskStatus;
   priority: Priority;
+  /** 工作项分类；旧数据可能没有，默认按「功能」处理 */
+  type: DevItemType;
+  createdAt: string;
+}
+
+/** 项目里程碑：做完一个勾一个 */
+export interface DevMilestone {
+  id: string;
+  title: string;
+  /** 目标日期 YYYY-MM-DD，可选 */
+  dueDate?: string;
+  done: boolean;
+  createdAt: string;
+}
+
+/** 开发日志：按天记流水 */
+export interface DevLogEntry {
+  id: string;
+  /** 日志日期 YYYY-MM-DD */
+  date: string;
+  content: string;
   createdAt: string;
 }
 
@@ -101,6 +125,10 @@ export interface DevProject {
   endDate?: string;
   /** 归档的项目从默认列表隐藏，不再参与统计 */
   archived: boolean;
+  /** 里程碑；旧数据可能没有 */
+  milestones: DevMilestone[];
+  /** 开发日志；旧数据可能没有 */
+  logs: DevLogEntry[];
   createdAt: string;
 }
 

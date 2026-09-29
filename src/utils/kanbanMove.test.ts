@@ -7,6 +7,7 @@ const task = (id: string, status: DevTask['status']): DevTask => ({
   title: `任务 ${id}`,
   status,
   priority: 'medium',
+  type: 'feature',
   createdAt: '2026-09-01T00:00:00.000Z',
 });
 
