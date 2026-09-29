@@ -267,4 +267,14 @@ describe('GamesPage', () => {
     expect(screen.queryByText(`${todayKey().slice(0, 4)} 年游玩`)).not.toBeInTheDocument();
     expect(screen.queryByRole('img', { name: /每月游玩时长/ })).not.toBeInTheDocument();
   });
+
+  it('游戏卡片带封面占位（渐变 + 首字）', () => {
+    addGame('哈迪斯');
+    render(<GamesPage />);
+
+    // 封面是 aria-hidden 的装饰块，里面显示游戏名首字
+    const cover = screen.getByText('哈').closest('div[aria-hidden]');
+    expect(cover).not.toBeNull();
+    expect(cover!.getAttribute('style')).toContain('linear-gradient');
+  });
 });

@@ -62,6 +62,26 @@ const FILTER_OPTIONS: Array<{ value: Filter; label: string }> = [
 /** 「最近游玩」最多列几条 */
 const SESSION_PREVIEW_COUNT = 6;
 
+/** 封面占位的渐变色（全部来自设计令牌），按游戏名稳定取色 */
+const COVER_GRADIENTS = [
+  'linear-gradient(135deg, var(--lm-accent), var(--lm-info))',
+  'linear-gradient(135deg, var(--lm-success), var(--lm-info))',
+  'linear-gradient(135deg, var(--lm-warning), var(--lm-accent))',
+  'linear-gradient(135deg, var(--lm-danger), var(--lm-warning))',
+  'linear-gradient(135deg, var(--lm-info), var(--lm-success))',
+  'linear-gradient(135deg, var(--lm-accent-strong), var(--lm-danger))',
+];
+
+function coverGradientOf(name: string): string {
+  let hash = 0;
+  for (const ch of name) hash = (hash + (ch.codePointAt(0) ?? 0)) % 997;
+  return COVER_GRADIENTS[hash % COVER_GRADIENTS.length]!;
+}
+
+function coverCharOf(name: string): string {
+  return [...name.trim()][0] ?? '游';
+}
+
 /** 删一条流水会同时改动 sessions 与游戏上的总时长，撤销得把两边一起还原 */
 interface PlayLogSnapshot {
   sessions: GameSession[];
@@ -379,13 +399,23 @@ export const GamesPage: React.FC = () => {
           />
         </Card>
       ) : (
-        <ul className="grid gap-4">
+        <ul className="grid gap-4 sm:grid-cols-2">
           {visibleGames.map((game) => {
             const unlocked = game.achievements.filter((achievement) => achievement.unlocked).length;
             return (
               <li key={game.id}>
                 <Card className="p-4">
-                  <div className="flex items-start justify-between gap-4">
+                  <div className="flex items-start gap-4">
+                    <div
+                      aria-hidden
+                      className="flex h-28 w-20 shrink-0 flex-col items-center justify-center gap-1 rounded-lg shadow-xs"
+                      style={{ background: coverGradientOf(game.name) }}
+                    >
+                      <span className="flex h-10 w-10 items-center justify-center rounded-full bg-black/25 text-lg font-semibold text-white">
+                        {coverCharOf(game.name)}
+                      </span>
+                      <Gamepad2 size={14} className="text-white/80" />
+                    </div>
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
                         <h3 className="font-semibold text-content">{game.name}</h3>
@@ -492,9 +522,9 @@ export const GamesPage: React.FC = () => {
                     <IconButton
                       label={`删除《${game.name}》`}
                       size="sm"
+                      className="ml-auto shrink-0 self-start hover:text-danger"
                       icon={<Trash2 size={15} />}
                       onClick={() => setPendingDeleteId(game.id)}
-                      className="hover:text-danger"
                     />
                   </div>
                 </Card>
