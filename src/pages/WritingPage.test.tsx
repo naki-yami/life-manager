@@ -7,6 +7,8 @@ import { ToastProvider } from '../components/ui';
 import { useWritingStore } from '../store/writingStore';
 import { WritingStatus } from '../types';
 import { requestPaletteFocus, resetPaletteFocus } from '../hooks/usePaletteFocus';
+import { MASTER_DETAIL_QUERY } from '../components/layout';
+import { mockMediaQueries } from '../test/matchMedia';
 
 beforeEach(() => {
   useWritingStore.setState({ projects: [] });
@@ -307,5 +309,105 @@ describe('WritingPage 标签', () => {
 
     expect(screen.getByText('专栏稿')).toBeInTheDocument();
     expect(screen.queryByText('产品文案')).not.toBeInTheDocument();
+  });
+});
+describe('WritingPage 宽屏双栏', () => {
+  afterEach(() => {
+    resetPaletteFocus();
+  });
+
+  const expectWideLayout = (): void => mockMediaQueries({ [MASTER_DETAIL_QUERY]: true });
+  const panel = (name = '创作笔记'): HTMLElement => screen.getByRole('complementary', { name });
+
+  it('宽屏右栏常驻，没选中项目时是占位内容', () => {
+    useWritingStore.getState().addProject('长文', 'article');
+    expectWideLayout();
+
+    render(<WritingPage />);
+
+    expect(within(panel()).getByText('还没有选中项目')).toBeInTheDocument();
+    expect(screen.getByText('长文')).toBeInTheDocument();
+  });
+
+  it('点「创作笔记」在右栏就地写，不再弹对话框', async () => {
+    useWritingStore.getState().addProject('长文', 'article');
+    expectWideLayout();
+
+    render(<WritingPage />);
+    await userEvent.click(screen.getByRole('button', { name: '创作笔记' }));
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.getByText('长文')).toBeInTheDocument();
+
+    const aside = panel('《长文》的创作笔记');
+    await userEvent.type(within(aside).getByLabelText('创作笔记'), '第二章要加一个反转');
+    await userEvent.click(within(aside).getByRole('button', { name: '保存' }));
+
+    expect(projectOf('长文').notes).toBe('第二章要加一个反转');
+    expect(screen.getByText('第二章要加一个反转')).toBeInTheDocument();
+    // 存完右栏回到占位
+    expect(within(panel()).getByText('还没有选中项目')).toBeInTheDocument();
+  });
+
+  it('「取消」只关右栏，不写回 store', async () => {
+    useWritingStore.getState().addProject('长文', 'article');
+    expectWideLayout();
+
+    render(<WritingPage />);
+    await userEvent.click(screen.getByRole('button', { name: '创作笔记' }));
+
+    const aside = panel('《长文》的创作笔记');
+    await userEvent.type(within(aside).getByLabelText('创作笔记'), '不该被保存');
+    await userEvent.click(within(aside).getByRole('button', { name: '取消' }));
+
+    expect(within(panel()).getByText('还没有选中项目')).toBeInTheDocument();
+    expect(projectOf('长文').notes).toBe('');
+  });
+
+  it('再点另一个项目的「创作笔记」，右栏换成那一个', async () => {
+    const store = useWritingStore.getState();
+    store.addProject('长文', 'article');
+    store.addProject('专栏稿', 'article');
+    store.updateNotes(projectOf('长文').id, '原来的笔记');
+    expectWideLayout();
+
+    render(<WritingPage />);
+    /** 卡片上的「创作笔记」按钮，按项目标题定位，避免多个项目时选到别的卡 */
+    const noteButtonOf = (title: string): HTMLElement =>
+      within(screen.getByText(title).closest('li') as HTMLElement).getByRole('button', {
+        name: '创作笔记',
+      });
+
+    await userEvent.click(noteButtonOf('长文'));
+    expect(within(panel('《长文》的创作笔记')).getByLabelText('创作笔记')).toHaveValue(
+      '原来的笔记',
+    );
+
+    await userEvent.click(noteButtonOf('专栏稿'));
+    expect(within(panel('《专栏稿》的创作笔记')).getByLabelText('创作笔记')).toHaveValue('');
+  });
+
+  it('正文编辑仍走宽弹窗 —— 它要的是整屏宽度，不是右栏', async () => {
+    useWritingStore.getState().addProject('长文', 'article');
+    expectWideLayout();
+
+    render(<WritingPage />);
+    await userEvent.click(screen.getByRole('button', { name: '编辑正文' }));
+
+    // 这一条是刻意的：正文编辑器占的是「写作面积」，塞进 24rem 右栏反而更难写
+    expect(screen.getByRole('dialog', { name: '《长文》编辑正文' })).toBeInTheDocument();
+    expect(within(panel()).getByText('还没有选中项目')).toBeInTheDocument();
+  });
+
+  it('宽屏下命令面板聚焦某篇稿子，还是打开编辑器', () => {
+    useWritingStore.getState().addProject('长文', 'article');
+    expectWideLayout();
+
+    render(<WritingPage />);
+    act(() => {
+      requestPaletteFocus('/writing', projectOf('长文').id);
+    });
+
+    expect(screen.getByRole('dialog', { name: '《长文》编辑正文' })).toBeInTheDocument();
   });
 });

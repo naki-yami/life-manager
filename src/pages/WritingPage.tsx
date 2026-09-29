@@ -28,7 +28,7 @@ import {
   TagInput,
   Textarea,
 } from '../components/ui';
-import { PageHeader, Toolbar } from '../components/layout';
+import { MasterDetail, PageHeader, Toolbar } from '../components/layout';
 import { useWritingStore } from '../store/writingStore';
 import { useUndoableRemove } from '../hooks/useUndoableRemove';
 import { useTagSuggestions } from '../hooks/useTagSuggestions';
@@ -197,6 +197,15 @@ export const WritingPage: React.FC = () => {
     setNoteId(id);
   };
 
+  const closeNotes = (): void => {
+    setNoteId(null);
+  };
+
+  const handleSaveNotes = (): void => {
+    if (noteId) updateNotes(noteId, noteInput);
+    closeNotes();
+  };
+
   return (
     <div className="space-y-section">
       <PageHeader
@@ -244,193 +253,230 @@ export const WritingPage: React.FC = () => {
         />
       </div>
 
-      <Toolbar
-        search={{
-          value: keyword,
-          onChange: setKeyword,
-          placeholder: '搜索标题、笔记、类型或标签…',
-        }}
-        actions={
-          <SegmentedControl
-            label="按写作状态筛选"
-            value={filter}
-            onChange={setFilter}
-            options={FILTER_OPTIONS.map((option) => ({
-              ...option,
-              count: option.value === 'all' ? projects.length : countOf(option.value),
-            }))}
+      <MasterDetail
+        detailTitle={noteProject ? `《${noteProject.title}》的创作笔记` : '创作笔记'}
+        detailOpen={noteProject !== null}
+        onCloseDetail={closeNotes}
+        drawerWidth="lg"
+        emptyDetail={
+          <EmptyState
+            icon={<StickyNote size={20} aria-hidden />}
+            title="还没有选中项目"
+            description="点左边任意一个项目的「创作笔记」，就能在这里记想法。"
+            className="py-6"
           />
         }
-      />
-
-      {visibleProjects.length === 0 ? (
-        <Card>
-          <EmptyState
-            icon={<PenLine size={22} aria-hidden />}
-            title={projects.length === 0 ? '还没有写作项目' : '没有符合条件的项目'}
-            description={
-              projects.length === 0
-                ? '新建一个项目，把想写的东西先记下来，再慢慢推进。'
-                : '换个关键词，或者切换上面的状态筛选。'
-            }
-            action={
-              projects.length === 0 ? (
-                <Button icon={<Plus size={16} aria-hidden />} onClick={openAddModal}>
-                  新建项目
+        detail={
+          noteProject ? (
+            <div className="space-y-4">
+              <p className="text-xs text-content-tertiary">留空并保存即可清空笔记</p>
+              <Textarea
+                label="创作笔记"
+                value={noteInput}
+                onChange={(event) => setNoteInput(event.target.value)}
+                rows={8}
+                placeholder="记录你的创作想法、待补的段落、参考素材…"
+              />
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                <Button variant="secondary" onClick={closeNotes}>
+                  取消
                 </Button>
-              ) : (
-                <Button
-                  variant="secondary"
-                  onClick={() => {
-                    setKeyword('');
-                    setFilter('all');
-                  }}
-                >
-                  清除筛选
-                </Button>
-              )
-            }
-          />
-        </Card>
-      ) : (
-        <ul className="grid gap-4">
-          {visibleProjects.map((project) => (
-            <li key={project.id}>
-              <Card className="p-4">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="font-semibold text-content">{project.title}</h3>
-                      <Badge tone="info">{TYPE_LABEL[project.type]}</Badge>
-                      <Badge tone={STATUS_TONE[project.status]}>
-                        {STATUS_LABEL[project.status]}
-                      </Badge>
-                    </div>
+                <Button onClick={handleSaveNotes}>保存</Button>
+              </div>
+            </div>
+          ) : null
+        }
+      >
+        <Toolbar
+          search={{
+            value: keyword,
+            onChange: setKeyword,
+            placeholder: '搜索标题、笔记、类型或标签…',
+          }}
+          actions={
+            <SegmentedControl
+              label="按写作状态筛选"
+              value={filter}
+              onChange={setFilter}
+              options={FILTER_OPTIONS.map((option) => ({
+                ...option,
+                count: option.value === 'all' ? projects.length : countOf(option.value),
+              }))}
+            />
+          }
+        />
 
-                    <p
-                      className={`mt-1.5 text-sm ${
-                        project.notes.trim()
-                          ? 'line-clamp-2 text-content-secondary'
-                          : 'text-content-tertiary'
-                      }`}
-                    >
-                      {project.notes.trim() || '还没有创作笔记'}
-                    </p>
+        {visibleProjects.length === 0 ? (
+          <Card>
+            <EmptyState
+              icon={<PenLine size={22} aria-hidden />}
+              title={projects.length === 0 ? '还没有写作项目' : '没有符合条件的项目'}
+              description={
+                projects.length === 0
+                  ? '新建一个项目，把想写的东西先记下来，再慢慢推进。'
+                  : '换个关键词，或者切换上面的状态筛选。'
+              }
+              action={
+                projects.length === 0 ? (
+                  <Button icon={<Plus size={16} aria-hidden />} onClick={openAddModal}>
+                    新建项目
+                  </Button>
+                ) : (
+                  <Button
+                    variant="secondary"
+                    onClick={() => {
+                      setKeyword('');
+                      setFilter('all');
+                    }}
+                  >
+                    清除筛选
+                  </Button>
+                )
+              }
+            />
+          </Card>
+        ) : (
+          <ul className="grid gap-4">
+            {visibleProjects.map((project) => (
+              <li key={project.id}>
+                <Card className="p-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="font-semibold text-content">{project.title}</h3>
+                        <Badge tone="info">{TYPE_LABEL[project.type]}</Badge>
+                        <Badge tone={STATUS_TONE[project.status]}>
+                          {STATUS_LABEL[project.status]}
+                        </Badge>
+                      </div>
 
-                    {project.content.trim() ? (
-                      <p className="mt-1.5 line-clamp-2 text-sm text-content-tertiary">
-                        {project.content.trim().split('\n')[0]}
+                      <p
+                        className={`mt-1.5 text-sm ${
+                          project.notes.trim()
+                            ? 'line-clamp-2 text-content-secondary'
+                            : 'text-content-tertiary'
+                        }`}
+                      >
+                        {project.notes.trim() || '还没有创作笔记'}
                       </p>
-                    ) : null}
-                    <div className="mt-2">
-                      <TagEditor
-                        tags={project.tags}
-                        suggestions={tagSuggestions}
-                        onChange={(tags) => updateProject(project.id, { tags })}
-                      />
-                    </div>
 
-                    {project.targetWords > 0 && (
-                      <div className="mt-2 max-w-md">
-                        <ProgressBar
-                          value={project.wordCount}
-                          max={project.targetWords}
-                          showValue
-                          label={`目标 ${formatNumber(project.targetWords)} 字`}
-                          tone={project.wordCount >= project.targetWords ? 'success' : 'accent'}
+                      {project.content.trim() ? (
+                        <p className="mt-1.5 line-clamp-2 text-sm text-content-tertiary">
+                          {project.content.trim().split('\n')[0]}
+                        </p>
+                      ) : null}
+                      <div className="mt-2">
+                        <TagEditor
+                          tags={project.tags}
+                          suggestions={tagSuggestions}
+                          onChange={(tags) => updateProject(project.id, { tags })}
                         />
                       </div>
-                    )}
 
-                    <div className="mt-3 flex flex-wrap items-end gap-3">
-                      <div className="w-36">
-                        <NumberInput
-                          ariaLabel={`「${project.title}」的字数`}
-                          value={project.wordCount}
-                          onChange={(value) =>
-                            updateWordCount(project.id, value === '' ? 0 : value)
-                          }
-                          min={0}
-                          step={100}
-                          suffix="字"
-                        />
-                      </div>
-                      <div className="w-36">
-                        <NumberInput
-                          ariaLabel={`「${project.title}」的目标字数`}
-                          value={project.targetWords}
-                          onChange={(value) => setTargetWords(project.id, value === '' ? 0 : value)}
-                          min={0}
-                          step={1000}
-                          suffix="目标"
-                          hint="0 表示未设置"
-                        />
-                      </div>
-                      <div className="w-36">
-                        <Select
-                          aria-label={`调整「${project.title}」的状态`}
-                          value={project.status}
-                          onChange={(value) => updateStatus(project.id, value as WritingStatus)}
-                          options={STATUS_OPTIONS}
-                        />
-                      </div>
-                      <span className="text-2xs text-content-tertiary">
-                        更新于 {new Date(project.updatedAt).toLocaleDateString('zh-CN')}
-                      </span>
-                    </div>
+                      {project.targetWords > 0 && (
+                        <div className="mt-2 max-w-md">
+                          <ProgressBar
+                            value={project.wordCount}
+                            max={project.targetWords}
+                            showValue
+                            label={`目标 ${formatNumber(project.targetWords)} 字`}
+                            tone={project.wordCount >= project.targetWords ? 'success' : 'accent'}
+                          />
+                        </div>
+                      )}
 
-                    <div className="mt-3 flex flex-wrap items-center gap-2">
-                      {project.status !== 'completed' && (
+                      <div className="mt-3 flex flex-wrap items-end gap-3">
+                        <div className="w-36">
+                          <NumberInput
+                            ariaLabel={`「${project.title}」的字数`}
+                            value={project.wordCount}
+                            onChange={(value) =>
+                              updateWordCount(project.id, value === '' ? 0 : value)
+                            }
+                            min={0}
+                            step={100}
+                            suffix="字"
+                          />
+                        </div>
+                        <div className="w-36">
+                          <NumberInput
+                            ariaLabel={`「${project.title}」的目标字数`}
+                            value={project.targetWords}
+                            onChange={(value) =>
+                              setTargetWords(project.id, value === '' ? 0 : value)
+                            }
+                            min={0}
+                            step={1000}
+                            suffix="目标"
+                            hint="0 表示未设置"
+                          />
+                        </div>
+                        <div className="w-36">
+                          <Select
+                            aria-label={`调整「${project.title}」的状态`}
+                            value={project.status}
+                            onChange={(value) => updateStatus(project.id, value as WritingStatus)}
+                            options={STATUS_OPTIONS}
+                          />
+                        </div>
+                        <span className="text-2xs text-content-tertiary">
+                          更新于 {new Date(project.updatedAt).toLocaleDateString('zh-CN')}
+                        </span>
+                      </div>
+
+                      <div className="mt-3 flex flex-wrap items-center gap-2">
+                        {project.status !== 'completed' && (
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            icon={<CheckCircle2 size={13} aria-hidden />}
+                            onClick={() => updateStatus(project.id, 'completed')}
+                          >
+                            标记完成
+                          </Button>
+                        )}
                         <Button
                           size="sm"
                           variant="secondary"
-                          icon={<CheckCircle2 size={13} aria-hidden />}
-                          onClick={() => updateStatus(project.id, 'completed')}
+                          icon={<PenLine size={13} aria-hidden />}
+                          onClick={() => openEditor(project.id)}
                         >
-                          标记完成
+                          编辑正文
                         </Button>
-                      )}
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        icon={<PenLine size={13} aria-hidden />}
-                        onClick={() => openEditor(project.id)}
-                      >
-                        编辑正文
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        icon={<StickyNote size={13} aria-hidden />}
-                        onClick={() => openNotes(project.id, project.notes)}
-                      >
-                        创作笔记
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        icon={<Download size={13} aria-hidden />}
-                        aria-label={`导出《${project.title}》为 Markdown`}
-                        onClick={() => handleExport(project.id)}
-                      >
-                        导出
-                      </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          icon={<StickyNote size={13} aria-hidden />}
+                          onClick={() => openNotes(project.id, project.notes)}
+                        >
+                          创作笔记
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          icon={<Download size={13} aria-hidden />}
+                          aria-label={`导出《${project.title}》为 Markdown`}
+                          onClick={() => handleExport(project.id)}
+                        >
+                          导出
+                        </Button>
+                      </div>
                     </div>
-                  </div>
 
-                  <IconButton
-                    label={`删除《${project.title}》`}
-                    size="sm"
-                    icon={<Trash2 size={15} />}
-                    onClick={() => setPendingDeleteId(project.id)}
-                    className="hover:text-danger"
-                  />
-                </div>
-              </Card>
-            </li>
-          ))}
-        </ul>
-      )}
+                    <IconButton
+                      label={`删除《${project.title}》`}
+                      size="sm"
+                      icon={<Trash2 size={15} />}
+                      onClick={() => setPendingDeleteId(project.id)}
+                      className="hover:text-danger"
+                    />
+                  </div>
+                </Card>
+              </li>
+            ))}
+          </ul>
+        )}
+      </MasterDetail>
 
       <Modal
         isOpen={showAddModal}
@@ -543,37 +589,6 @@ export const WritingPage: React.FC = () => {
           )}
         </div>
       </Modal>
-
-      <Modal
-        isOpen={noteProject !== null}
-        onClose={() => setNoteId(null)}
-        title={noteProject ? `《${noteProject.title}》的创作笔记` : '创作笔记'}
-        description="留空并保存即可清空笔记"
-        footer={
-          <>
-            <Button variant="secondary" onClick={() => setNoteId(null)}>
-              取消
-            </Button>
-            <Button
-              onClick={() => {
-                if (noteId) updateNotes(noteId, noteInput);
-                setNoteId(null);
-              }}
-            >
-              保存
-            </Button>
-          </>
-        }
-      >
-        <Textarea
-          label="创作笔记"
-          value={noteInput}
-          onChange={(event) => setNoteInput(event.target.value)}
-          rows={8}
-          placeholder="记录你的创作想法、待补的段落、参考素材…"
-        />
-      </Modal>
-
       <ConfirmDialog
         isOpen={deletingProject !== null}
         onClose={() => setPendingDeleteId(null)}
