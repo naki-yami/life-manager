@@ -26,6 +26,7 @@ const task = (over: Partial<Task> & { id: string; title: string }): Task => ({
   dueDate: '',
   subtasks: [],
   repeat: null,
+  timebox: null,
   createdAt: '2026-09-01T00:00:00.000Z',
   ...over,
   tags: over.tags ?? [],

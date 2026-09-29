@@ -33,6 +33,7 @@ function sampleData(): BackupData {
           { id: 'sub-2', title: '写结论', done: false },
         ],
         repeat: { kind: 'weekly', weekdays: [0, 2] },
+        timebox: { date: '2026-09-27', start: '09:00', minutes: 90 },
         createdAt: '2026-09-27T01:00:00.000Z',
         completedAt: '2026-09-27T09:00:00.000Z',
       },
@@ -224,6 +225,22 @@ function sampleData(): BackupData {
         createdAt: '2026-09-27T07:00:00.000Z',
       },
     ],
+    focusSessions: [
+      {
+        id: 'focus-1',
+        date: '2026-09-27',
+        entityId: 'task-1',
+        title: '写周报',
+        target: 'task',
+        mode: 'pomodoro',
+        plannedMinutes: 25,
+        minutes: 25,
+        startedAt: '2026-09-27T08:00:00.000Z',
+        endedAt: '2026-09-27T08:25:00.000Z',
+        posted: false,
+        createdAt: '2026-09-27T08:25:00.000Z',
+      },
+    ],
     settings: { theme: 'dark' },
   };
 }
@@ -243,6 +260,7 @@ const emptyData = (): BackupData => ({
   gameSessions: [],
   readingSessions: [],
   habits: [],
+  focusSessions: [],
 });
 
 describe('导出 / 导入 往返', () => {
@@ -270,6 +288,7 @@ describe('导出 / 导入 往返', () => {
     expect(plan.data.dietRecords).toEqual(original.dietRecords);
     expect(plan.data.games).toEqual(original.games);
     expect(plan.data.habits).toEqual(original.habits);
+    expect(plan.data.focusSessions).toEqual(original.focusSessions);
     expect(plan.data.settings).toEqual(original.settings);
   });
 
@@ -298,7 +317,7 @@ describe('导出 / 导入 往返', () => {
   it('信封结构包含 schemaVersion 与 exportedAt', () => {
     const envelope = buildBackupEnvelope(emptyData(), new Date('2026-09-28T00:00:00.000Z'));
     expect(envelope.app).toBe('life-manager');
-    expect(envelope.schemaVersion).toBe(13);
+    expect(envelope.schemaVersion).toBe(14);
     expect(envelope.exportedAt).toBe('2026-09-28T00:00:00.000Z');
   });
 });
@@ -719,6 +738,94 @@ describe('身体指标的导入兼容', () => {
   });
 });
 
+describe('专注记录与时间盒的导入兼容', () => {
+  const keptSession = {
+    id: 'keep',
+    date: '2026-09-01',
+    entityId: 'task-1',
+    title: '写周报',
+    target: 'task' as const,
+    mode: 'pomodoro' as const,
+    plannedMinutes: 25,
+    minutes: 25,
+    startedAt: '2026-09-01T08:00:00.000Z',
+    endedAt: '2026-09-01T08:25:00.000Z',
+    posted: false,
+    createdAt: '2026-09-01T08:25:00.000Z',
+  };
+
+  it('旧备份没有 focusSessions 时该模块视为缺失，覆盖模式也不会清空现有记录', () => {
+    const legacy = sampleData() as Record<string, unknown>;
+    delete legacy.focusSessions;
+    const parsed = parseBackup(JSON.stringify(legacy));
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+
+    expect(parsed.backup.modules.focusSessions).toBeUndefined();
+
+    const plan = planImport({ focusSessions: [keptSession] }, parsed.backup.modules, 'overwrite');
+    expect(plan.data.focusSessions).toEqual([keptSession]);
+  });
+
+  it('时间盒往返后原样保留；坏时间盒退回「没排」而不是画一个假盒子', () => {
+    const backup = sampleData();
+    expect(backup.tasks[0]?.timebox).toEqual({ date: '2026-09-27', start: '09:00', minutes: 90 });
+
+    const dirty = sampleData() as unknown as { tasks: Record<string, unknown>[] };
+    dirty.tasks[0]!.timebox = { date: '2026-09-27', start: '25:00', minutes: 90 };
+
+    const parsed = parseBackup(JSON.stringify(dirty));
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+
+    const plan = planImport(emptyData(), parsed.backup.modules, 'overwrite');
+    expect(plan.data.tasks?.[0]?.timebox).toBeNull();
+  });
+
+  it('旧任务没有 timebox 字段时补成 null，页面不必再写 ?? null', () => {
+    const legacy = sampleData() as unknown as { tasks: Record<string, unknown>[] };
+    delete legacy.tasks[0]!.timebox;
+
+    const parsed = parseBackup(JSON.stringify(legacy));
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+
+    const plan = planImport(emptyData(), parsed.backup.modules, 'merge');
+    expect(plan.data.tasks?.[0]?.timebox).toBeNull();
+  });
+
+  it('时长越界的专注记录被收敛到 1 – 600 分钟', () => {
+    const backup = sampleData() as unknown as { focusSessions: Record<string, unknown>[] };
+    backup.focusSessions = [{ ...keptSession, minutes: 0, plannedMinutes: 9999 }];
+
+    const parsed = parseBackup(JSON.stringify(backup));
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+
+    const plan = planImport(emptyData(), parsed.backup.modules, 'merge');
+    expect(plan.data.focusSessions).toHaveLength(1);
+    expect(plan.data.focusSessions?.[0]).toMatchObject({
+      id: 'keep',
+      // plannedMinutes 超出上限：catch 到默认的 25 分钟，而不是夹成 600
+      plannedMinutes: 25,
+      minutes: 1,
+    });
+  });
+
+  it('结构坏掉的专注记录整条丢弃，不写进 store', () => {
+    const backup = sampleData() as unknown as { focusSessions: Record<string, unknown>[] };
+    backup.focusSessions = [{ ...keptSession, target: 'telepathy' }];
+
+    const parsed = parseBackup(JSON.stringify(backup));
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+
+    const plan = planImport(emptyData(), parsed.backup.modules, 'merge');
+    expect(plan.data.focusSessions).toEqual([]);
+    expect(plan.stats.focusSessions.skipped).toBe(0);
+  });
+});
+
 describe('导入模式', () => {
   const existing = [{ id: 'a', title: '现有' }];
 
@@ -787,6 +894,7 @@ describe('导入模式', () => {
       plan.data.gameSessions,
       plan.data.readingSessions,
       plan.data.habits,
+      plan.data.focusSessions,
     ].reduce((sum, list) => sum + (list?.length ?? 0), 0);
 
     expect(totals.added).toBe(actual);

@@ -17,6 +17,7 @@ export const STORAGE_KEYS = {
   games: 'lm:games',
   habits: 'lm:habits',
   body: 'lm:body',
+  focus: 'lm:focus',
   theme: 'lm:theme',
   ui: 'lm:ui',
 } as const;
@@ -37,6 +38,7 @@ export const DATA_STORAGE_KEYS: readonly string[] = [
   STORAGE_KEYS.games,
   STORAGE_KEYS.habits,
   STORAGE_KEYS.body,
+  STORAGE_KEYS.focus,
 ];
 
 /** 浏览器普遍在 5MB 左右封顶，取 3MB 作为「该清理了」的预警线 */

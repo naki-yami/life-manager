@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { Task, Priority, SubTask, TaskStatus, Memo, RepeatRule } from '../types';
+import { Task, Priority, SubTask, TaskStatus, Memo, RepeatRule, TaskTimebox } from '../types';
 import { createId } from '../utils/id';
 import { STORAGE_KEYS } from '../utils/storageKeys';
 import { persistOptions } from './persist';
@@ -9,6 +9,7 @@ import { memoSchema, taskSchema } from '../services/schemas';
 import { nextDueDate } from '../utils/repeat';
 import { todayKey } from '../utils/date';
 import { normalizeTags } from '../utils/tags';
+import { normalizeTimebox } from '../utils/focus';
 
 interface TaskState {
   tasks: Task[];
@@ -22,6 +23,8 @@ interface TaskState {
     tags?: string[],
   ) => void;
   updateTask: (id: string, updates: Partial<Task>) => void;
+  /** 排 / 撤时间盒；传 null 表示把任务从时间轴上拿下来 */
+  setTimebox: (taskId: string, timebox: TaskTimebox | null) => void;
   deleteTask: (id: string) => void;
   toggleTaskStatus: (id: string) => void;
   addSubtask: (taskId: string, title: string) => void;
@@ -52,6 +55,7 @@ export const useTaskStore = create<TaskState>()(
               dueDate,
               subtasks: [] as SubTask[],
               repeat: repeat ?? null,
+              timebox: null,
               tags: normalizeTags(tags),
               createdAt: new Date().toISOString(),
             },
@@ -60,6 +64,14 @@ export const useTaskStore = create<TaskState>()(
       updateTask: (id, updates) =>
         set((state) => ({
           tasks: state.tasks.map((t) => (t.id === id ? { ...t, ...updates } : t)),
+        })),
+      // 合法性判定放在这，页面只管把落点丢进来；不合法就是「没排」，
+      // 不会在时间轴上留下一个画不出来的盒子
+      setTimebox: (taskId, timebox) =>
+        set((state) => ({
+          tasks: state.tasks.map((t) =>
+            t.id === taskId ? { ...t, timebox: normalizeTimebox(timebox) } : t,
+          ),
         })),
       deleteTask: (id) => set((state) => ({ tasks: state.tasks.filter((t) => t.id !== id) })),
       toggleTaskStatus: (id) =>
@@ -81,12 +93,16 @@ export const useTaskStore = create<TaskState>()(
           // 重复任务完成时自动生成下一次：新 id、清空完成时间、子任务重置为未做
           if (completing && target.repeat) {
             const due = target.dueDate || todayKey();
+            const nextDate = nextDueDate(target.repeat, due);
             nextTasks.push({
               ...target,
               id: createId(),
               status: 'pending',
               completedAt: undefined,
-              dueDate: nextDueDate(target.repeat, due),
+              dueDate: nextDate,
+              // 下一轮沿用同一个时间点，只把日期换掉 ——
+              // 否则「每天 09:00 跑步」第二天就掉出时间轴了
+              timebox: target.timebox ? { ...target.timebox, date: nextDate } : null,
               subtasks: target.subtasks.map((subtask) => ({ ...subtask, done: false })),
               createdAt: new Date().toISOString(),
             });

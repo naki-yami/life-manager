@@ -66,6 +66,7 @@ describe('taskStore', () => {
         dueDate: '2026-09-28',
         subtasks: [],
         repeat: null,
+        timebox: null,
         tags: [],
         createdAt: '2026-09-01T00:00:00.000Z',
         completedAt: '2026-09-02T00:00:00.000Z',
@@ -123,6 +124,52 @@ describe('taskStore', () => {
     useTaskStore.getState().addTask('一次性的事', '', 'low', '');
     useTaskStore.getState().toggleTaskStatus(useTaskStore.getState().tasks[0]!.id);
     expect(useTaskStore.getState().tasks).toHaveLength(1);
+  });
+
+  it('新建任务默认没有时间盒', () => {
+    useTaskStore.getState().addTask('写方案', '', 'high', '2026-09-29');
+    expect(useTaskStore.getState().tasks[0]!.timebox).toBeNull();
+  });
+
+  it('排时间盒：合法落点原样写入，非法落点等于没排', () => {
+    useTaskStore.getState().addTask('写方案', '', 'high', '2026-09-29');
+    const id = useTaskStore.getState().tasks[0]!.id;
+
+    useTaskStore.getState().setTimebox(id, { date: '2026-09-29', start: '09:00', minutes: 90 });
+    expect(useTaskStore.getState().tasks[0]!.timebox).toEqual({
+      date: '2026-09-29',
+      start: '09:00',
+      minutes: 90,
+    });
+
+    useTaskStore.getState().setTimebox(id, { date: '2026-09-29', start: '25:00', minutes: 90 });
+    expect(useTaskStore.getState().tasks[0]!.timebox).toBeNull();
+
+    useTaskStore.getState().setTimebox(id, { date: '2026-09-29', start: '09:00', minutes: 90 });
+    useTaskStore.getState().setTimebox(id, null);
+    expect(useTaskStore.getState().tasks[0]!.timebox).toBeNull();
+  });
+
+  it('重复任务的下一轮沿用同一个时间点，只把日期换成新的一天', () => {
+    useTaskStore.getState().addTask('站会', '', 'medium', '2026-09-28', { kind: 'daily' });
+    const id = useTaskStore.getState().tasks[0]!.id;
+    useTaskStore.getState().setTimebox(id, {
+      date: '2026-09-28',
+      start: '09:00',
+      minutes: 30,
+    });
+
+    useTaskStore.getState().toggleTaskStatus(id);
+
+    const next = useTaskStore.getState().tasks[1]!;
+    expect(next.dueDate).toBe('2026-09-29');
+    expect(next.timebox).toEqual({ date: '2026-09-29', start: '09:00', minutes: 30 });
+    // 原任务的时间盒留在原来那天，历史不被改写
+    expect(useTaskStore.getState().tasks[0]!.timebox).toEqual({
+      date: '2026-09-28',
+      start: '09:00',
+      minutes: 30,
+    });
   });
 });
 

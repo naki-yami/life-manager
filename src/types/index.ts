@@ -17,6 +17,22 @@ export interface RepeatRule {
   weekdays?: number[];
 }
 
+/**
+ * 任务的时间盒：把任务排到某一天的某个时间点。
+ *
+ * 为什么不复用 `dueDate`：截止日期回答「最晚什么时候做完」，
+ * 时间盒回答「我打算什么时候做」。两者经常不一致（提前做、逾期补做），
+ * 拆开之后拖时间轴不会顺带改掉截止日期。
+ */
+export interface TaskTimebox {
+  /** 时间盒所在日期 YYYY-MM-DD */
+  date: string;
+  /** 开始时间 HH:mm（24 小时制，本地时间） */
+  start: string;
+  /** 计划时长（分钟） */
+  minutes: number;
+}
+
 export interface Task {
   id: string;
   title: string;
@@ -28,6 +44,8 @@ export interface Task {
   subtasks: SubTask[];
   /** 重复规则；null 表示不重复。旧数据可能没有 */
   repeat: RepeatRule | null;
+  /** 今日时间轴上的时间盒；null 表示还没排。旧数据可能没有 */
+  timebox: TaskTimebox | null;
   /** 统一标签（不带 #）；旧数据由归一化补 []，所以这里不是可选的 */
   tags: string[];
   createdAt: string;
@@ -341,5 +359,53 @@ export interface BodyMetric {
   bodyFat?: number;
   /** 围度（cm）：部位键 -> 数值；没填的部位不会出现 */
   measurements: Record<string, number>;
+  createdAt: string;
+}
+
+// Focus types
+/** 番茄钟：倒计时到点；正计时：一直往上走，手动停 */
+export type FocusMode = 'pomodoro' | 'stopwatch';
+
+/**
+ * 专注对象。前三种对应「能把时长回填成流水」的模块：
+ * - `task`：专注结束可以直接把任务勾掉；
+ * - `dev` / `book` / `game`：把这次时长写成工时 / 阅读 / 游玩流水。
+ */
+export type FocusTarget = 'task' | 'dev' | 'book' | 'game';
+
+/**
+ * 进行中的专注。
+ *
+ * 与已完成的会话分开存：秒表在跑的时候不该在「记录列表」里出现一条半成品，
+ * 刷新页面后用户需要的也只是「还在跑的那一个」，而不是一堆中间态。
+ */
+export interface ActiveFocus {
+  /** 关联实体 id；实体被删掉后这里就只是一个孤 id，展示时回退到 title */
+  entityId: string;
+  /** 开始时的标题快照，实体被删后仍能看懂这次专注做的是什么 */
+  title: string;
+  target: FocusTarget;
+  mode: FocusMode;
+  /** 计划时长（分钟）：番茄钟到点自动结束，正计时只用来显示「已超时多久」 */
+  plannedMinutes: number;
+  startedAt: string;
+}
+
+/** 一次已完成的专注；取消的专注不写记录 */
+export interface FocusSession {
+  id: string;
+  /** 专注发生在哪一天 YYYY-MM-DD（按 startedAt 的本地日期） */
+  date: string;
+  entityId: string;
+  title: string;
+  target: FocusTarget;
+  mode: FocusMode;
+  plannedMinutes: number;
+  /** 实际专注分钟数，至少 1 分钟 */
+  minutes: number;
+  startedAt: string;
+  endedAt: string;
+  /** 时长是否已经写成对应模块的流水；避免重复回填 */
+  posted: boolean;
   createdAt: string;
 }

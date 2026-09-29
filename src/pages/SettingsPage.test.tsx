@@ -63,6 +63,7 @@ const emptyBackup: BackupData = {
   gameSessions: [],
   readingSessions: [],
   habits: [],
+  focusSessions: [],
   settings: { themeMode: 'system', density: 'comfortable', sidebarCollapsed: false },
 };
 

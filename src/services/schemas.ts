@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { normalizeTags } from '../utils/tags';
 import { normalizeSchedule, sanitizeHabitLogs } from '../utils/habits';
 import { readMetric, sanitizeMeasurements } from '../utils/body';
+import { normalizeTimebox } from '../utils/focus';
 import type { HabitSchedule } from '../types';
 
 /**
@@ -18,8 +19,9 @@ export const APP_ID = 'life-manager';
  * 12：新增「习惯」模块（含打卡日志）；旧文件里没有它，导入时视为缺失，
  *     不会清空用户现在的习惯。
  * 13：新增「身体指标」模块（体重 / 体脂 / 围度）；同样按缺失处理，不清空现有记录。
+ * 14：新增「专注记录」模块，任务增加可选的时间盒字段。
  */
-export const BACKUP_SCHEMA_VERSION = 13;
+export const BACKUP_SCHEMA_VERSION = 14;
 
 const isoDateString = z.string();
 const percent = z.number().min(0).max(100).catch(0);
@@ -49,6 +51,23 @@ export const repeatRuleSchema = z.object({
   weekdays: z.array(z.number().min(0).max(6)).optional(),
 });
 
+/**
+ * 时间盒。
+ *
+ * 先宽松收下三个字段，再交给 normalizeTimebox 统一判定：日期不是本地日键、
+ * 开始时间不是 HH:mm、时长不是数字 —— 任何一项不合法都退回 null（= 没排），
+ * 不会在时间轴上留一个画不出来的盒子。校验与写入共用同一个函数。
+ */
+export const taskTimeboxSchema = z
+  .object({
+    date: z.string().default(''),
+    start: z.string().default(''),
+    minutes: z.number().default(0),
+  })
+  .nullable()
+  .default(null)
+  .transform((value) => normalizeTimebox(value));
+
 export const taskSchema = z.object({
   id: z.string().min(1),
   title: z.string(),
@@ -60,6 +79,8 @@ export const taskSchema = z.object({
   /** v7：子任务与重复规则；旧备份缺省时补默认值 */
   subtasks: z.array(subTaskSchema).default([]),
   repeat: repeatRuleSchema.nullable().default(null),
+  /** 时间盒；旧备份与旧数据没有它，缺省即「没排」 */
+  timebox: taskTimeboxSchema,
   createdAt: isoDateString.default(() => new Date().toISOString()),
   completedAt: z.string().optional(),
 });
@@ -342,6 +363,42 @@ export const habitSchema = z.object({
   createdAt: isoDateString.default(() => new Date().toISOString()),
 });
 
+// ---------- 专注 ----------
+const focusTarget = z.enum(['task', 'dev', 'book', 'game']);
+const focusMode = z.enum(['pomodoro', 'stopwatch']);
+
+/** 进行中的专注；旧备份里没有它，导入后就是「当前没有在跑的表」 */
+export const activeFocusSchema = z.object({
+  entityId: z.string().default(''),
+  title: z.string().default(''),
+  target: focusTarget.default('task'),
+  mode: focusMode.default('pomodoro'),
+  plannedMinutes: z.number().min(1).max(600).catch(25),
+  startedAt: isoDateString.default(() => new Date().toISOString()),
+});
+
+/**
+ * 一次已完成的专注。
+ *
+ * `plannedMinutes` 与 `minutes` 分开存：前者是「本来打算多久」，后者是「实际多久」。
+ * 复盘时「计划 25 分钟，实际 12 分钟」比一个孤零零的数字有信息量得多。
+ * `posted` 记录时长是否已经写成对应模块的流水，避免重复回填。
+ */
+export const focusSessionSchema = z.object({
+  id: z.string().min(1),
+  date: z.string().default(''),
+  entityId: z.string().default(''),
+  title: z.string().default(''),
+  target: focusTarget.default('task'),
+  mode: focusMode.default('pomodoro'),
+  plannedMinutes: z.number().min(1).max(600).catch(25),
+  minutes: z.number().min(1).max(600).catch(1),
+  startedAt: isoDateString.default(() => new Date().toISOString()),
+  endedAt: isoDateString.default(() => new Date().toISOString()),
+  posted: z.boolean().default(false),
+  createdAt: isoDateString.default(() => new Date().toISOString()),
+});
+
 // ---------- 设置 ----------
 export const settingsSchema = z.object({
   /** 新字段（v3）：三态主题 */
@@ -368,6 +425,7 @@ export const backupDataSchema = z.object({
   gameSessions: z.array(gameSessionSchema).default([]),
   readingSessions: z.array(readingSessionSchema).default([]),
   habits: z.array(habitSchema).default([]),
+  focusSessions: z.array(focusSessionSchema).default([]),
   settings: settingsSchema.optional(),
 });
 
@@ -388,6 +446,7 @@ export const BACKUP_MODULES = [
   'gameSessions',
   'readingSessions',
   'habits',
+  'focusSessions',
 ] as const;
 
 export type BackupModule = (typeof BACKUP_MODULES)[number];
@@ -407,4 +466,5 @@ export const MODULE_LABELS: Record<BackupModule, string> = {
   gameSessions: '游玩记录',
   readingSessions: '阅读记录',
   habits: '习惯',
+  focusSessions: '专注记录',
 };
