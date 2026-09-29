@@ -80,12 +80,12 @@ describe('StatsPage', () => {
 
     renderStats();
 
-    expect(cardFor('近 30 天完成任务').getByText('1')).toBeInTheDocument();
-    expect(cardFor('近 30 天训练').getByText('2')).toBeInTheDocument();
-    expect(cardFor('近 30 天训练').getByText('分布在 2 天里')).toBeInTheDocument();
+    expect(cardFor('最近 30 天完成任务').getByText('1')).toBeInTheDocument();
+    expect(cardFor('最近 30 天训练').getByText('2')).toBeInTheDocument();
+    expect(cardFor('最近 30 天训练').getByText('分布在 2 天里')).toBeInTheDocument();
     // 今天有任务与训练、昨天有训练，所以连续记录是 2 天
     expect(cardFor('连续记录').getByText('2')).toBeInTheDocument();
-    expect(screen.getByText('近 30 天活动 3 次')).toBeInTheDocument();
+    expect(screen.getByText('最近 30 天活动 3 次')).toBeInTheDocument();
     expect(screen.getByText('连续记录 2 天')).toBeInTheDocument();
   });
 
@@ -100,9 +100,10 @@ describe('StatsPage', () => {
       screen.getByRole('img', { name: '最近 30 天活动热力图：30 天里有 1 天有记录，合计 1' }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole('img', { name: /最近 14 天每日完成任务数：合计 1 个/ }),
+      screen.getByRole('img', { name: /最近 30 天任务完成数（按天）：合计 1 个/ }),
     ).toBeInTheDocument();
-    expect(screen.getByRole('img', { name: '近 14 天每日完成任务数趋势' })).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: '最近 30 天每日完成任务数趋势' })).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: /最近 30 天活动构成：合计 1 次/ })).toBeInTheDocument();
   });
 
   it('日均热量只按有记录的天数计算', () => {
@@ -231,5 +232,67 @@ describe('StatsPage', () => {
     // 统计页同样带周期前缀（「每周 · 1 次 / 4 次」）
     expect(screen.getByText(/1 次 \/ 4 次/)).toBeInTheDocument();
     expect(screen.getByText('0/1 个已达成', { exact: false })).toBeInTheDocument();
+  });
+
+  it('切换时间范围后标题、徽标与柱子数量同步变化', async () => {
+    const tasks = useTaskStore.getState();
+    tasks.addTask('写周报', '', 'high', '');
+    useTaskStore.getState().toggleTaskStatus(useTaskStore.getState().tasks[0]!.id);
+
+    renderStats();
+
+    // 默认 30 天：一天一根柱子
+    expect(screen.getByRole('img', { name: /任务完成数（按天）/ }).children).toHaveLength(30);
+
+    await userEvent.click(screen.getByRole('button', { name: '7 天' }));
+
+    expect(screen.getByText('最近 7 天的活动趋势与各模块进度')).toBeInTheDocument();
+    expect(screen.getByText('最近 7 天活动 1 次')).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: /任务完成数（按天）/ }).children).toHaveLength(7);
+    expect(
+      screen.getByRole('img', { name: /最近 7 天活动热力图：7 天里有 1 天有记录/ }),
+    ).toBeInTheDocument();
+
+    // 90 天太长，改成一周一根柱子
+    await userEvent.click(screen.getByRole('button', { name: '90 天' }));
+
+    expect(screen.getByText('最近 90 天的活动趋势与各模块进度')).toBeInTheDocument();
+    const weekly = screen.getByRole('img', { name: /任务完成数（按周）/ });
+    expect(weekly.children.length).toBeGreaterThan(5);
+    expect(weekly.children.length).toBeLessThan(20);
+  });
+
+  it('「全部」从最早一条记录算起，并封顶 365 天、按月聚合', async () => {
+    const projectId = useDevStore.getState().addProject('老项目', '');
+    useDevStore.getState().addSession(projectId, addDays(todayKey(), -400), 1, '');
+
+    renderStats();
+
+    await userEvent.click(screen.getByRole('button', { name: '全部' }));
+
+    // 最早记录在 400 天前，但区间上限是 365 天
+    expect(screen.getByText('全部 365 天的活动趋势与各模块进度')).toBeInTheDocument();
+    const monthly = screen.getByRole('img', { name: /任务完成数（按月）/ });
+    expect(monthly.children.length).toBeGreaterThanOrEqual(12);
+    expect(monthly.children.length).toBeLessThanOrEqual(13);
+  });
+
+  it('活动构成把任务、训练与饮食分色堆叠', () => {
+    const tasks = useTaskStore.getState();
+    tasks.addTask('写周报', '', 'high', '');
+    useTaskStore.getState().toggleTaskStatus(useTaskStore.getState().tasks[0]!.id);
+    useFitnessStore.getState().addRecord('推日', todayKey(), workout, '');
+    useDietStore.getState().addRecord(todayKey(), 'lunch', meal);
+
+    renderStats();
+
+    const card = screen.getByText('活动构成').closest('div.rounded-lg');
+    if (!card) throw new Error('找不到活动构成卡片');
+    for (const name of ['任务', '训练', '饮食']) {
+      expect(within(card as HTMLElement).getByText(name)).toBeInTheDocument();
+    }
+    expect(
+      screen.getByRole('img', { name: '最近 30 天活动构成：合计 3 次，最高一天 3 次' }),
+    ).toBeInTheDocument();
   });
 });

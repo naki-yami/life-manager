@@ -4,6 +4,7 @@ import { sumOf } from '../../utils/stats';
 import { CHART_BAR } from './tones';
 import type { ChartTone } from './tones';
 import { formatShortDate } from '../../utils/date';
+import { CHART_FOCUS_RING, useChartCursor } from './useChartCursor';
 
 export interface BarChartProps {
   data: DayPoint[];
@@ -19,7 +20,7 @@ export interface BarChartProps {
 
 /**
  * 逐日柱状图。高度用百分比设置，所以容器多宽都能自适应；
- * 读屏用户走 figcaption 里的明细列表，图形本身只作视觉呈现。
+ * 读屏用户走 figcaption 里的明细列表，键盘用户可聚焦后用左右键逐点读。
  */
 export const BarChart: React.FC<BarChartProps> = ({
   data,
@@ -30,8 +31,10 @@ export const BarChart: React.FC<BarChartProps> = ({
   formatDate = formatShortDate,
   className = '',
 }) => {
+  const cursor = useChartCursor(data.length);
   const max = Math.max(1, ...data.map((point) => point.value));
   const total = sumOf(data.map((point) => point.value));
+  const active = cursor.index === null ? undefined : data[cursor.index];
 
   if (data.length === 0) {
     return (
@@ -47,18 +50,19 @@ export const BarChart: React.FC<BarChartProps> = ({
   return (
     <figure className={className}>
       <div
+        {...cursor.containerProps}
         role="img"
         aria-label={`${label}：合计 ${formatValue(total)}，单日最高 ${formatValue(max)}`}
-        className="flex items-end gap-1"
+        className={`flex items-end gap-1 ${CHART_FOCUS_RING}`}
         style={{ height }}
       >
-        {data.map((point) => (
+        {data.map((point, index) => (
           <span
             key={point.date}
             title={`${point.date} · ${formatValue(point.value)}`}
             className={`min-w-0 flex-1 rounded-t-sm ${
               point.value > 0 ? CHART_BAR[tone] : 'bg-inset'
-            }`}
+            } ${index === cursor.index ? 'ring-2 ring-line-focus' : ''}`}
             style={{
               height: point.value > 0 ? `${Math.max(4, (point.value / max) * 100)}%` : '2px',
             }}
@@ -67,7 +71,11 @@ export const BarChart: React.FC<BarChartProps> = ({
       </div>
       <div className="mt-1.5 flex items-center justify-between text-2xs text-content-tertiary">
         <span>{data.length > 0 ? formatDate(data[0]!.date) : ''}</span>
-        <span>合计 {formatValue(total)}</span>
+        <span aria-live="polite" className="tabular">
+          {active
+            ? `${formatDate(active.date)} · ${formatValue(active.value)}`
+            : `合计 ${formatValue(total)}`}
+        </span>
         <span>{data.length > 0 ? formatDate(data[data.length - 1]!.date) : ''}</span>
       </div>
       <figcaption className="sr-only">

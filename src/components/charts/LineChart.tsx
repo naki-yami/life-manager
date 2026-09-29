@@ -3,6 +3,7 @@ import type { DayPoint } from '../../utils/stats';
 import { CHART_FILL, CHART_STROKE } from './tones';
 import type { ChartTone } from './tones';
 import { formatShortDate } from '../../utils/date';
+import { CHART_FOCUS_RING, useChartCursor } from './useChartCursor';
 
 export interface LineChartProps {
   /** 按时间升序的数据点；折线按给定顺序连线，不会自己排序 */
@@ -27,6 +28,8 @@ const BOTTOM = 92;
  * 与 BarChart 的区别很关键：柱状图默认从 0 起算，适合「数量」，
  * 而体重从 0 起算会变成一条毫无信息的直线，所以这里按 min–max 自适应。
  * 点之间按数据顺序直连，缺测的日子不会被补成 0 —— 补出来的 0 会把折线拽到底部。
+ *
+ * 键盘用户可聚焦图表后用左右键逐点读：图里落一条竖线，底部说明行同步显示那一天的数值。
  */
 export const LineChart: React.FC<LineChartProps> = ({
   data,
@@ -37,6 +40,8 @@ export const LineChart: React.FC<LineChartProps> = ({
   formatDate = formatShortDate,
   className = '',
 }) => {
+  // 钩子必须在提前 return 之前调用，否则空数据与非空数据走的是两套 Hook 顺序
+  const cursor = useChartCursor(data.length);
   if (data.length === 0) {
     return (
       <div
@@ -67,13 +72,15 @@ export const LineChart: React.FC<LineChartProps> = ({
   const latest = data[data.length - 1]!;
   /** 悬停热区的宽度：点数越多越窄，单点时铺满 */
   const band = data.length > 1 ? step : 100;
+  const active = cursor.index === null ? undefined : coords[cursor.index];
 
   return (
     <figure className={className}>
       <div
+        {...cursor.containerProps}
         role="img"
         aria-label={`${label}：共 ${data.length} 次记录，最新 ${formatValue(latest.value)}，最低 ${formatValue(min)}，最高 ${formatValue(max)}`}
-        className="relative"
+        className={`relative ${CHART_FOCUS_RING}`}
         style={{ height }}
       >
         <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="h-full w-full" aria-hidden>
@@ -111,6 +118,19 @@ export const LineChart: React.FC<LineChartProps> = ({
             className={CHART_STROKE[tone]}
             aria-hidden
           />
+          {/* 键盘光标：一条竖线指出当前读到的是哪一天 */}
+          {active && (
+            <line
+              x1={active.x}
+              x2={active.x}
+              y1={0}
+              y2={100}
+              strokeDasharray="3 3"
+              vectorEffect="non-scaling-stroke"
+              className="stroke-line-strong"
+              aria-hidden
+            />
+          )}
           {/* 透明热区负责鼠标悬停提示；用矩形而不是圆点，避免拉伸后变形 */}
           {coords.map(({ x, point }) => (
             <rect
@@ -128,8 +148,10 @@ export const LineChart: React.FC<LineChartProps> = ({
       </div>
       <div className="mt-1.5 flex items-center justify-between gap-2 text-2xs text-content-tertiary">
         <span>{formatDate(data[0]!.date)}</span>
-        <span>
-          最低 {formatValue(min)} · 最高 {formatValue(max)}
+        <span aria-live="polite" className="tabular">
+          {active
+            ? `${formatDate(active.point.date)} · ${formatValue(active.point.value)}`
+            : `最低 ${formatValue(min)} · 最高 ${formatValue(max)}`}
         </span>
         <span>{formatDate(latest.date)}</span>
       </div>

@@ -62,6 +62,18 @@ export default {
         },
         info: { DEFAULT: 'var(--lm-info)', soft: 'var(--lm-info-soft)' },
 
+        // 图表分类色板：多序列时按顺序取色（bg-chart-3 / stroke-chart-3…）
+        chart: {
+          1: 'var(--lm-chart-1)',
+          2: 'var(--lm-chart-2)',
+          3: 'var(--lm-chart-3)',
+          4: 'var(--lm-chart-4)',
+          5: 'var(--lm-chart-5)',
+          6: 'var(--lm-chart-6)',
+          7: 'var(--lm-chart-7)',
+          8: 'var(--lm-chart-8)',
+        },
+
         // 活动热力图等级色（0 = 无活动）
         heat: {
           0: 'var(--lm-heat-0)',

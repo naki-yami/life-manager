@@ -5,6 +5,7 @@ import {
   currentStreak,
   dayRange,
   heatLevel,
+  monthBuckets,
   normalizeToUnit,
   percentOf,
   seriesByDay,
@@ -16,6 +17,7 @@ import {
   weekStartKey,
   sumOf,
   sumSeries,
+  weekBuckets,
   weekdayIndex,
 } from './stats';
 
@@ -236,6 +238,42 @@ describe('seriesByMonth', () => {
         (item) => item.n,
       ),
     ).toEqual([{ date: '2026-09-01', value: 5 }]);
+  });
+});
+
+describe('weekBuckets / monthBuckets', () => {
+  // 2026-09-21 是周一，09-27 是周日，09-28 是下一周的周一，10-02 是周五
+  const daily = [
+    { date: '2026-09-21', value: 1 },
+    { date: '2026-09-22', value: 2 },
+    { date: '2026-09-27', value: 4 },
+    { date: '2026-09-28', value: 8 },
+    { date: '2026-10-02', value: 16 },
+  ];
+
+  it('按自然周合并到周一，跨周不串台', () => {
+    expect(weekBuckets(daily)).toEqual([
+      { date: '2026-09-21', value: 7 },
+      { date: '2026-09-28', value: 24 },
+    ]);
+  });
+
+  it('按自然月合并到当月 1 号', () => {
+    expect(monthBuckets(daily)).toEqual([
+      { date: '2026-09-01', value: 15 },
+      { date: '2026-10-01', value: 16 },
+    ]);
+  });
+
+  it('空序列返回空数组', () => {
+    expect(weekBuckets([])).toEqual([]);
+    expect(monthBuckets([])).toEqual([]);
+  });
+
+  it('乱序输入按日期重新排序', () => {
+    const shuffled = [daily[4]!, daily[0]!, daily[3]!, daily[1]!, daily[2]!];
+    expect(weekBuckets(shuffled)).toEqual(weekBuckets(daily));
+    expect(monthBuckets(shuffled)).toEqual(monthBuckets(daily));
   });
 });
 

@@ -212,6 +212,64 @@ describe('Layout', () => {
   });
 });
 
+describe('BottomTabBar', () => {
+  const bar = () => screen.getByTestId('bottom-tab-bar');
+
+  it('只放四个高频入口，其余走「更多」抽屉', async () => {
+    renderLayout('/');
+
+    for (const label of ['首页总览', '今日计划', '习惯养成', '统计']) {
+      expect(within(bar()).getByRole('button', { name: label })).toBeInTheDocument();
+    }
+    // 读书不在 Tab 上，只能从抽屉进
+    expect(within(bar()).queryByRole('button', { name: '读书' })).not.toBeInTheDocument();
+
+    const more = within(bar()).getByRole('button', { name: '更多' });
+    expect(more).toHaveAttribute('aria-expanded', 'false');
+
+    await userEvent.click(more);
+
+    expect(screen.getByRole('dialog', { name: '导航' })).toBeInTheDocument();
+    expect(within(bar()).getByRole('button', { name: '更多' })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
+  });
+
+  it('当前页面的 Tab 带 aria-current，点击即可跳转', async () => {
+    renderLayout('/');
+
+    expect(within(bar()).getByRole('button', { name: '首页总览' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+
+    await userEvent.click(within(bar()).getByRole('button', { name: '今日计划' }));
+
+    expect(screen.getByText('任务内容')).toBeInTheDocument();
+    expect(within(bar()).getByRole('button', { name: '今日计划' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    expect(within(bar()).getByRole('button', { name: '首页总览' })).not.toHaveAttribute(
+      'aria-current',
+    );
+  });
+
+  it('当前页面不在 Tab 上时点亮「更多」，它本身不是页面所以不带 aria-current', () => {
+    renderLayout('/books');
+
+    const more = within(bar()).getByRole('button', { name: '更多' });
+    expect(more).toHaveClass('text-accent');
+    expect(more).not.toHaveAttribute('aria-current');
+    for (const label of ['首页总览', '今日计划', '习惯养成', '统计']) {
+      expect(within(bar()).getByRole('button', { name: label })).toHaveClass(
+        'text-content-tertiary',
+      );
+    }
+  });
+});
+
 const renderLayoutWithToasts = (path = '/') =>
   render(
     <MemoryRouter initialEntries={[path]}>

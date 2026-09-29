@@ -1,6 +1,8 @@
 export { Header } from './Header';
 export { Sidebar, NavList } from './Sidebar';
 export { Layout } from './Layout';
+export { BottomTabBar } from './BottomTabBar';
+export type { BottomTabBarProps } from './BottomTabBar';
 export { StorageAlert } from './StorageAlert';
 export { PageHeader } from './PageHeader';
 export type { PageHeaderProps } from './PageHeader';

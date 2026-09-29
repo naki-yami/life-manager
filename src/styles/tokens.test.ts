@@ -200,6 +200,49 @@ describe('设计令牌 · 文字对比度', () => {
   });
 });
 
+describe('设计令牌 · 图表分类色板', () => {
+  const SERIES = [1, 2, 3, 4, 5, 6, 7, 8] as const;
+  const seriesToken = (selector: string, index: number): string => `--lm-chart-${index}`;
+
+  /** 粗略的 RGB 欧氏距离：够用来拦住「两个序列肉眼分不开」 */
+  const distance = (a: Rgba, b: Rgba): number =>
+    Math.sqrt((a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2);
+
+  it.each([':root', '.dark'])('%s 下 8 个序列色齐全且两两可区分', (selector) => {
+    const palette = SERIES.map((index) => ({
+      index,
+      rgba: parseColor(tokenOf(selector, seriesToken(selector, index))),
+    }));
+
+    const tooClose: string[] = [];
+    for (let a = 0; a < palette.length; a += 1) {
+      for (let b = a + 1; b < palette.length; b += 1) {
+        const gap = distance(palette[a]!.rgba, palette[b]!.rgba);
+        if (gap < 45) {
+          tooClose.push(
+            `chart-${palette[a]!.index} / chart-${palette[b]!.index}：${gap.toFixed(0)}`,
+          );
+        }
+      }
+    }
+
+    expect(tooClose).toEqual([]);
+    expect(new Set(palette.map((entry) => entry.rgba.join(','))).size).toBe(SERIES.length);
+  });
+
+  it.each([':root', '.dark'])('%s 下每个序列色对卡片底与页面底都达到 3:1', (selector) => {
+    const failures = SERIES.flatMap((index) => {
+      const color = parseColor(tokenOf(selector, seriesToken(selector, index)));
+      return ['--lm-bg-surface', '--lm-bg-canvas'].flatMap((bg) => {
+        const ratio = contrastRatio(color, parseColor(tokenOf(selector, bg)));
+        return ratio >= 3 ? [] : [`chart-${index} / ${bg}：${ratio.toFixed(2)}:1`];
+      });
+    });
+
+    expect(failures).toEqual([]);
+  });
+});
+
 describe('设计令牌 · 窄屏留白', () => {
   const mobileSelector = '@media (max-width: 640px) :root';
   const compactSelector = "[data-density='compact']";

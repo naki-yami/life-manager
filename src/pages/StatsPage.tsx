@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Activity, BarChart3, CalendarCheck, Flame, TrendingUp } from 'lucide-react';
 import {
@@ -9,9 +9,10 @@ import {
   CardHeader,
   EmptyState,
   ProgressRing,
+  SegmentedControl,
   StatCard,
 } from '../components/ui';
-import { BarChart, Heatmap, Sparkline } from '../components/charts';
+import { BarChart, Heatmap, Sparkline, StackedBar } from '../components/charts';
 import { ProgressBar } from '../components/ui';
 import { PageHeader } from '../components/layout';
 import { GoalProgressList } from '../components/goals';
@@ -29,18 +30,67 @@ import {
   activeDays,
   averageOf,
   currentStreak,
+  monthBuckets,
   percentOf,
   seriesByDay,
   seriesByWeek,
   sumOf,
   sumSeries,
+  weekBuckets,
 } from '../utils/stats';
-import { dayKeyOf, formatNumber, formatShortDate, todayKey } from '../utils/date';
+import {
+  dayKeyOf,
+  daysBetween,
+  formatMonthLabel,
+  formatNumber,
+  formatShortDate,
+  isDayKey,
+  todayKey,
+} from '../utils/date';
 import { goalProgress, sortGoals, summarizeGoals } from '../utils/goals';
+import type { DayPoint } from '../utils/stats';
 import type { MetricSnapshot } from '../utils/metrics';
 
-const WINDOW_DAYS = 30;
-const CHART_DAYS = 14;
+/** 图表的时间范围档位；「全部」从最早一条记录算起 */
+type StatsRange = '7' | '30' | '90' | 'all';
+
+const RANGE_OPTIONS: Array<{ value: StatsRange; label: string }> = [
+  { value: '7', label: '7 天' },
+  { value: '30', label: '30 天' },
+  { value: '90', label: '90 天' },
+  { value: 'all', label: '全部' },
+];
+
+/** 默认窗口：30 天，够看出趋势又不至于太密 */
+const DEFAULT_RANGE_DAYS = 30;
+/** 「全部」的回看上限：再长也没人看，还会把热力图压成一条线 */
+const ALL_DAYS_CAP = 365;
+/** 超过这个天数就按周汇总，否则一天一根柱子细得看不清 */
+const WEEKLY_THRESHOLD = 31;
+/** 再长就按月汇总：300 多根柱子挤在一起，谁也读不出来 */
+const MONTHLY_THRESHOLD = 120;
+
+/** 图表的聚合粒度：7 / 30 天看每天，90 天看每周，再长看每月 */
+type BucketMode = 'day' | 'week' | 'month';
+
+const BUCKET_UNIT: Record<BucketMode, string> = { day: '天', week: '周', month: '月' };
+
+const bucketModeOf = (days: number): BucketMode =>
+  days > MONTHLY_THRESHOLD ? 'month' : days > WEEKLY_THRESHOLD ? 'week' : 'day';
+
+/**
+ * 把逐日序列合并到图表粒度。
+ * 聚合是可加的：「先合并再相加」与「先相加再合并」结果一致，
+ * 所以几张图各自合并一次即可，不用回头重新取一遍数。
+ */
+function bucketize(series: readonly DayPoint[], mode: BucketMode): DayPoint[] {
+  if (mode === 'month') return monthBuckets(series);
+  if (mode === 'week') return weekBuckets(series);
+  return [...series];
+}
+
+const rangeLabelOf = (range: StatsRange, days: number): string =>
+  range === 'all' ? `全部 ${days} 天` : `最近 ${days} 天`;
 
 export const StatsPage: React.FC = () => {
   const navigate = useNavigate();
@@ -59,6 +109,45 @@ export const StatsPage: React.FC = () => {
   const goals = useGoalStore((state) => state.goals);
 
   const today = todayKey();
+  const [range, setRange] = useState<StatsRange>('30');
+
+  /**
+   * 当前窗口的天数。「全部」从最早一条流水算起，上限 365 天 ——
+   * 再长的区间只会把热力图压成一条线，没有信息量。
+   * 只认 `YYYY-MM-DD` 形态的日期键，脏数据不会把区间拉成天文数字。
+   */
+  const rangeDays = useMemo(() => {
+    if (range !== 'all') return Number(range);
+    const keys = [
+      ...tasks.map((task) => dayKeyOf(task.completedAt)),
+      ...fitnessRecords.map((record) => record.date),
+      ...dietRecords.map((record) => record.date),
+      ...devSessions.map((session) => session.date),
+      ...readingSessions.map((session) => session.date),
+      ...gameSessions.map((session) => session.date),
+    ]
+      .filter((key): key is string => typeof key === 'string' && isDayKey(key))
+      .sort();
+    const earliest = keys[0];
+    const span = earliest === undefined ? null : daysBetween(earliest, today);
+    if (span === null) return DEFAULT_RANGE_DAYS;
+    return Math.min(ALL_DAYS_CAP, Math.max(1, span + 1));
+  }, [
+    range,
+    tasks,
+    fitnessRecords,
+    dietRecords,
+    devSessions,
+    readingSessions,
+    gameSessions,
+    today,
+  ]);
+
+  const rangeLabel = rangeLabelOf(range, rangeDays);
+  const bucketMode = bucketModeOf(rangeDays);
+  const bucketUnit = BUCKET_UNIT[bucketMode];
+  /** 按周 / 按月聚合时，底部刻度换成「9/28」之外的写法 */
+  const formatBucketDate = bucketMode === 'month' ? formatMonthLabel : formatShortDate;
 
   /** 目标达成：与首页、复盘共用 metrics registry，三处不会算出不同的数 */
   const goalProgressList = useMemo(() => {
@@ -89,30 +178,30 @@ export const StatsPage: React.FC = () => {
     () =>
       seriesByDay(
         tasks.filter((task) => task.status === 'completed' && task.completedAt),
-        WINDOW_DAYS,
+        rangeDays,
         today,
         (task) => dayKeyOf(task.completedAt),
       ),
-    [tasks, today],
+    [tasks, today, rangeDays],
   );
   const fitnessSeries = useMemo(
-    () => seriesByDay(fitnessRecords, WINDOW_DAYS, today, (record) => record.date),
-    [fitnessRecords, today],
+    () => seriesByDay(fitnessRecords, rangeDays, today, (record) => record.date),
+    [fitnessRecords, today, rangeDays],
   );
   const dietCountSeries = useMemo(
-    () => seriesByDay(dietRecords, WINDOW_DAYS, today, (record) => record.date),
-    [dietRecords, today],
+    () => seriesByDay(dietRecords, rangeDays, today, (record) => record.date),
+    [dietRecords, today, rangeDays],
   );
   const calorieSeries = useMemo(
     () =>
       seriesByDay(
         dietRecords,
-        WINDOW_DAYS,
+        rangeDays,
         today,
         (record) => record.date,
         (record) => record.totalCalories,
       ),
-    [dietRecords, today],
+    [dietRecords, today, rangeDays],
   );
 
   const activitySeries = useMemo(
@@ -120,8 +209,22 @@ export const StatsPage: React.FC = () => {
     [taskSeries, fitnessSeries, dietCountSeries],
   );
 
-  const taskChart = taskSeries.slice(-CHART_DAYS);
-  const calorieChart = calorieSeries.slice(-CHART_DAYS);
+  /** 图表用聚合后的序列；总量 / 连续天数仍用逐日序列，与热力图保持同源 */
+  const taskChart = useMemo(() => bucketize(taskSeries, bucketMode), [taskSeries, bucketMode]);
+  const fitnessChart = useMemo(
+    () => bucketize(fitnessSeries, bucketMode),
+    [fitnessSeries, bucketMode],
+  );
+  const dietCountChart = useMemo(
+    () => bucketize(dietCountSeries, bucketMode),
+    [dietCountSeries, bucketMode],
+  );
+  const calorieChart = useMemo(
+    () => bucketize(calorieSeries, bucketMode),
+    [calorieSeries, bucketMode],
+  );
+  const activityDates = taskChart.map((point) => point.date);
+  const sparkSeries = taskSeries.slice(-Math.min(14, rangeDays));
 
   const completedInWindow = sumOf(taskSeries.map((point) => point.value));
   const workoutInWindow = sumOf(fitnessSeries.map((point) => point.value));
@@ -227,11 +330,19 @@ export const StatsPage: React.FC = () => {
     <div className="space-y-section">
       <PageHeader
         title="统计"
-        description={`最近 ${WINDOW_DAYS} 天的活动趋势与各模块进度`}
+        description={`${rangeLabel}的活动趋势与各模块进度`}
         icon={BarChart3}
+        actions={
+          <SegmentedControl
+            label="统计时间范围"
+            value={range}
+            onChange={setRange}
+            options={RANGE_OPTIONS}
+          />
+        }
         meta={
           <>
-            <Badge tone="accent">近 30 天活动 {formatNumber(activityTotal)} 次</Badge>
+            <Badge tone="accent">{`${rangeLabel}活动 ${formatNumber(activityTotal)} 次`}</Badge>
             {streak > 0 && (
               <Badge tone="success" dot>
                 连续记录 {streak} 天
@@ -243,22 +354,22 @@ export const StatsPage: React.FC = () => {
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
-          label="近 30 天完成任务"
+          label={`${rangeLabel}完成任务`}
           value={completedInWindow}
           unit="个"
           tone="success"
           icon={<CalendarCheck size={16} aria-hidden />}
           footer={
             <Sparkline
-              data={taskChart.map((point) => point.value)}
-              label="近 14 天每日完成任务数趋势"
+              data={sparkSeries.map((point) => point.value)}
+              label={`${rangeLabel}每日完成任务数趋势`}
               tone="success"
               height={28}
             />
           }
         />
         <StatCard
-          label="近 30 天训练"
+          label={`${rangeLabel}训练`}
           value={workoutInWindow}
           unit="次"
           tone="accent"
@@ -300,10 +411,10 @@ export const StatsPage: React.FC = () => {
           <Card>
             <CardHeader
               title="活动热力图"
-              subtitle={`最近 ${WINDOW_DAYS} 天，每天的任务完成、训练与饮食记录合起来算一次活动`}
+              subtitle={`${rangeLabel}，每天的任务完成、训练与饮食记录合起来算一次活动`}
             />
             <CardBody>
-              <Heatmap data={activitySeries} label="最近 30 天活动热力图" />
+              <Heatmap data={activitySeries} label={`${rangeLabel}活动热力图`} />
             </CardBody>
           </Card>
 
@@ -319,27 +430,55 @@ export const StatsPage: React.FC = () => {
             </Card>
           )}
 
+          <Card>
+            <CardHeader
+              title="活动构成"
+              subtitle={`${rangeLabel}的任务完成、训练与饮食记录叠加，看活动量由哪几部分组成`}
+            />
+            <CardBody>
+              <StackedBar
+                dates={activityDates}
+                series={[
+                  { name: '任务', values: taskChart.map((point) => point.value) },
+                  { name: '训练', values: fitnessChart.map((point) => point.value) },
+                  { name: '饮食', values: dietCountChart.map((point) => point.value) },
+                ]}
+                label={`${rangeLabel}活动构成`}
+                formatValue={(value) => `${value} 次`}
+                formatDate={formatBucketDate}
+              />
+            </CardBody>
+          </Card>
+
           <div className="grid gap-4 lg:grid-cols-2">
             <Card>
-              <CardHeader title="任务完成趋势" subtitle={`最近 ${CHART_DAYS} 天每天完成的任务数`} />
+              <CardHeader
+                title="任务完成趋势"
+                subtitle={`${rangeLabel}，按${bucketUnit}汇总完成的任务数`}
+              />
               <CardBody>
                 <BarChart
                   data={taskChart}
-                  label="最近 14 天每日完成任务数"
+                  label={`${rangeLabel}任务完成数（按${bucketUnit}）`}
                   tone="success"
                   formatValue={(value) => `${value} 个`}
+                  formatDate={formatBucketDate}
                 />
               </CardBody>
             </Card>
 
             <Card>
-              <CardHeader title="热量趋势" subtitle={`最近 ${CHART_DAYS} 天每天的摄入热量`} />
+              <CardHeader
+                title="热量趋势"
+                subtitle={`${rangeLabel}，按${bucketUnit}汇总的摄入热量`}
+              />
               <CardBody>
                 <BarChart
                   data={calorieChart}
-                  label="最近 14 天每日摄入热量"
+                  label={`${rangeLabel}摄入热量（按${bucketUnit}）`}
                   tone="warning"
                   formatValue={(value) => `${formatNumber(value)} kcal`}
+                  formatDate={formatBucketDate}
                 />
               </CardBody>
             </Card>

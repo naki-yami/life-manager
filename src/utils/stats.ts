@@ -73,6 +73,36 @@ export function activeDays(series: readonly DayPoint[]): string[] {
   return series.filter((point) => point.value > 0).map((point) => point.date);
 }
 
+/**
+ * 把逐日序列按自然周合并（`date` 取那周的周一）。
+ *
+ * 时间范围一拉长（90 天 / 全部），一天一根柱子会细得看不清，按周汇总才有可读性。
+ * 就地把已有的日序列合并，而不是回头按周重新取一次数 —— 同一条序列两处各算一遍，
+ * 迟早会算出两个数。
+ */
+export function weekBuckets(series: readonly DayPoint[]): DayPoint[] {
+  const buckets = new Map<string, number>();
+  for (const point of series) {
+    const key = weekStartKey(point.date);
+    buckets.set(key, (buckets.get(key) ?? 0) + point.value);
+  }
+  return [...buckets.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([date, value]) => ({ date, value }));
+}
+
+/** 把逐日序列按自然月合并（`date` 取当月 1 号）；区间拉到一年以上时用 */
+export function monthBuckets(series: readonly DayPoint[]): DayPoint[] {
+  const buckets = new Map<string, number>();
+  for (const point of series) {
+    const key = monthStartKey(point.date);
+    buckets.set(key, (buckets.get(key) ?? 0) + point.value);
+  }
+  return [...buckets.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([date, value]) => ({ date, value }));
+}
+
 /** 从 endKey 往前数连续有记录的天数；今天没有记录时为 0 */
 export function currentStreak(series: readonly DayPoint[], endKey: string): number {
   let streak = 0;

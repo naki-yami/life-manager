@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom';
 import { Drawer } from '../ui';
 import { Header } from './Header';
 import { Sidebar, NavList } from './Sidebar';
+import { BottomTabBar } from './BottomTabBar';
 import { StorageAlert } from './StorageAlert';
 import { CommandPaletteProvider } from './CommandPalette';
 import { useCommandPalette } from './commandPaletteContext';
@@ -82,13 +83,16 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
             tabIndex={-1}
             className="min-w-0 flex-1 overflow-y-auto p-page focus:outline-none"
           >
-            <div className="mx-auto w-full max-w-5xl xl:max-w-6xl 2xl:max-w-7xl">
+            {/* 窄屏底部有固定的 Tab 条，内容多留出它的高度免得被压住 */}
+            <div className="mx-auto w-full max-w-5xl pb-16 lg:pb-0 xl:max-w-6xl 2xl:max-w-7xl">
               {/* 只在写入失败时渲染，正常情况下不占位 */}
               <StorageAlert />
               {children}
             </div>
           </main>
         </div>
+
+        <BottomTabBar onOpenMore={() => setNavOpen(true)} drawerOpen={navOpen} />
 
         <RouteAnnouncer />
 
