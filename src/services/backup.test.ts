@@ -241,6 +241,18 @@ function sampleData(): BackupData {
         createdAt: '2026-09-27T08:25:00.000Z',
       },
     ],
+    reviews: [
+      {
+        id: 'review-1',
+        period: 'week',
+        date: '2026-09-21',
+        best: '把存储层收进一个模块',
+        blocker: '晚上容易被消息打断',
+        next: '把复盘页做完',
+        createdAt: '2026-09-27T12:00:00.000Z',
+        updatedAt: '2026-09-27T12:00:00.000Z',
+      },
+    ],
     settings: { theme: 'dark' },
   };
 }
@@ -261,6 +273,7 @@ const emptyData = (): BackupData => ({
   readingSessions: [],
   habits: [],
   focusSessions: [],
+  reviews: [],
 });
 
 describe('导出 / 导入 往返', () => {
@@ -289,6 +302,7 @@ describe('导出 / 导入 往返', () => {
     expect(plan.data.games).toEqual(original.games);
     expect(plan.data.habits).toEqual(original.habits);
     expect(plan.data.focusSessions).toEqual(original.focusSessions);
+    expect(plan.data.reviews).toEqual(original.reviews);
     expect(plan.data.settings).toEqual(original.settings);
   });
 
@@ -317,7 +331,7 @@ describe('导出 / 导入 往返', () => {
   it('信封结构包含 schemaVersion 与 exportedAt', () => {
     const envelope = buildBackupEnvelope(emptyData(), new Date('2026-09-28T00:00:00.000Z'));
     expect(envelope.app).toBe('life-manager');
-    expect(envelope.schemaVersion).toBe(14);
+    expect(envelope.schemaVersion).toBe(15);
     expect(envelope.exportedAt).toBe('2026-09-28T00:00:00.000Z');
   });
 });
@@ -826,6 +840,73 @@ describe('专注记录与时间盒的导入兼容', () => {
   });
 });
 
+describe('复盘的导入兼容', () => {
+  const keptReview = {
+    id: 'keep',
+    period: 'week' as const,
+    date: '2026-09-21',
+    best: '把复盘页收尾',
+    blocker: '',
+    next: '',
+    createdAt: '2026-09-27T12:00:00.000Z',
+    updatedAt: '2026-09-27T12:00:00.000Z',
+  };
+
+  it('旧备份没有 reviews 时该模块视为缺失，覆盖模式也不会清空现有复盘', () => {
+    const legacy = sampleData() as Record<string, unknown>;
+    delete legacy.reviews;
+
+    const parsed = parseBackup(JSON.stringify(legacy));
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+
+    expect(parsed.backup.modules.reviews).toBeUndefined();
+
+    const plan = planImport({ reviews: [keptReview] }, parsed.backup.modules, 'overwrite');
+    expect(plan.data.reviews).toEqual([keptReview]);
+  });
+
+  it('复盘三问缺字段时补空串，其余内容照常保留', () => {
+    const backup = sampleData() as unknown as { reviews: Record<string, unknown>[] };
+    delete backup.reviews[0]!.blocker;
+
+    const parsed = parseBackup(JSON.stringify(backup));
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+
+    const plan = planImport(emptyData(), parsed.backup.modules, 'merge');
+    expect(plan.data.reviews?.[0]).toMatchObject({
+      id: 'review-1',
+      blocker: '',
+      next: '把复盘页做完',
+    });
+  });
+
+  it('旧备份没有 period 字段时补成「每周复盘」，不会整条丢弃', () => {
+    const backup = sampleData() as unknown as { reviews: Record<string, unknown>[] };
+    delete backup.reviews[0]!.period;
+
+    const parsed = parseBackup(JSON.stringify(backup));
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+
+    const plan = planImport(emptyData(), parsed.backup.modules, 'merge');
+    expect(plan.data.reviews?.[0]).toMatchObject({ id: 'review-1', period: 'week' });
+  });
+
+  it('周期取值不在枚举里时整条丢弃，并留下解析警告', () => {
+    const backup = sampleData() as unknown as { reviews: Record<string, unknown>[] };
+    backup.reviews[0]!.period = 'month';
+
+    const parsed = parseBackup(JSON.stringify(backup));
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+
+    expect(parsed.backup.modules.reviews).toEqual([]);
+    expect(parsed.backup.warnings.some((issue) => issue.path.startsWith('reviews'))).toBe(true);
+  });
+});
+
 describe('导入模式', () => {
   const existing = [{ id: 'a', title: '现有' }];
 
@@ -895,6 +976,7 @@ describe('导入模式', () => {
       plan.data.readingSessions,
       plan.data.habits,
       plan.data.focusSessions,
+      plan.data.reviews,
     ].reduce((sum, list) => sum + (list?.length ?? 0), 0);
 
     expect(totals.added).toBe(actual);

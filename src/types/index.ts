@@ -409,3 +409,33 @@ export interface FocusSession {
   posted: boolean;
   createdAt: string;
 }
+
+// Review types
+/** 复盘的周期粒度：日复盘与周复盘各写各的，互不覆盖 */
+export type ReviewPeriod = 'day' | 'week';
+
+/**
+ * 一次复盘。
+ *
+ * 三个取舍：
+ * - **一个周期只有一条**：`period + date` 就是主键，同一天再写是修正而不是新增，
+ *   否则「这周我到底怎么想的」会散落在好几条记录里；
+ * - **`date` 存周期起始日**：日复盘存当天，周复盘存那周的周一，
+ *   这样「哪一周」不需要再算一遍，也天然排好序；
+ * - **只存三个回答，不存汇总数字**：汇总能从各模块的流水实时算出来，
+ *   存下来反而会在数据变动之后撒谎。
+ */
+export interface ReviewEntry {
+  id: string;
+  period: ReviewPeriod;
+  /** 周期起始日 YYYY-MM-DD：日复盘＝当天，周复盘＝那周的周一 */
+  date: string;
+  /** 最有价值的一件事 */
+  best: string;
+  /** 最大的阻碍 */
+  blocker: string;
+  /** 下个周期最重要的事 */
+  next: string;
+  createdAt: string;
+  updatedAt: string;
+}

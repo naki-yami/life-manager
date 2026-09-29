@@ -31,6 +31,14 @@ describe('navItems', () => {
     expect(new Set(paths).size).toBe(paths.length);
   });
 
+  it('复盘页挂在主导航上，命令面板也能按「复盘 / 周报」搜到', () => {
+    const review = findNavItem('/review');
+
+    expect(review).toMatchObject({ label: '复盘', group: 'main' });
+    expect(review?.keywords).toContain('复盘');
+    expect(review?.keywords).toContain('周报');
+  });
+
   it('根路径只在自己身上激活', () => {
     expect(isNavItemActive('/', '/')).toBe(true);
     expect(isNavItemActive('/tasks', '/')).toBe(false);

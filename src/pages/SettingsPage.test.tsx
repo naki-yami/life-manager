@@ -15,6 +15,7 @@ import { useFitnessStore } from '../store/fitnessStore';
 import { useDietStore } from '../store/dietStore';
 import { useGameStore } from '../store/gameStore';
 import { useHabitStore } from '../store/habitStore';
+import { useReviewStore } from '../store/reviewStore';
 import { useThemeStore } from '../store/themeStore';
 import { useUiStore } from '../store/uiStore';
 
@@ -27,6 +28,7 @@ beforeEach(() => {
   useDietStore.setState({ records: [] });
   useGameStore.setState({ games: [] });
   useHabitStore.setState({ habits: [] });
+  useReviewStore.setState({ reviews: [] });
   useThemeStore.setState({ themeMode: 'system' });
   useUiStore.setState({ density: 'comfortable', sidebarCollapsed: false });
   localStorage.clear();
@@ -64,6 +66,7 @@ const emptyBackup: BackupData = {
   readingSessions: [],
   habits: [],
   focusSessions: [],
+  reviews: [],
   settings: { themeMode: 'system', density: 'comfortable', sidebarCollapsed: false },
 };
 
@@ -112,6 +115,28 @@ describe('SettingsPage', () => {
 
     expect(screen.getByText('习惯')).toBeInTheDocument();
     expect(screen.getByText(/共 2 条数据/)).toBeInTheDocument();
+  });
+
+  it('数据概览会把复盘也算进来', () => {
+    useReviewStore.setState({
+      reviews: [
+        {
+          id: 'r1',
+          period: 'week',
+          date: '2026-09-21',
+          best: '把复盘页收尾',
+          blocker: '',
+          next: '',
+          createdAt: '2026-09-21T12:00:00',
+          updatedAt: '2026-09-21T12:00:00',
+        },
+      ],
+    });
+
+    renderSettings();
+
+    expect(screen.getByText('复盘')).toBeInTheDocument();
+    expect(screen.getByText(/共 1 条数据/)).toBeInTheDocument();
   });
 
   it('数据概览列出各模块条数并在标题旁汇总', () => {

@@ -7,6 +7,7 @@ import {
   Gamepad2,
   Home,
   LayoutGrid,
+  NotebookPen,
   PenTool,
   Settings,
   Target,
@@ -107,6 +108,14 @@ export const NAV_ITEMS: NavItem[] = [
     description: '每日打卡、节奏追踪与强度分数',
     icon: Target,
     keywords: ['habits', 'habit', 'xiguan', '习惯', '打卡'],
+    group: 'main',
+  },
+  {
+    path: '/review',
+    label: '复盘',
+    description: '每日 / 每周回顾：数字自动汇总，判断留给自己写',
+    icon: NotebookPen,
+    keywords: ['review', 'retro', 'fupan', '复盘', '周报', '总结', '回顾'],
     group: 'main',
   },
   {

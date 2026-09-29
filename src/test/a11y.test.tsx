@@ -12,6 +12,7 @@ import { FitnessPage } from '../pages/FitnessPage';
 import { GamesPage } from '../pages/GamesPage';
 import { HomePage } from '../pages/HomePage';
 import { NotFoundPage } from '../pages/NotFoundPage';
+import { ReviewPage } from '../pages/ReviewPage';
 import { SettingsPage } from '../pages/SettingsPage';
 import { StatsPage } from '../pages/StatsPage';
 import { TasksPage } from '../pages/TasksPage';
@@ -124,6 +125,7 @@ const PAGES: Array<{ label: string; element: React.ReactElement }> = [
   { label: '饮食', element: <DietPage /> },
   { label: '游戏', element: <GamesPage /> },
   { label: '统计', element: <StatsPage /> },
+  { label: '复盘', element: <ReviewPage /> },
   { label: '数据与设置', element: <SettingsPage /> },
   { label: '组件预览', element: <UiPage /> },
   { label: '404', element: <NotFoundPage /> },

@@ -20,8 +20,9 @@ export const APP_ID = 'life-manager';
  *     不会清空用户现在的习惯。
  * 13：新增「身体指标」模块（体重 / 体脂 / 围度）；同样按缺失处理，不清空现有记录。
  * 14：新增「专注记录」模块，任务增加可选的时间盒字段。
+ * 15：新增「复盘」模块（每日 / 每周三个固定问题）。
  */
-export const BACKUP_SCHEMA_VERSION = 14;
+export const BACKUP_SCHEMA_VERSION = 15;
 
 const isoDateString = z.string();
 const percent = z.number().min(0).max(100).catch(0);
@@ -399,6 +400,24 @@ export const focusSessionSchema = z.object({
   createdAt: isoDateString.default(() => new Date().toISOString()),
 });
 
+// ---------- 复盘 ----------
+/**
+ * 一次复盘。
+ *
+ * `period + date` 在 store 里充当主键，所以两者都给了默认值：旧文件（或手写 JSON）
+ * 缺字段时不会整条作废，坏到的只是那一个字段。
+ */
+export const reviewSchema = z.object({
+  id: z.string().min(1),
+  period: z.enum(['day', 'week']).default('week'),
+  date: z.string().default(''),
+  best: z.string().default(''),
+  blocker: z.string().default(''),
+  next: z.string().default(''),
+  createdAt: isoDateString.default(() => new Date().toISOString()),
+  updatedAt: isoDateString.default(() => new Date().toISOString()),
+});
+
 // ---------- 设置 ----------
 export const settingsSchema = z.object({
   /** 新字段（v3）：三态主题 */
@@ -426,6 +445,7 @@ export const backupDataSchema = z.object({
   readingSessions: z.array(readingSessionSchema).default([]),
   habits: z.array(habitSchema).default([]),
   focusSessions: z.array(focusSessionSchema).default([]),
+  reviews: z.array(reviewSchema).default([]),
   settings: settingsSchema.optional(),
 });
 
@@ -447,6 +467,7 @@ export const BACKUP_MODULES = [
   'readingSessions',
   'habits',
   'focusSessions',
+  'reviews',
 ] as const;
 
 export type BackupModule = (typeof BACKUP_MODULES)[number];
@@ -467,4 +488,5 @@ export const MODULE_LABELS: Record<BackupModule, string> = {
   readingSessions: '阅读记录',
   habits: '习惯',
   focusSessions: '专注记录',
+  reviews: '复盘',
 };
