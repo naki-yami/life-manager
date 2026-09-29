@@ -287,3 +287,38 @@ export interface Memo {
   content: string;
   createdAt: string;
 }
+// Habit types
+export type HabitKind = 'binary' | 'count';
+export type HabitScheduleKind = 'daily' | 'weekly' | 'interval';
+
+/**
+ * 习惯的节奏。
+ *
+ * 三个字段都必填：归一化层会把缺失项补成默认值，代码里就不必到处写 `?? 1`。
+ * 只有 kind 对应的那个字段会被读取，另一个只是占位。
+ */
+export interface HabitSchedule {
+  kind: HabitScheduleKind;
+  /** kind = 'weekly' 时生效：每周目标次数（1-7） */
+  timesPerWeek: number;
+  /** kind = 'interval' 时生效：间隔天数（>=1），例如「每 2 天」 */
+  everyDays: number;
+}
+
+export interface Habit {
+  id: string;
+  name: string;
+  /** binary：做到即完成；count：数量达到 target 才算完成 */
+  kind: HabitKind;
+  /** count 型的目标数量；binary 型固定按 1 处理 */
+  target: number;
+  /** 计量单位，例如「杯」「公里」；binary 型为空串 */
+  unit: string;
+  schedule: HabitSchedule;
+  /**
+   * 打卡日志：日期键（YYYY-MM-DD）→ 当天完成量。
+   * 只记「有打卡」的日子，取消打卡即删除该键，避免存储里积一堆 0。
+   */
+  logs: Record<string, number>;
+  createdAt: string;
+}

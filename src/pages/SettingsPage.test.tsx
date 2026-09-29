@@ -14,6 +14,7 @@ import { useWritingStore } from '../store/writingStore';
 import { useFitnessStore } from '../store/fitnessStore';
 import { useDietStore } from '../store/dietStore';
 import { useGameStore } from '../store/gameStore';
+import { useHabitStore } from '../store/habitStore';
 import { useThemeStore } from '../store/themeStore';
 import { useUiStore } from '../store/uiStore';
 
@@ -25,6 +26,7 @@ beforeEach(() => {
   useFitnessStore.setState({ plans: [], records: [] });
   useDietStore.setState({ records: [] });
   useGameStore.setState({ games: [] });
+  useHabitStore.setState({ habits: [] });
   useThemeStore.setState({ themeMode: 'system' });
   useUiStore.setState({ density: 'comfortable', sidebarCollapsed: false });
   localStorage.clear();
@@ -59,6 +61,7 @@ const emptyBackup: BackupData = {
   games: [],
   gameSessions: [],
   readingSessions: [],
+  habits: [],
   settings: { themeMode: 'system', density: 'comfortable', sidebarCollapsed: false },
 };
 
@@ -97,6 +100,16 @@ describe('SettingsPage', () => {
 
     await userEvent.click(screen.getByRole('switch', { name: '折叠侧边栏' }));
     expect(useUiStore.getState().sidebarCollapsed).toBe(true);
+  });
+
+  it('数据概览会把习惯也算进来', () => {
+    useHabitStore.getState().addHabit({ name: '晨跑' });
+    useHabitStore.getState().addHabit({ name: '喝水', kind: 'count', target: 8 });
+
+    renderSettings();
+
+    expect(screen.getByText('习惯')).toBeInTheDocument();
+    expect(screen.getByText(/共 2 条数据/)).toBeInTheDocument();
   });
 
   it('数据概览列出各模块条数并在标题旁汇总', () => {

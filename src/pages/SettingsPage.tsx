@@ -38,6 +38,7 @@ import { useWritingStore } from '../store/writingStore';
 import { useFitnessStore } from '../store/fitnessStore';
 import { useDietStore } from '../store/dietStore';
 import { useGameStore } from '../store/gameStore';
+import { useHabitStore } from '../store/habitStore';
 import { useThemeStore } from '../store/themeStore';
 import { useUiStore } from '../store/uiStore';
 import { BACKUP_MODULES, MODULE_LABELS } from '../services/schemas';
@@ -82,6 +83,7 @@ function readAllData(): BackupData {
     games: useGameStore.getState().games,
     gameSessions: useGameStore.getState().sessions,
     readingSessions: useBookStore.getState().sessions,
+    habits: useHabitStore.getState().habits,
     settings: {
       themeMode: useThemeStore.getState().themeMode,
       density: useUiStore.getState().density,
@@ -104,6 +106,7 @@ function applyPlan(data: Partial<BackupData>): void {
   if (data.games) useGameStore.getState().replaceGames(data.games);
   if (data.gameSessions) useGameStore.getState().replaceSessions(data.gameSessions);
   if (data.readingSessions) useBookStore.getState().replaceSessions(data.readingSessions);
+  if (data.habits) useHabitStore.getState().replaceHabits(data.habits);
   const settings = data.settings;
   if (settings) {
     // 旧备份只有二态 theme，按 themeMode 处理
@@ -129,6 +132,7 @@ function resetStores(): void {
   useDietStore.getState().replaceRecords([]);
   useGameStore.getState().replaceGames([]);
   useGameStore.getState().replaceSessions([]);
+  useHabitStore.getState().replaceHabits([]);
   // 外观也回到默认，避免「清除数据」后还停留在上一次的皮肤
   useThemeStore.getState().setThemeMode('system');
   useUiStore.getState().setDensity('comfortable');
@@ -179,6 +183,7 @@ export const SettingsPage: React.FC = () => {
   const gameCount = useGameStore((state) => state.games.length);
   const sessionCount = useGameStore((state) => state.sessions.length);
   const readingSessionCount = useBookStore((state) => state.sessions.length);
+  const habitCount = useHabitStore((state) => state.habits.length);
 
   const counts: { module: BackupModule; label: string; count: number }[] = [
     { module: 'tasks', label: MODULE_LABELS.tasks, count: taskCount },
@@ -193,6 +198,7 @@ export const SettingsPage: React.FC = () => {
     { module: 'games', label: MODULE_LABELS.games, count: gameCount },
     { module: 'gameSessions', label: MODULE_LABELS.gameSessions, count: sessionCount },
     { module: 'readingSessions', label: MODULE_LABELS.readingSessions, count: readingSessionCount },
+    { module: 'habits', label: MODULE_LABELS.habits, count: habitCount },
   ];
 
   const totalEntries = counts.reduce((sum, item) => sum + item.count, 0);

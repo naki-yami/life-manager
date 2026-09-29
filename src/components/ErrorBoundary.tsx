@@ -3,6 +3,7 @@ import { AlertTriangle, RefreshCw, Download } from 'lucide-react';
 import { Button } from './ui';
 import { useTaskStore } from '../store/taskStore';
 import { useBookStore } from '../store/bookStore';
+import { useHabitStore } from '../store/habitStore';
 import { useDevStore } from '../store/devStore';
 import { useWritingStore } from '../store/writingStore';
 import { useFitnessStore } from '../store/fitnessStore';
@@ -68,6 +69,7 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
         games: safeRead(() => useGameStore.getState().games, [], '游戏'),
         gameSessions: safeRead(() => useGameStore.getState().sessions, [], '游玩记录'),
         readingSessions: safeRead(() => useBookStore.getState().sessions, [], '阅读记录'),
+        habits: safeRead(() => useHabitStore.getState().habits, [], '习惯'),
         settings: {
           themeMode: safeRead(() => useThemeStore.getState().themeMode, 'system' as const, '主题'),
           density: safeRead(() => useUiStore.getState().density, 'comfortable' as const, '密度'),

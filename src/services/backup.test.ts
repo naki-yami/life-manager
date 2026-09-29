@@ -202,6 +202,18 @@ function sampleData(): BackupData {
         createdAt: '2026-09-26T21:00:00.000Z',
       },
     ],
+    habits: [
+      {
+        id: 'habit-1',
+        name: '喝水',
+        kind: 'count',
+        target: 8,
+        unit: '杯',
+        schedule: { kind: 'daily', timesPerWeek: 1, everyDays: 1 },
+        logs: { '2026-09-27': 8, '2026-09-28': 3 },
+        createdAt: '2026-09-20T00:00:00.000Z',
+      },
+    ],
     settings: { theme: 'dark' },
   };
 }
@@ -219,6 +231,7 @@ const emptyData = (): BackupData => ({
   games: [],
   gameSessions: [],
   readingSessions: [],
+  habits: [],
 });
 
 describe('导出 / 导入 往返', () => {
@@ -244,6 +257,7 @@ describe('导出 / 导入 往返', () => {
     expect(plan.data.fitnessRecords).toEqual(original.fitnessRecords);
     expect(plan.data.dietRecords).toEqual(original.dietRecords);
     expect(plan.data.games).toEqual(original.games);
+    expect(plan.data.habits).toEqual(original.habits);
     expect(plan.data.settings).toEqual(original.settings);
   });
 
@@ -272,7 +286,7 @@ describe('导出 / 导入 往返', () => {
   it('信封结构包含 schemaVersion 与 exportedAt', () => {
     const envelope = buildBackupEnvelope(emptyData(), new Date('2026-09-28T00:00:00.000Z'));
     expect(envelope.app).toBe('life-manager');
-    expect(envelope.schemaVersion).toBe(11);
+    expect(envelope.schemaVersion).toBe(12);
     expect(envelope.exportedAt).toBe('2026-09-28T00:00:00.000Z');
   });
 });
@@ -597,6 +611,44 @@ describe('阅读记录的导入兼容', () => {
   });
 });
 
+describe('习惯的导入兼容', () => {
+  const keptHabit = {
+    id: 'keep',
+    name: '晨跑',
+    kind: 'binary' as const,
+    target: 1,
+    unit: '',
+    schedule: { kind: 'daily' as const, timesPerWeek: 1, everyDays: 1 },
+    logs: {},
+    createdAt: '2026-09-01T00:00:00.000Z',
+  };
+
+  it('旧备份没有 habits 时该模块视为缺失，覆盖模式也不会清空现有习惯', () => {
+    const legacy = sampleData() as Record<string, unknown>;
+    delete legacy.habits;
+    const parsed = parseBackup(JSON.stringify(legacy));
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+
+    expect(parsed.backup.modules.habits).toBeUndefined();
+
+    const plan = planImport({ habits: [keptHabit] }, parsed.backup.modules, 'overwrite');
+    expect(plan.data.habits).toEqual([keptHabit]);
+  });
+
+  it('打卡日志里的脏值在导入时被清洗，合法记录照常保留', () => {
+    const backup = sampleData();
+    backup.habits[0]!.logs = { '2026-09-28': 3, '2026-09-27': 0, '2026/09/26': 5 };
+
+    const parsed = parseBackup(serializeBackup(backup));
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+
+    const plan = planImport(emptyData(), parsed.backup.modules, 'merge');
+    expect(plan.data.habits?.[0]?.logs).toEqual({ '2026-09-28': 3 });
+  });
+});
+
 describe('导入模式', () => {
   const existing = [{ id: 'a', title: '现有' }];
 
@@ -663,6 +715,7 @@ describe('导入模式', () => {
       plan.data.games,
       plan.data.gameSessions,
       plan.data.readingSessions,
+      plan.data.habits,
     ].reduce((sum, list) => sum + (list?.length ?? 0), 0);
 
     expect(totals.added).toBe(actual);

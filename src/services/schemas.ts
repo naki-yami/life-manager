@@ -1,5 +1,7 @@
 import { z } from 'zod';
 import { normalizeTags } from '../utils/tags';
+import { sanitizeHabitLogs } from '../utils/habits';
+import type { HabitSchedule } from '../types';
 
 /**
  * 备份文件的 schema 定义。
@@ -12,8 +14,10 @@ export const APP_ID = 'life-manager';
  * 备份文件的 schema 版本。
  * 11：7 类实体（任务 / 书 / 开发项目 / 写作 / 游戏 / 训练记录 / 饮食记录）新增
  *     `tags` 字段；旧文件里没有它，导入时补空数组。
+ * 12：新增「习惯」模块（含打卡日志）；旧文件里没有它，导入时视为缺失，
+ *     不会清空用户现在的习惯。
  */
-export const BACKUP_SCHEMA_VERSION = 11;
+export const BACKUP_SCHEMA_VERSION = 12;
 
 const isoDateString = z.string();
 const percent = z.number().min(0).max(100).catch(0);
@@ -266,6 +270,42 @@ export const gameSessionSchema = z.object({
   createdAt: isoDateString.default(() => new Date().toISOString()),
 });
 
+// ---------- 习惯 ----------
+export const habitScheduleSchema = z.object({
+  kind: z.enum(['daily', 'weekly', 'interval']).default('daily'),
+  /** kind = 'weekly' 时生效：每周目标次数 */
+  timesPerWeek: z.number().min(1).max(7).catch(1).default(1),
+  /** kind = 'interval' 时生效：间隔天数 */
+  everyDays: z.number().min(1).max(365).catch(1).default(1),
+});
+
+/**
+ * 打卡日志。
+ *
+ * 值是「当天完成量」，键是本地日期；非法内容交给 sanitizeHabitLogs 统一清洗
+ * （丢掉坏键、非正数与多余精度），和标签一样做到「脏数据不会进 store」。
+ */
+const habitLogs = z
+  .record(z.string(), z.number().catch(0))
+  .default({})
+  .transform((logs) => sanitizeHabitLogs(logs));
+
+export const habitSchema = z.object({
+  id: z.string().min(1),
+  name: z.string(),
+  kind: z.enum(['binary', 'count']).default('binary'),
+  target: z.number().min(1).max(9999).catch(1).default(1),
+  unit: z.string().default(''),
+  // 旧数据（以及缺 schedule 的脏数据）统一退回「每天」，thunk 避免所有记录共用同一个对象
+  schedule: habitScheduleSchema.default((): HabitSchedule => ({
+    kind: 'daily',
+    timesPerWeek: 1,
+    everyDays: 1,
+  })),
+  logs: habitLogs,
+  createdAt: isoDateString.default(() => new Date().toISOString()),
+});
+
 // ---------- 设置 ----------
 export const settingsSchema = z.object({
   /** 新字段（v3）：三态主题 */
@@ -290,6 +330,7 @@ export const backupDataSchema = z.object({
   games: z.array(gameSchema).default([]),
   gameSessions: z.array(gameSessionSchema).default([]),
   readingSessions: z.array(readingSessionSchema).default([]),
+  habits: z.array(habitSchema).default([]),
   settings: settingsSchema.optional(),
 });
 
@@ -308,6 +349,7 @@ export const BACKUP_MODULES = [
   'games',
   'gameSessions',
   'readingSessions',
+  'habits',
 ] as const;
 
 export type BackupModule = (typeof BACKUP_MODULES)[number];
@@ -325,4 +367,5 @@ export const MODULE_LABELS: Record<BackupModule, string> = {
   games: '游戏',
   gameSessions: '游玩记录',
   readingSessions: '阅读记录',
+  habits: '习惯',
 };

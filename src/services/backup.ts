@@ -19,6 +19,7 @@ import {
   fitnessPlanSchema,
   gameSchema,
   gameSessionSchema,
+  habitSchema,
   readingSessionSchema,
   mealRecordSchema,
   memoSchema,
@@ -151,6 +152,7 @@ export function parseBackup(
   modules.games = pick(gameSchema, 'games');
   modules.gameSessions = pick(gameSessionSchema, 'gameSessions');
   modules.readingSessions = pick(readingSessionSchema, 'readingSessions');
+  modules.habits = pick(habitSchema, 'habits');
 
   const settings = settingsSchema.safeParse(source.settings);
   if (settings.success) modules.settings = settings.data;
@@ -255,6 +257,7 @@ export function planImport(
   const games = merge('games', current.games ?? []);
   const gameSessions = merge('gameSessions', current.gameSessions ?? []);
   const readingSessions = merge('readingSessions', current.readingSessions ?? []);
+  const habits = merge('habits', current.habits ?? []);
 
   const count = (incoming: unknown[] | undefined) => (incoming ?? []).length;
 
@@ -272,6 +275,7 @@ export function planImport(
       games: games.items,
       gameSessions: gameSessions.items,
       readingSessions: readingSessions.items,
+      habits: habits.items,
       settings: backup.settings,
     },
     stats: {
@@ -319,6 +323,7 @@ export function planImport(
         added: readingSessions.added,
         skipped: readingSessions.skipped,
       },
+      habits: { incoming: count(backup.habits), added: habits.added, skipped: habits.skipped },
     },
   };
 }
