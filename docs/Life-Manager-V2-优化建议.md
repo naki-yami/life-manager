@@ -974,6 +974,38 @@ pm run size）≤ 300KB ✅
 
 ---
 
+### V2.1 真机验证：agent-browser 冒烟（已完成）
+
+用 `agent-browser` 驱动本机 Edge 跑了一遍真实页面（`npm run dev`）的端到端冒烟，重点是 V2.1 新做的存储层、
+文件夹备份，以及几条主干链路。截图留在 `.runtime/`（已 gitignore）。
+
+| 项 | 结果 | 说明 |
+| --- | --- | --- |
+| IndexedDB 首启搬家 | ✅ | 先造一份「只存在于 localStorage」的 `lm:tasks` → 刷新 → `life-manager/kv` 里出现同名 key，**localStorage 老副本仍在**，两边内容一致 |
+| 写入与刷新持久化 | ✅ | 新增任务 → 勾选完成 → 刷新 → IndexedDB 里状态仍是 `completed`，首页 KPI 显示「已完成 1 项」 |
+| 命令面板 | ✅ | `Ctrl+K` 打开；中文搜「读书」命中页面跳转；输入任意文本给出「新建任务 / 存为备忘」；回车后任务落库 |
+| 纯键盘新建 | ✅ | `g`+`2` 跳今日计划、`n` 开弹窗、输入标题、Tab 到「添加」回车 → 落库 |
+| 移动端 | ✅ | 375×812：侧栏换成抽屉（遮罩用 `elementFromPoint` 确认真的盖在内容上），底部 Tab 正常 |
+| 导出 → 清空 → 导入 | ✅ | 导出文件名 `life-manager-backup-2026-09-29.json`；清空前必须把「清除」两个字打全（打错按钮保持禁用）；清空后「共 0 条数据」且**两份自动快照都还在**；导入预览显示「任务 4 新增 / 0 跳过」；确认后 4 任务 + 1 备忘连状态一起回来 |
+| 备份到文件夹 | ✅ | Edge 支持 `showDirectoryPicker`；临时屏蔽该 API 后卡片出示「这个浏览器不支持」并撤掉按钮；让选择器抛 `AbortError`（等价于用户按取消）后没有红色错误、状态不变 |
+| 控制台 | ✅ | 无页面错误；只剩 React Router v7 的两条 future flag 警告 |
+
+**没验证到的（写清楚，免得下次以为验过）**
+
+- **系统目录选择框本身**：会弹原生窗口，自动化点不了。所以「选一个真实文件夹并写进去」这一步仍然只有单元测试
+  （`folderSync.test.ts`，用 `fakeFolder()` 假句柄）覆盖。
+- **导出的真实下载落盘**：`agent-browser download` 在本机一律报 `Download was canceled` —— 用两个对照按钮
+  （立即 `revokeObjectURL` / 延迟 revoke）各试一次，**同样都失败**，所以这是 CLI 的环境限制，不是
+  `downloadBackup()` 的问题。文件名与内容改成在页内截获 blob 验证，均正确。
+
+**顺手记下的两条待办（尚未动手）**
+
+- 新建弹窗没有包 `<form>`，所以在标题框里按回车**不会提交**，键盘用户得 Tab 到「添加」再回车。
+  归入 U7 键盘导航一起做，比单独给每个弹窗打补丁划算。
+- React Router 的 `v7_startTransition` / `v7_relativeSplatPath` 两条 future flag 可以直接开，消掉控制台警告。
+
+---
+
 ## 附：本文档的调研来源
 
 GitHub 仓库检索（2026-09-29）：
