@@ -18,6 +18,13 @@ describe('matchesKeyword', () => {
   it('null / undefined 字段不会抛错', () => {
     expect(matchesKeyword('x', undefined, null)).toBe(false);
   });
+
+  it('开头的 # 会被忽略，方便直接粘贴标签', () => {
+    expect(matchesKeyword('#工作', '工作')).toBe(true);
+    expect(matchesKeyword('#工作', '待办')).toBe(false);
+    // 只有 # 时等价于不筛选
+    expect(matchesKeyword('#', '待办')).toBe(true);
+  });
 });
 
 describe('filterByKeyword', () => {

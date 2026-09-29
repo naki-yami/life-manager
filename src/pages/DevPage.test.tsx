@@ -260,3 +260,42 @@ describe('DevPage', () => {
     expect(screen.getAllByText(/停滞 \d+ 天/)).toHaveLength(1);
   });
 });
+
+describe('DevPage 标签', () => {
+  it('编辑项目时能打标签，卡片上会显示', async () => {
+    useDevStore.getState().addProject('记账工具', '');
+    renderDev();
+
+    await userEvent.click(screen.getByRole('button', { name: '编辑「记账工具」' }));
+    const dialog = screen.getByRole('dialog', { name: '编辑「记账工具」' });
+    await userEvent.type(within(dialog).getByLabelText('标签'), '副业{Enter}');
+    await userEvent.click(within(dialog).getByRole('button', { name: '保存' }));
+
+    expect(useDevStore.getState().projects[0]!.tags).toEqual(['副业']);
+    expect(screen.getByText('#副业')).toBeInTheDocument();
+  });
+
+  it('卡片上可以就地补标签，标签会写回 store', async () => {
+    useDevStore.getState().addProject('记账工具', '');
+    renderDev();
+
+    await userEvent.click(screen.getByRole('button', { name: '添加标签' }));
+    await userEvent.type(screen.getByLabelText('编辑标签'), '副业{Enter}');
+    await userEvent.click(screen.getByRole('button', { name: '完成' }));
+
+    expect(useDevStore.getState().projects[0]!.tags).toEqual(['副业']);
+    expect(screen.getByText('#副业')).toBeInTheDocument();
+  });
+
+  it('搜索框里输入 #标签 能筛出对应的项目', async () => {
+    const store = useDevStore.getState();
+    store.addProject('记账工具', '', ['副业']);
+    store.addProject('写作助手', '', ['工具']);
+    renderDev();
+
+    await userEvent.type(screen.getByRole('textbox', { name: '搜索' }), '#副业');
+
+    expect(screen.getByText('记账工具')).toBeInTheDocument();
+    expect(screen.queryByText('写作助手')).not.toBeInTheDocument();
+  });
+});

@@ -27,6 +27,8 @@ import {
   SegmentedControl,
   Select,
   Slider,
+  TagEditor,
+  TagInput,
 } from '../components/ui';
 import { PageHeader, Toolbar } from '../components/layout';
 import { useBookStore } from '../store/bookStore';
@@ -38,6 +40,7 @@ import { daysBetween, formatDuration, formatNumber, formatShortDate, todayKey } 
 import { Book, BookStatus, ReadingSession } from '../types';
 import { useNewEntryShortcut } from '../hooks/useShortcuts';
 import { usePaletteFocus } from '../hooks/usePaletteFocus';
+import { useTagSuggestions } from '../hooks/useTagSuggestions';
 
 /** 年度阅读目标：一年读完 12 本，进度环按它算 */
 const YEARLY_GOAL = 12;
@@ -92,6 +95,7 @@ export const BooksPage: React.FC = () => {
     replaceSessions,
   } = useBookStore();
   const undoableRemove = useUndoableRemove();
+  const tagSuggestions = useTagSuggestions();
 
   const [showAddModal, setShowAddModal] = useState(false);
   useNewEntryShortcut(() => setShowAddModal(true));
@@ -102,7 +106,7 @@ export const BooksPage: React.FC = () => {
   const [noteError, setNoteError] = useState<string | undefined>();
   const [keyword, setKeyword] = useState('');
   const [filter, setFilter] = useState<Filter>('all');
-  const [form, setForm] = useState({ title: '', author: '', category: '' });
+  const [form, setForm] = useState({ title: '', author: '', category: '', tags: [] as string[] });
   const [showSessionModal, setShowSessionModal] = useState(false);
   const [pendingSessionId, setPendingSessionId] = useState<string | null>(null);
   const [sessionForm, setSessionForm] = useState<{
@@ -197,7 +201,12 @@ export const BooksPage: React.FC = () => {
 
   const visibleBooks = useMemo(() => {
     const byStatus = filter === 'all' ? books : books.filter((book) => book.status === filter);
-    return filterByKeyword(byStatus, keyword, (book) => [book.title, book.author, book.category]);
+    return filterByKeyword(byStatus, keyword, (book) => [
+      book.title,
+      book.author,
+      book.category,
+      ...book.tags,
+    ]);
   }, [books, filter, keyword]);
 
   const currentYear = new Date().getFullYear();
@@ -212,8 +221,8 @@ export const BooksPage: React.FC = () => {
 
   const handleAdd = (): void => {
     if (!form.title.trim()) return;
-    addBook(form.title.trim(), form.author.trim(), form.category.trim());
-    setForm({ title: '', author: '', category: '' });
+    addBook(form.title.trim(), form.author.trim(), form.category.trim(), form.tags);
+    setForm({ title: '', author: '', category: '', tags: [] });
     setShowAddModal(false);
   };
 
@@ -258,7 +267,7 @@ export const BooksPage: React.FC = () => {
             <Button
               icon={<Plus size={16} aria-hidden />}
               onClick={() => {
-                setForm({ title: '', author: '', category: '' });
+                setForm({ title: '', author: '', category: '', tags: [] });
                 setShowAddModal(true);
               }}
             >
@@ -346,7 +355,11 @@ export const BooksPage: React.FC = () => {
       )}
 
       <Toolbar
-        search={{ value: keyword, onChange: setKeyword, placeholder: '搜索书名、作者或分类…' }}
+        search={{
+          value: keyword,
+          onChange: setKeyword,
+          placeholder: '搜索书名、作者、分类或标签…',
+        }}
         actions={
           <SegmentedControl
             label="按阅读状态筛选"
@@ -410,6 +423,14 @@ export const BooksPage: React.FC = () => {
                       {[book.author, book.category].filter(Boolean).join(' · ') ||
                         '未填写作者与分类'}
                     </p>
+
+                    <div className="mt-2">
+                      <TagEditor
+                        tags={book.tags}
+                        suggestions={tagSuggestions}
+                        onChange={(tags) => updateBook(book.id, { tags })}
+                      />
+                    </div>
 
                     {(() => {
                       const daysLeft = estimateDaysLeft(book);
@@ -580,6 +601,13 @@ export const BooksPage: React.FC = () => {
             value={form.category}
             onChange={(event) => setForm({ ...form, category: event.target.value })}
             placeholder="如：技术、文学、历史"
+          />
+          <TagInput
+            label="标签"
+            hint="回车或逗号分隔；标签跨模块通用，可在命令面板里输入 #标签 直接找"
+            value={form.tags}
+            suggestions={tagSuggestions}
+            onChange={(tags) => setForm({ ...form, tags })}
           />
         </div>
       </Modal>

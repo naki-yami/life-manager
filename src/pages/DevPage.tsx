@@ -31,6 +31,8 @@ import {
   SegmentedControl,
   Select,
   StatCard,
+  TagEditor,
+  TagInput,
   Textarea,
 } from '../components/ui';
 import { PageHeader, Toolbar } from '../components/layout';
@@ -49,6 +51,7 @@ import {
   WorkSession,
 } from '../types';
 import { useNewEntryShortcut } from '../hooks/useShortcuts';
+import { useTagSuggestions } from '../hooks/useTagSuggestions';
 
 type ProjectFilter = 'all' | DevProjectStatus | 'archived';
 
@@ -148,6 +151,7 @@ export const DevPage: React.FC = () => {
     replaceSessions,
   } = useDevStore();
   const undoableRemove = useUndoableRemove();
+  const tagSuggestions = useTagSuggestions();
 
   const [showAddProject, setShowAddProject] = useState(false);
   const [taskProjectId, setTaskProjectId] = useState<string | null>(null);
@@ -176,6 +180,7 @@ export const DevPage: React.FC = () => {
     repoUrl: '',
     startDate: '',
     endDate: '',
+    tags: [] as string[],
   });
   const [sessionForm, setSessionForm] = useState<{
     projectId: string;
@@ -208,6 +213,7 @@ export const DevPage: React.FC = () => {
       project.name,
       project.description,
       ...project.techStack,
+      ...project.tags,
       ...project.tasks.map((task) => task.title),
     ]);
   }, [projects, filter, keyword]);
@@ -308,6 +314,7 @@ export const DevPage: React.FC = () => {
       repoUrl: project.repoUrl,
       startDate: project.startDate ?? '',
       endDate: project.endDate ?? '',
+      tags: project.tags,
     });
     setEditingProjectId(project.id);
   };
@@ -324,6 +331,7 @@ export const DevPage: React.FC = () => {
       repoUrl: editForm.repoUrl.trim(),
       startDate: editForm.startDate || undefined,
       endDate: editForm.endDate || undefined,
+      tags: editForm.tags,
     });
     setEditingProjectId(null);
   };
@@ -474,7 +482,7 @@ export const DevPage: React.FC = () => {
       )}
 
       <Toolbar
-        search={{ value: keyword, onChange: setKeyword, placeholder: '搜索项目或任务…' }}
+        search={{ value: keyword, onChange: setKeyword, placeholder: '搜索项目、任务或标签…' }}
         actions={
           <SegmentedControl
             label="按项目状态筛选"
@@ -560,6 +568,14 @@ export const DevPage: React.FC = () => {
                           )}
                         </div>
                       )}
+
+                      <div className="mt-1.5">
+                        <TagEditor
+                          tags={project.tags}
+                          suggestions={tagSuggestions}
+                          onChange={(tags) => updateProject(project.id, { tags })}
+                        />
+                      </div>
 
                       <div className="mt-3 flex flex-wrap items-center gap-3">
                         <ProgressBar
@@ -770,6 +786,13 @@ export const DevPage: React.FC = () => {
             value={editForm.repoUrl}
             onChange={(event) => setEditForm({ ...editForm, repoUrl: event.target.value })}
             placeholder="https://github.com/…（可选）"
+          />
+          <TagInput
+            label="标签"
+            hint="回车或逗号分隔；标签跨模块通用，可在命令面板里输入 #标签 直接找"
+            value={editForm.tags}
+            suggestions={tagSuggestions}
+            onChange={(tags) => setEditForm({ ...editForm, tags })}
           />
           <div className="grid gap-4 sm:grid-cols-2">
             <Input

@@ -1,15 +1,8 @@
 import React from 'react';
+import { BADGE_TONES } from './badgeTones';
+import type { BadgeTone } from './badgeTones';
 
-export type BadgeTone = 'default' | 'accent' | 'success' | 'warning' | 'danger' | 'info';
-
-const TONES: Record<BadgeTone, string> = {
-  default: 'bg-inset text-content-secondary',
-  accent: 'bg-accent-soft text-accent',
-  success: 'bg-success-soft text-success',
-  warning: 'bg-warning-soft text-warning',
-  danger: 'bg-danger-soft text-danger',
-  info: 'bg-info-soft text-info',
-};
+export type { BadgeTone } from './badgeTones';
 
 export interface BadgeProps {
   children: React.ReactNode;
@@ -28,7 +21,7 @@ export const Badge: React.FC<BadgeProps> = ({
   className = '',
 }) => (
   <span
-    className={`inline-flex items-center gap-1.5 rounded-full font-medium ${TONES[tone]} ${
+    className={`inline-flex items-center gap-1.5 rounded-full font-medium ${BADGE_TONES[tone]} ${
       size === 'sm' ? 'px-2 py-0.5 text-2xs' : 'px-2.5 py-1 text-xs'
     } ${className}`}
   >

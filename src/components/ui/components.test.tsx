@@ -4,6 +4,8 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { renderToString } from 'react-dom/server';
 import {
+  Badge,
+  BADGE_TONES,
   Button,
   ConfirmDialog,
   Drawer,
@@ -18,6 +20,26 @@ import {
   Tooltip,
   useToast,
 } from './index';
+
+import type { BadgeTone } from './index';
+
+describe('Badge', () => {
+  const TONES: BadgeTone[] = ['default', 'accent', 'success', 'warning', 'danger', 'info'];
+
+  it('六个档位都有配色类名，并会渲染到元素上', () => {
+    expect(Object.keys(BADGE_TONES).sort()).toEqual([...TONES].sort());
+
+    for (const tone of TONES) {
+      const { container } = render(<Badge tone={tone}>徽章</Badge>);
+      expect(container.firstElementChild!.className).toContain(BADGE_TONES[tone]);
+    }
+  });
+
+  it('不传 tone 时用 default 档', () => {
+    const { container } = render(<Badge>徽章</Badge>);
+    expect(container.firstElementChild!.className).toContain(BADGE_TONES.default);
+  });
+});
 
 describe('Button', () => {
   it('loading 时禁用点击并标记 aria-busy', async () => {

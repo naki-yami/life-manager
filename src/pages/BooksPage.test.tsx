@@ -270,4 +270,41 @@ describe('BooksPage', () => {
     render(<BooksPage />);
     expect(screen.getByText(/开读 40 天未完/)).toBeInTheDocument();
   });
+
+  it('添加时能打标签，标签会显示在卡片上', async () => {
+    render(<BooksPage />);
+
+    await userEvent.click(screen.getAllByRole('button', { name: '添加书籍' })[0]!);
+    const dialog = screen.getByRole('dialog', { name: '添加书籍' });
+
+    await userEvent.type(within(dialog).getByLabelText(/^书名/), '置身事内');
+    await userEvent.type(within(dialog).getByLabelText('标签'), '经济{Enter}');
+    await userEvent.click(within(dialog).getByRole('button', { name: '添加' }));
+
+    expect(useBookStore.getState().books[0]!.tags).toEqual(['经济']);
+    expect(screen.getByText('#经济')).toBeInTheDocument();
+  });
+
+  it('卡片上可以就地补标签，标签会写回 store', async () => {
+    useBookStore.getState().addBook('置身事内', '兰小欢', '');
+    render(<BooksPage />);
+
+    await userEvent.click(screen.getByRole('button', { name: '添加标签' }));
+    await userEvent.type(screen.getByLabelText('编辑标签'), '经济{Enter}');
+    await userEvent.click(screen.getByRole('button', { name: '完成' }));
+
+    expect(useBookStore.getState().books[0]!.tags).toEqual(['经济']);
+    expect(screen.getByText('#经济')).toBeInTheDocument();
+  });
+
+  it('搜索框里输入 #标签 能筛出对应的书', async () => {
+    const store = useBookStore.getState();
+    store.addBook('置身事内', '兰小欢', '经济', ['经济']);
+    store.addBook('人类简史', 'Harari', '历史', ['历史']);
+    render(<BooksPage />);
+
+    await userEvent.type(screen.getByRole('textbox', { name: /搜索/ }), '#经济');
+    expect(screen.getByText('置身事内')).toBeInTheDocument();
+    expect(screen.queryByText('人类简史')).not.toBeInTheDocument();
+  });
 });

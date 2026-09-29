@@ -13,7 +13,10 @@ export type { ModalProps, ModalSize, ConfirmDialogProps } from './Modal';
 export { Drawer } from './Drawer';
 export type { DrawerProps, DrawerSide } from './Drawer';
 export { Badge, Divider, Kbd } from './Badge';
+export { BADGE_TONES } from './badgeTones';
 export type { BadgeProps, BadgeTone, DividerProps, KbdProps } from './Badge';
+export { TagChips, TagInput, TagEditor } from './Tags';
+export type { TagChipsProps, TagInputProps, TagEditorProps } from './Tags';
 export { Spinner, Skeleton, Alert, EmptyState, ErrorState } from './Feedback';
 export type {
   SpinnerProps,

@@ -270,3 +270,42 @@ describe('WritingPage', () => {
     expect(createObjectURL).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('WritingPage 标签', () => {
+  it('新建项目时能打标签，卡片上会显示', async () => {
+    render(<WritingPage />);
+
+    await userEvent.click(screen.getAllByRole('button', { name: '新建项目' })[0]!);
+    const dialog = screen.getByRole('dialog', { name: '新建写作项目' });
+    await userEvent.type(within(dialog).getByLabelText(/^标题/), '专栏稿');
+    await userEvent.type(within(dialog).getByLabelText('标签'), '专栏{Enter}');
+    await userEvent.click(within(dialog).getByRole('button', { name: '创建' }));
+
+    expect(projectOf('专栏稿').tags).toEqual(['专栏']);
+    expect(screen.getByText('#专栏')).toBeInTheDocument();
+  });
+
+  it('卡片上可以就地补标签，标签会写回 store', async () => {
+    useWritingStore.getState().addProject('专栏稿', 'article');
+    render(<WritingPage />);
+
+    await userEvent.click(screen.getByRole('button', { name: '添加标签' }));
+    await userEvent.type(screen.getByLabelText('编辑标签'), '专栏{Enter}');
+    await userEvent.click(screen.getByRole('button', { name: '完成' }));
+
+    expect(projectOf('专栏稿').tags).toEqual(['专栏']);
+    expect(screen.getByText('#专栏')).toBeInTheDocument();
+  });
+
+  it('搜索框里输入 #标签 能筛出对应的稿件', async () => {
+    const store = useWritingStore.getState();
+    store.addProject('专栏稿', 'article', ['专栏']);
+    store.addProject('产品文案', 'copy', ['工作']);
+    render(<WritingPage />);
+
+    await userEvent.type(screen.getByRole('textbox', { name: '搜索' }), '#专栏');
+
+    expect(screen.getByText('专栏稿')).toBeInTheDocument();
+    expect(screen.queryByText('产品文案')).not.toBeInTheDocument();
+  });
+});

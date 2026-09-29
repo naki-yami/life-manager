@@ -340,3 +340,42 @@ describe('TasksPage', () => {
     });
   });
 });
+
+describe('TasksPage 标签', () => {
+  it('添加任务时能打标签，卡片上会显示', async () => {
+    render(<TasksPage />);
+
+    await userEvent.click(screen.getAllByRole('button', { name: '添加任务' })[0]!);
+    const dialog = screen.getByRole('dialog', { name: '添加任务' });
+    await userEvent.type(within(dialog).getByLabelText(/^标题/), '整理发票');
+    await userEvent.type(within(dialog).getByLabelText('标签'), '财务{Enter}');
+    await userEvent.click(within(dialog).getByRole('button', { name: '添加' }));
+
+    expect(useTaskStore.getState().tasks[0]!.tags).toEqual(['财务']);
+    expect(screen.getByText('#财务')).toBeInTheDocument();
+  });
+
+  it('卡片上可以就地补标签，标签会写回 store', async () => {
+    useTaskStore.getState().addTask('整理发票', '', 'medium', '');
+    render(<TasksPage />);
+
+    await userEvent.click(screen.getByRole('button', { name: '添加标签' }));
+    await userEvent.type(screen.getByLabelText('编辑标签'), '财务{Enter}');
+    await userEvent.click(screen.getByRole('button', { name: '完成' }));
+
+    expect(useTaskStore.getState().tasks[0]!.tags).toEqual(['财务']);
+    expect(screen.getByText('#财务')).toBeInTheDocument();
+  });
+
+  it('搜索框里输入 #标签 能筛出对应的任务', async () => {
+    const store = useTaskStore.getState();
+    store.addTask('整理发票', '', 'medium', '', null, ['财务']);
+    store.addTask('写周报', '', 'medium', '', null, ['工作']);
+    render(<TasksPage />);
+
+    await userEvent.type(screen.getByRole('textbox', { name: '搜索' }), '#财务');
+
+    expect(screen.getByText('整理发票')).toBeInTheDocument();
+    expect(screen.queryByText('写周报')).not.toBeInTheDocument();
+  });
+});

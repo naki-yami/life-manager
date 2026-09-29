@@ -24,6 +24,8 @@ import {
   ProgressRing,
   SegmentedControl,
   Select,
+  TagEditor,
+  TagInput,
   type KanbanColumnData,
   type KanbanMoveResult,
 } from '../components/ui';
@@ -33,9 +35,11 @@ import { useTaskStore } from '../store/taskStore';
 import { useUndoableRemove } from '../hooks/useUndoableRemove';
 import { daysBetween, formatShortDate, todayKey } from '../utils/date';
 import { seriesByWeek } from '../utils/stats';
+import { matchesKeyword } from '../utils/search';
 import { Priority, RepeatKind, RepeatRule, Task, TaskStatus } from '../types';
 import { useNewEntryShortcut } from '../hooks/useShortcuts';
 import { usePaletteFocus } from '../hooks/usePaletteFocus';
+import { useTagSuggestions } from '../hooks/useTagSuggestions';
 
 type Filter = 'all' | TaskStatus;
 type ViewMode = 'list' | 'kanban' | 'quadrant';
@@ -113,6 +117,7 @@ interface TaskForm {
   dueDate: string;
   repeatKind: 'none' | RepeatKind;
   repeatWeekdays: number[];
+  tags: string[];
 }
 
 const EMPTY_FORM: TaskForm = {
@@ -122,6 +127,7 @@ const EMPTY_FORM: TaskForm = {
   dueDate: '',
   repeatKind: 'none',
   repeatWeekdays: [],
+  tags: [],
 };
 
 /** 截止日期的角标：逾期（含逾期天数）/ 今天 / 具体日期 */
@@ -148,7 +154,8 @@ const DueBadge: React.FC<{ task: Task }> = ({ task }) => {
 const TaskFormFields: React.FC<{
   form: TaskForm;
   onChange: (form: TaskForm) => void;
-}> = ({ form, onChange }) => (
+  tagSuggestions: string[];
+}> = ({ form, onChange, tagSuggestions }) => (
   <div className="space-y-4">
     <Input
       label="标题"
@@ -223,6 +230,13 @@ const TaskFormFields: React.FC<{
         </p>
       )}
     </div>
+    <TagInput
+      label="标签"
+      hint="回车或逗号分隔；标签跨模块通用，可在命令面板里输入 #标签 直接找"
+      value={form.tags}
+      suggestions={tagSuggestions}
+      onChange={(tags) => onChange({ ...form, tags })}
+    />
   </div>
 );
 
@@ -274,6 +288,7 @@ export const TasksPage: React.FC = () => {
     deleteSubtask,
   } = useTaskStore();
   const undoableRemove = useUndoableRemove();
+  const tagSuggestions = useTagSuggestions();
 
   const [showAddModal, setShowAddModal] = useState(false);
   useNewEntryShortcut(() => {
@@ -311,17 +326,11 @@ export const TasksPage: React.FC = () => {
   );
 
   const visibleTasks = useMemo(() => {
-    const query = keyword.trim().toLowerCase();
-
     return tasks
       .filter((task) => filter === 'all' || task.status === filter)
       .filter((task) => priorityFilter === 'all' || task.priority === priorityFilter)
-      .filter(
-        (task) =>
-          query === '' ||
-          task.title.toLowerCase().includes(query) ||
-          task.description.toLowerCase().includes(query),
-      )
+      // 标题、描述与标签都参与匹配；`#标签` 这种写法也能直接筛
+      .filter((task) => matchesKeyword(keyword, task.title, task.description, ...task.tags))
       .sort((a, b) => {
         if (a.status !== b.status) return a.status === 'pending' ? -1 : 1;
         const byPriority = PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority];
@@ -391,7 +400,14 @@ export const TasksPage: React.FC = () => {
 
   const handleAdd = (): void => {
     if (!form.title.trim()) return;
-    addTask(form.title.trim(), form.description.trim(), form.priority, form.dueDate, buildRepeat());
+    addTask(
+      form.title.trim(),
+      form.description.trim(),
+      form.priority,
+      form.dueDate,
+      buildRepeat(),
+      form.tags,
+    );
     setForm(EMPTY_FORM);
     setShowAddModal(false);
   };
@@ -404,6 +420,7 @@ export const TasksPage: React.FC = () => {
       priority: form.priority,
       dueDate: form.dueDate,
       repeat: buildRepeat(),
+      tags: form.tags,
     });
     setEditingTaskId(null);
   };
@@ -417,6 +434,7 @@ export const TasksPage: React.FC = () => {
       dueDate: task.dueDate,
       repeatKind: task.repeat?.kind ?? 'none',
       repeatWeekdays: task.repeat?.weekdays ?? [],
+      tags: task.tags,
     });
   };
 
@@ -512,7 +530,7 @@ export const TasksPage: React.FC = () => {
       )}
 
       <Toolbar
-        search={{ value: keyword, onChange: setKeyword, placeholder: '搜索标题或描述…' }}
+        search={{ value: keyword, onChange: setKeyword, placeholder: '搜索标题、描述或标签…' }}
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Select
@@ -652,6 +670,13 @@ export const TasksPage: React.FC = () => {
                           {task.description}
                         </p>
                       )}
+                      <div className="mt-1.5">
+                        <TagEditor
+                          tags={task.tags}
+                          suggestions={tagSuggestions}
+                          onChange={(tags) => updateTask(task.id, { tags })}
+                        />
+                      </div>
                       <div className="mt-1.5 flex flex-wrap items-center gap-2">
                         <Badge tone={priority.tone} dot>
                           {priority.label}
@@ -799,7 +824,7 @@ export const TasksPage: React.FC = () => {
           </>
         }
       >
-        <TaskFormFields form={form} onChange={setForm} />
+        <TaskFormFields form={form} onChange={setForm} tagSuggestions={tagSuggestions} />
       </Modal>
 
       <Modal
@@ -817,7 +842,7 @@ export const TasksPage: React.FC = () => {
           </>
         }
       >
-        <TaskFormFields form={form} onChange={setForm} />
+        <TaskFormFields form={form} onChange={setForm} tagSuggestions={tagSuggestions} />
       </Modal>
 
       <ConfirmDialog

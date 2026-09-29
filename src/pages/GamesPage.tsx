@@ -17,6 +17,8 @@ import {
   Select,
   Slider,
   StatCard,
+  TagEditor,
+  TagInput,
   Textarea,
 } from '../components/ui';
 import { PageHeader, Toolbar } from '../components/layout';
@@ -35,6 +37,7 @@ import { seriesByMonth } from '../utils/stats';
 import { Game, GamePlatform, GameSession, GameStatus } from '../types';
 import { useNewEntryShortcut } from '../hooks/useShortcuts';
 import { usePaletteFocus } from '../hooks/usePaletteFocus';
+import { useTagSuggestions } from '../hooks/useTagSuggestions';
 
 type Filter = 'all' | GameStatus;
 
@@ -107,6 +110,7 @@ export const GamesPage: React.FC = () => {
     replaceSessions,
   } = useGameStore();
   const undoableRemove = useUndoableRemove();
+  const tagSuggestions = useTagSuggestions();
 
   const [keyword, setKeyword] = useState('');
   const [filter, setFilter] = useState<Filter>('all');
@@ -116,9 +120,10 @@ export const GamesPage: React.FC = () => {
   const [achievementGameId, setAchievementGameId] = useState<string | null>(null);
   const [noteGameId, setNoteGameId] = useState<string | null>(null);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
-  const [form, setForm] = useState<{ name: string; platform: GamePlatform }>({
+  const [form, setForm] = useState<{ name: string; platform: GamePlatform; tags: string[] }>({
     name: '',
     platform: 'PC',
+    tags: [],
   });
   const [achievementForm, setAchievementForm] = useState({ name: '', description: '' });
   const [noteInput, setNoteInput] = useState('');
@@ -178,6 +183,7 @@ export const GamesPage: React.FC = () => {
       game.name,
       game.platform,
       game.notes,
+      ...game.tags,
       ...game.achievements.map((achievement) => achievement.name),
     ]);
   }, [games, filter, keyword]);
@@ -201,7 +207,8 @@ export const GamesPage: React.FC = () => {
   const handleAddGame = (): void => {
     const name = form.name.trim();
     if (!name) return;
-    addGame(name, form.platform);
+    addGame(name, form.platform, form.tags);
+    setForm({ name: '', platform: 'PC', tags: [] });
     setShowAddModal(false);
   };
 
@@ -264,7 +271,7 @@ export const GamesPage: React.FC = () => {
             <Button
               icon={<Plus size={16} aria-hidden />}
               onClick={() => {
-                setForm({ name: '', platform: 'PC' });
+                setForm({ name: '', platform: 'PC', tags: [] });
                 setShowAddModal(true);
               }}
             >
@@ -362,7 +369,11 @@ export const GamesPage: React.FC = () => {
       )}
 
       <Toolbar
-        search={{ value: keyword, onChange: setKeyword, placeholder: '搜索游戏、平台或成就…' }}
+        search={{
+          value: keyword,
+          onChange: setKeyword,
+          placeholder: '搜索游戏、平台、标签或成就…',
+        }}
         actions={
           <SegmentedControl
             label="按游玩状态筛选"
@@ -439,6 +450,14 @@ export const GamesPage: React.FC = () => {
                           {game.notes}
                         </p>
                       )}
+
+                      <div className="mt-1.5">
+                        <TagEditor
+                          tags={game.tags}
+                          suggestions={tagSuggestions}
+                          onChange={(tags) => updateGame(game.id, { tags })}
+                        />
+                      </div>
 
                       <div className="mt-3 flex flex-wrap items-end gap-3">
                         <div className="w-36">
@@ -619,6 +638,13 @@ export const GamesPage: React.FC = () => {
             value={form.platform}
             onChange={(value) => setForm({ ...form, platform: value as GamePlatform })}
             options={PLATFORM_OPTIONS}
+          />
+          <TagInput
+            label="标签"
+            hint="回车或逗号分隔；标签跨模块通用，可在命令面板里输入 #标签 直接找"
+            value={form.tags}
+            suggestions={tagSuggestions}
+            onChange={(tags) => setForm({ ...form, tags })}
           />
         </div>
       </Modal>

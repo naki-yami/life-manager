@@ -306,3 +306,42 @@ describe('GamesPage', () => {
     expect(cover!.getAttribute('style')).toContain('linear-gradient');
   });
 });
+
+describe('GamesPage 标签', () => {
+  it('添加游戏时能打标签，卡片上会显示', async () => {
+    render(<GamesPage />);
+
+    await userEvent.click(screen.getAllByRole('button', { name: '添加游戏' })[0]!);
+    const dialog = screen.getByRole('dialog', { name: '添加游戏' });
+    await userEvent.type(within(dialog).getByLabelText(/^游戏名称/), '极乐迪斯科');
+    await userEvent.type(within(dialog).getByLabelText('标签'), 'RPG{Enter}');
+    await userEvent.click(within(dialog).getByRole('button', { name: '添加' }));
+
+    expect(useGameStore.getState().games[0]!.tags).toEqual(['RPG']);
+    expect(screen.getByText('#RPG')).toBeInTheDocument();
+  });
+
+  it('卡片上可以就地补标签，标签会写回 store', async () => {
+    addGame('极乐迪斯科');
+    render(<GamesPage />);
+
+    await userEvent.click(screen.getByRole('button', { name: '添加标签' }));
+    await userEvent.type(screen.getByLabelText('编辑标签'), 'RPG{Enter}');
+    await userEvent.click(screen.getByRole('button', { name: '完成' }));
+
+    expect(gameOf('极乐迪斯科').tags).toEqual(['RPG']);
+    expect(screen.getByText('#RPG')).toBeInTheDocument();
+  });
+
+  it('搜索框里输入 #标签 能筛出对应的游戏', async () => {
+    const store = useGameStore.getState();
+    store.addGame('极乐迪斯科', 'PC', ['RPG']);
+    store.addGame('星露谷物语', 'PC', ['休闲']);
+    render(<GamesPage />);
+
+    await userEvent.type(screen.getByRole('textbox', { name: '搜索' }), '#休闲');
+
+    expect(screen.getByText('星露谷物语')).toBeInTheDocument();
+    expect(screen.queryByText('极乐迪斯科')).not.toBeInTheDocument();
+  });
+});

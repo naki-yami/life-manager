@@ -24,11 +24,14 @@ import {
   SegmentedControl,
   Select,
   StatCard,
+  TagEditor,
+  TagInput,
   Textarea,
 } from '../components/ui';
 import { PageHeader, Toolbar } from '../components/layout';
 import { useWritingStore } from '../store/writingStore';
 import { useUndoableRemove } from '../hooks/useUndoableRemove';
+import { useTagSuggestions } from '../hooks/useTagSuggestions';
 import { filterByKeyword } from '../utils/search';
 import { formatNumber } from '../utils/date';
 import { WritingStatus, WritingType } from '../types';
@@ -84,9 +87,11 @@ export const WritingPage: React.FC = () => {
     updateNotes,
     updateContent,
     setTargetWords,
+    updateProject,
     replaceProjects,
   } = useWritingStore();
   const undoableRemove = useUndoableRemove();
+  const tagSuggestions = useTagSuggestions();
   const toastContext = React.useContext(ToastContext);
 
   const [showAddModal, setShowAddModal] = useState(false);
@@ -99,9 +104,10 @@ export const WritingPage: React.FC = () => {
   const [contentDraft, setContentDraft] = useState('');
   const [keyword, setKeyword] = useState('');
   const [filter, setFilter] = useState<Filter>('all');
-  const [form, setForm] = useState<{ title: string; type: WritingType }>({
+  const [form, setForm] = useState<{ title: string; type: WritingType; tags: string[] }>({
     title: '',
     type: 'article',
+    tags: [],
   });
 
   const countOf = (status: WritingStatus): number =>
@@ -116,6 +122,7 @@ export const WritingPage: React.FC = () => {
       project.title,
       project.notes,
       TYPE_LABEL[project.type],
+      ...project.tags,
     ]);
   }, [projects, filter, keyword]);
 
@@ -123,14 +130,14 @@ export const WritingPage: React.FC = () => {
   const deletingProject = projects.find((project) => project.id === pendingDeleteId) ?? null;
 
   const openAddModal = (): void => {
-    setForm({ title: '', type: 'article' });
+    setForm({ title: '', type: 'article', tags: [] });
     setShowAddModal(true);
   };
 
   const handleAdd = (): void => {
     const title = form.title.trim();
     if (!title) return;
-    addProject(title, form.type);
+    addProject(title, form.type, form.tags);
     setShowAddModal(false);
   };
 
@@ -238,7 +245,11 @@ export const WritingPage: React.FC = () => {
       </div>
 
       <Toolbar
-        search={{ value: keyword, onChange: setKeyword, placeholder: '搜索标题、笔记或类型…' }}
+        search={{
+          value: keyword,
+          onChange: setKeyword,
+          placeholder: '搜索标题、笔记、类型或标签…',
+        }}
         actions={
           <SegmentedControl
             label="按写作状态筛选"
@@ -311,6 +322,14 @@ export const WritingPage: React.FC = () => {
                         {project.content.trim().split('\n')[0]}
                       </p>
                     ) : null}
+                    <div className="mt-2">
+                      <TagEditor
+                        tags={project.tags}
+                        suggestions={tagSuggestions}
+                        onChange={(tags) => updateProject(project.id, { tags })}
+                      />
+                    </div>
+
                     {project.targetWords > 0 && (
                       <div className="mt-2 max-w-md">
                         <ProgressBar
@@ -442,6 +461,13 @@ export const WritingPage: React.FC = () => {
             value={form.type}
             onChange={(value) => setForm({ ...form, type: value as WritingType })}
             options={TYPE_OPTIONS}
+          />
+          <TagInput
+            label="标签"
+            hint="回车或逗号分隔；标签跨模块通用，可在命令面板里输入 #标签 直接找"
+            value={form.tags}
+            suggestions={tagSuggestions}
+            onChange={(tags) => setForm({ ...form, tags })}
           />
         </div>
       </Modal>
