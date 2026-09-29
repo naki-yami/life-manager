@@ -21,7 +21,7 @@ import {
   TagInput,
   Textarea,
 } from '../components/ui';
-import { PageHeader, Toolbar } from '../components/layout';
+import { MasterDetail, PageHeader, Toolbar } from '../components/layout';
 import { BarChart } from '../components/charts';
 import { useGameStore } from '../store/gameStore';
 import { useUndoableRemove } from '../hooks/useUndoableRemove';
@@ -117,8 +117,14 @@ export const GamesPage: React.FC = () => {
   const [showAddModal, setShowAddModal] = useState(false);
   useNewEntryShortcut(() => setShowAddModal(true));
 
-  const [achievementGameId, setAchievementGameId] = useState<string | null>(null);
-  const [noteGameId, setNoteGameId] = useState<string | null>(null);
+  /**
+   * 右栏当前展示哪一款游戏的哪一块。
+   * 成就与笔记是同一款游戏的两面，共用一份「选中了什么」的状态：
+   * 宽屏下它决定右栏内容，窄屏下它决定抽屉开不开。
+   */
+  const [detail, setDetail] = useState<{ gameId: string; kind: 'achievements' | 'notes' } | null>(
+    null,
+  );
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [form, setForm] = useState<{ name: string; platform: GamePlatform; tags: string[] }>({
     name: '',
@@ -188,14 +194,30 @@ export const GamesPage: React.FC = () => {
     ]);
   }, [games, filter, keyword]);
 
-  const achievementGame = games.find((game) => game.id === achievementGameId) ?? null;
-  const noteGame = games.find((game) => game.id === noteGameId) ?? null;
+  const detailGame = games.find((game) => game.id === detail?.gameId) ?? null;
+  /** 详情栏标题：宽屏是卡片标题，窄屏是抽屉的可访问名称 */
+  const detailKindLabel = detail?.kind === 'notes' ? '笔记' : '成就';
+  const detailTitle = detail
+    ? detailGame
+      ? `《${detailGame.name}》的${detailKindLabel}`
+      : detailKindLabel
+    : '游戏详情';
   const pendingGame = games.find((game) => game.id === pendingDeleteId) ?? null;
   const pendingSession = sessions.find((session) => session.id === pendingSessionId) ?? null;
 
   const openNotes = (game: Game): void => {
     setNoteInput(game.notes);
-    setNoteGameId(game.id);
+    setDetail({ gameId: game.id, kind: 'notes' });
+  };
+
+  const closeDetail = (): void => {
+    setDetail(null);
+    setAchievementForm({ name: '', description: '' });
+  };
+
+  const handleSaveNotes = (): void => {
+    if (detail) updateGame(detail.gameId, { notes: noteInput.trim() });
+    closeDetail();
   };
 
   // 命令面板搜到本页的游戏时，直接打开它的笔记面板
@@ -213,10 +235,10 @@ export const GamesPage: React.FC = () => {
   };
 
   const handleAddAchievement = (): void => {
-    if (!achievementGameId) return;
+    if (!detail || detail.kind !== 'achievements') return;
     const name = achievementForm.name.trim();
     if (!name) return;
-    addAchievement(achievementGameId, name, achievementForm.description.trim());
+    addAchievement(detail.gameId, name, achievementForm.description.trim());
     setAchievementForm({ name: '', description: '' });
   };
 
@@ -368,197 +390,341 @@ export const GamesPage: React.FC = () => {
         </Card>
       )}
 
-      <Toolbar
-        search={{
-          value: keyword,
-          onChange: setKeyword,
-          placeholder: '搜索游戏、平台、标签或成就…',
-        }}
-        actions={
-          <SegmentedControl
-            label="按游玩状态筛选"
-            value={filter}
-            onChange={setFilter}
-            options={FILTER_OPTIONS.map((option) => ({
-              ...option,
-              count: option.value === 'all' ? games.length : countOf(option.value),
-            }))}
+      <MasterDetail
+        detailTitle={detailTitle}
+        detailOpen={detail !== null}
+        onCloseDetail={closeDetail}
+        drawerWidth="lg"
+        emptyDetail={
+          <EmptyState
+            icon={<Trophy size={20} aria-hidden />}
+            title="还没有选中游戏"
+            description="点左边任意一款游戏的「管理成就」或「笔记」，就能在这里处理。"
+            className="py-6"
           />
         }
-      />
-
-      {visibleGames.length === 0 ? (
-        <Card>
-          <EmptyState
-            icon={<Gamepad2 size={22} aria-hidden />}
-            title={games.length === 0 ? '游戏库还是空的' : '没有符合条件的游戏'}
-            description={
-              games.length === 0
-                ? '把在玩的、想玩的都加进来，时长和成就可以慢慢补。'
-                : '换个关键词，或者切换上面的状态筛选。'
-            }
-            action={
-              games.length === 0 ? (
-                <Button icon={<Plus size={16} aria-hidden />} onClick={() => setShowAddModal(true)}>
-                  添加游戏
-                </Button>
-              ) : (
-                <Button
-                  variant="secondary"
-                  onClick={() => {
-                    setKeyword('');
-                    setFilter('all');
+        detail={
+          detail === null || detailGame === null ? null : detail.kind === 'achievements' ? (
+            <div className="space-y-4">
+              <p className="text-xs text-content-tertiary">点击已有成就可以切换解锁状态</p>
+              <div className="space-y-2">
+                <Input
+                  label="成就名称"
+                  value={achievementForm.name}
+                  onChange={(event) =>
+                    setAchievementForm({ ...achievementForm, name: event.target.value })
+                  }
+                  placeholder="如：无伤通关"
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      event.preventDefault();
+                      handleAddAchievement();
+                    }
                   }}
-                >
-                  清除筛选
-                </Button>
-              )
-            }
-          />
-        </Card>
-      ) : (
-        <ul className="grid gap-4 sm:grid-cols-2">
-          {visibleGames.map((game) => {
-            const unlocked = game.achievements.filter((achievement) => achievement.unlocked).length;
-            return (
-              <li key={game.id}>
-                <Card className="p-4">
-                  <div className="flex items-start gap-4">
-                    <div
-                      aria-hidden
-                      className="flex h-28 w-20 shrink-0 flex-col items-center justify-center gap-1 rounded-lg shadow-xs"
-                      style={{ background: coverGradientOf(game.name) }}
-                    >
-                      <span className="flex h-10 w-10 items-center justify-center rounded-full bg-black/25 text-lg font-semibold text-white">
-                        {coverCharOf(game.name)}
-                      </span>
-                      <Gamepad2 size={14} className="text-white/80" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="font-semibold text-content">{game.name}</h3>
-                        <Badge tone="info">{game.platform}</Badge>
-                        {game.achievements.length > 0 && (
-                          <Badge tone={unlocked > 0 ? 'success' : 'default'}>
-                            成就 {unlocked}/{game.achievements.length}
-                          </Badge>
-                        )}
-                      </div>
-
-                      {game.notes && (
-                        <p className="mt-1.5 line-clamp-2 text-sm text-content-tertiary">
-                          {game.notes}
-                        </p>
-                      )}
-
-                      <div className="mt-1.5">
-                        <TagEditor
-                          tags={game.tags}
-                          suggestions={tagSuggestions}
-                          onChange={(tags) => updateGame(game.id, { tags })}
-                        />
-                      </div>
-
-                      <div className="mt-3 flex flex-wrap items-end gap-3">
-                        <div className="w-36">
-                          <NumberInput
-                            ariaLabel={`「${game.name}」的游玩时长`}
-                            label="游玩时长"
-                            value={game.hoursPlayed}
-                            onChange={(value) =>
-                              updateHoursPlayed(game.id, value === '' ? 0 : value)
-                            }
-                            min={0}
-                            step={0.5}
-                            suffix="小时"
-                          />
-                        </div>
-                        <div className="w-32">
-                          <Select
-                            aria-label={`调整「${game.name}」的状态`}
-                            value={game.status}
-                            onChange={(value) => updateGameStatus(game.id, value as GameStatus)}
-                            options={STATUS_OPTIONS}
-                          />
-                        </div>
-                      </div>
-
-                      <div className="mt-3 space-y-2">
-                        <ProgressBar
-                          value={game.progress}
-                          label="通关进度"
-                          showValue
-                          tone={game.progress >= 100 ? 'success' : 'accent'}
-                        />
-                        <Slider
-                          ariaLabel={`调整「${game.name}」的进度`}
-                          value={game.progress}
-                          onChange={(value) => updateGame(game.id, { progress: value })}
-                          showValue
-                          formatValue={(value) => `${value}%`}
-                        />
-                      </div>
-
-                      <div className="mt-3 flex flex-wrap items-center gap-1.5">
-                        {game.achievements.map((achievement) => (
-                          <button
-                            key={achievement.id}
-                            type="button"
-                            aria-pressed={achievement.unlocked}
-                            title={achievement.description || achievement.name}
-                            onClick={() => toggleAchievement(game.id, achievement.id)}
-                            className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-2xs font-medium transition-colors duration-fast ease-standard focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-line-focus ${
-                              achievement.unlocked
-                                ? 'bg-success-soft text-success'
-                                : 'bg-inset text-content-tertiary hover:text-content-secondary'
-                            }`}
-                          >
-                            <Trophy size={11} aria-hidden />
-                            {achievement.name}
-                          </button>
-                        ))}
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          icon={<Trophy size={13} aria-hidden />}
-                          onClick={() => setAchievementGameId(game.id)}
-                        >
-                          管理成就
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          icon={<StickyNote size={13} aria-hidden />}
-                          onClick={() => openNotes(game)}
-                        >
-                          笔记
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          icon={<Clock size={13} aria-hidden />}
-                          aria-label={`记录《${game.name}》的游玩`}
-                          onClick={() => openSessionModal(game.id)}
-                        >
-                          记录游玩
-                        </Button>
-                      </div>
-                    </div>
-
-                    <IconButton
-                      label={`删除《${game.name}》`}
-                      size="sm"
-                      className="ml-auto shrink-0 self-start hover:text-danger"
-                      icon={<Trash2 size={15} />}
-                      onClick={() => setPendingDeleteId(game.id)}
+                />
+                <div className="flex items-end gap-2">
+                  <div className="min-w-0 flex-1">
+                    <Input
+                      label="描述"
+                      value={achievementForm.description}
+                      onChange={(event) =>
+                        setAchievementForm({ ...achievementForm, description: event.target.value })
+                      }
+                      placeholder="可选"
                     />
                   </div>
-                </Card>
-              </li>
-            );
-          })}
-        </ul>
-      )}
+                  <Button onClick={handleAddAchievement} disabled={!achievementForm.name.trim()}>
+                    添加
+                  </Button>
+                </div>
+              </div>
+
+              {detailGame && detailGame.achievements.length === 0 ? (
+                <EmptyState
+                  icon={<Trophy size={20} aria-hidden />}
+                  title="还没有成就"
+                  description="把想要拿的成就先列出来，解锁后点一下就行。"
+                  className="py-6"
+                />
+              ) : (
+                <ul className="space-y-1">
+                  {detailGame?.achievements.map((achievement) => (
+                    <li
+                      key={achievement.id}
+                      className="flex items-center justify-between gap-3 rounded px-2 py-1.5 hover:bg-hover"
+                    >
+                      <button
+                        type="button"
+                        aria-pressed={achievement.unlocked}
+                        onClick={() =>
+                          detailGame && toggleAchievement(detailGame.id, achievement.id)
+                        }
+                        className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                      >
+                        <span
+                          className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border text-2xs ${
+                            achievement.unlocked
+                              ? 'border-success bg-success text-white'
+                              : 'border-line text-transparent'
+                          }`}
+                          aria-hidden
+                        >
+                          ✓
+                        </span>
+                        <span className="min-w-0">
+                          <span
+                            className={`block truncate text-sm ${
+                              achievement.unlocked ? 'text-content' : 'text-content-secondary'
+                            }`}
+                          >
+                            {achievement.name}
+                          </span>
+                          {achievement.description && (
+                            <span className="block truncate text-2xs text-content-tertiary">
+                              {achievement.description}
+                            </span>
+                          )}
+                        </span>
+                      </button>
+                      <IconButton
+                        label={`删除成就「${achievement.name}」`}
+                        size="sm"
+                        icon={<Trash2 size={13} />}
+                        onClick={() => {
+                          if (!detailGame) return;
+                          const snapshot = games;
+                          deleteAchievement(detailGame.id, achievement.id);
+                          undoableRemove({
+                            message: `已删除成就「${achievement.name}」`,
+                            description: '点「撤销」可以恢复。',
+                            snapshot,
+                            restore: replaceGames,
+                          });
+                        }}
+                        className="hover:text-danger"
+                      />
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <p className="text-xs text-content-tertiary">留空并保存即可清空</p>
+              <Textarea
+                label="笔记"
+                value={noteInput}
+                onChange={(event) => setNoteInput(event.target.value)}
+                rows={6}
+                placeholder="攻略、心得、待补的 DLC…"
+              />
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                <Button variant="secondary" onClick={closeDetail}>
+                  取消
+                </Button>
+                <Button onClick={handleSaveNotes}>保存</Button>
+              </div>
+            </div>
+          )
+        }
+      >
+        <Toolbar
+          search={{
+            value: keyword,
+            onChange: setKeyword,
+            placeholder: '搜索游戏、平台、标签或成就…',
+          }}
+          actions={
+            <SegmentedControl
+              label="按游玩状态筛选"
+              value={filter}
+              onChange={setFilter}
+              options={FILTER_OPTIONS.map((option) => ({
+                ...option,
+                count: option.value === 'all' ? games.length : countOf(option.value),
+              }))}
+            />
+          }
+        />
+
+        {visibleGames.length === 0 ? (
+          <Card>
+            <EmptyState
+              icon={<Gamepad2 size={22} aria-hidden />}
+              title={games.length === 0 ? '游戏库还是空的' : '没有符合条件的游戏'}
+              description={
+                games.length === 0
+                  ? '把在玩的、想玩的都加进来，时长和成就可以慢慢补。'
+                  : '换个关键词，或者切换上面的状态筛选。'
+              }
+              action={
+                games.length === 0 ? (
+                  <Button
+                    icon={<Plus size={16} aria-hidden />}
+                    onClick={() => setShowAddModal(true)}
+                  >
+                    添加游戏
+                  </Button>
+                ) : (
+                  <Button
+                    variant="secondary"
+                    onClick={() => {
+                      setKeyword('');
+                      setFilter('all');
+                    }}
+                  >
+                    清除筛选
+                  </Button>
+                )
+              }
+            />
+          </Card>
+        ) : (
+          <ul className="grid gap-4 sm:grid-cols-2">
+            {visibleGames.map((game) => {
+              const unlocked = game.achievements.filter(
+                (achievement) => achievement.unlocked,
+              ).length;
+              return (
+                <li key={game.id}>
+                  <Card className="p-4">
+                    <div className="flex items-start gap-4">
+                      <div
+                        aria-hidden
+                        className="flex h-28 w-20 shrink-0 flex-col items-center justify-center gap-1 rounded-lg shadow-xs"
+                        style={{ background: coverGradientOf(game.name) }}
+                      >
+                        <span className="flex h-10 w-10 items-center justify-center rounded-full bg-black/25 text-lg font-semibold text-white">
+                          {coverCharOf(game.name)}
+                        </span>
+                        <Gamepad2 size={14} className="text-white/80" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="font-semibold text-content">{game.name}</h3>
+                          <Badge tone="info">{game.platform}</Badge>
+                          {game.achievements.length > 0 && (
+                            <Badge tone={unlocked > 0 ? 'success' : 'default'}>
+                              成就 {unlocked}/{game.achievements.length}
+                            </Badge>
+                          )}
+                        </div>
+
+                        {game.notes && (
+                          <p className="mt-1.5 line-clamp-2 text-sm text-content-tertiary">
+                            {game.notes}
+                          </p>
+                        )}
+
+                        <div className="mt-1.5">
+                          <TagEditor
+                            tags={game.tags}
+                            suggestions={tagSuggestions}
+                            onChange={(tags) => updateGame(game.id, { tags })}
+                          />
+                        </div>
+
+                        <div className="mt-3 flex flex-wrap items-end gap-3">
+                          <div className="w-36">
+                            <NumberInput
+                              ariaLabel={`「${game.name}」的游玩时长`}
+                              label="游玩时长"
+                              value={game.hoursPlayed}
+                              onChange={(value) =>
+                                updateHoursPlayed(game.id, value === '' ? 0 : value)
+                              }
+                              min={0}
+                              step={0.5}
+                              suffix="小时"
+                            />
+                          </div>
+                          <div className="w-32">
+                            <Select
+                              aria-label={`调整「${game.name}」的状态`}
+                              value={game.status}
+                              onChange={(value) => updateGameStatus(game.id, value as GameStatus)}
+                              options={STATUS_OPTIONS}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="mt-3 space-y-2">
+                          <ProgressBar
+                            value={game.progress}
+                            label="通关进度"
+                            showValue
+                            tone={game.progress >= 100 ? 'success' : 'accent'}
+                          />
+                          <Slider
+                            ariaLabel={`调整「${game.name}」的进度`}
+                            value={game.progress}
+                            onChange={(value) => updateGame(game.id, { progress: value })}
+                            showValue
+                            formatValue={(value) => `${value}%`}
+                          />
+                        </div>
+
+                        <div className="mt-3 flex flex-wrap items-center gap-1.5">
+                          {game.achievements.map((achievement) => (
+                            <button
+                              key={achievement.id}
+                              type="button"
+                              aria-pressed={achievement.unlocked}
+                              title={achievement.description || achievement.name}
+                              onClick={() => toggleAchievement(game.id, achievement.id)}
+                              className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-2xs font-medium transition-colors duration-fast ease-standard focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-line-focus ${
+                                achievement.unlocked
+                                  ? 'bg-success-soft text-success'
+                                  : 'bg-inset text-content-tertiary hover:text-content-secondary'
+                              }`}
+                            >
+                              <Trophy size={11} aria-hidden />
+                              {achievement.name}
+                            </button>
+                          ))}
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            icon={<Trophy size={13} aria-hidden />}
+                            onClick={() => setDetail({ gameId: game.id, kind: 'achievements' })}
+                          >
+                            管理成就
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            icon={<StickyNote size={13} aria-hidden />}
+                            onClick={() => openNotes(game)}
+                          >
+                            笔记
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            icon={<Clock size={13} aria-hidden />}
+                            aria-label={`记录《${game.name}》的游玩`}
+                            onClick={() => openSessionModal(game.id)}
+                          >
+                            记录游玩
+                          </Button>
+                        </div>
+                      </div>
+
+                      <IconButton
+                        label={`删除《${game.name}》`}
+                        size="sm"
+                        className="ml-auto shrink-0 self-start hover:text-danger"
+                        icon={<Trash2 size={15} />}
+                        onClick={() => setPendingDeleteId(game.id)}
+                      />
+                    </div>
+                  </Card>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </MasterDetail>
 
       <Modal
         isOpen={showSessionModal}
@@ -647,145 +813,6 @@ export const GamesPage: React.FC = () => {
             onChange={(tags) => setForm({ ...form, tags })}
           />
         </div>
-      </Modal>
-
-      <Modal
-        isOpen={achievementGame !== null}
-        onClose={() => {
-          setAchievementGameId(null);
-          setAchievementForm({ name: '', description: '' });
-        }}
-        title={achievementGame ? `《${achievementGame.name}》的成就` : '成就'}
-        description="点击已有成就可以切换解锁状态"
-      >
-        <div className="space-y-4">
-          <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
-            <Input
-              label="成就名称"
-              value={achievementForm.name}
-              onChange={(event) =>
-                setAchievementForm({ ...achievementForm, name: event.target.value })
-              }
-              placeholder="如：无伤通关"
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') {
-                  event.preventDefault();
-                  handleAddAchievement();
-                }
-              }}
-            />
-            <Input
-              label="描述"
-              value={achievementForm.description}
-              onChange={(event) =>
-                setAchievementForm({ ...achievementForm, description: event.target.value })
-              }
-              placeholder="可选"
-            />
-            <Button onClick={handleAddAchievement} disabled={!achievementForm.name.trim()}>
-              添加
-            </Button>
-          </div>
-
-          {achievementGame && achievementGame.achievements.length === 0 ? (
-            <EmptyState
-              icon={<Trophy size={20} aria-hidden />}
-              title="还没有成就"
-              description="把想要拿的成就先列出来，解锁后点一下就行。"
-              className="py-6"
-            />
-          ) : (
-            <ul className="space-y-1">
-              {achievementGame?.achievements.map((achievement) => (
-                <li
-                  key={achievement.id}
-                  className="flex items-center justify-between gap-3 rounded px-2 py-1.5 hover:bg-hover"
-                >
-                  <button
-                    type="button"
-                    aria-pressed={achievement.unlocked}
-                    onClick={() =>
-                      achievementGame && toggleAchievement(achievementGame.id, achievement.id)
-                    }
-                    className="flex min-w-0 flex-1 items-center gap-2 text-left"
-                  >
-                    <span
-                      className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border text-2xs ${
-                        achievement.unlocked
-                          ? 'border-success bg-success text-white'
-                          : 'border-line text-transparent'
-                      }`}
-                      aria-hidden
-                    >
-                      ✓
-                    </span>
-                    <span className="min-w-0">
-                      <span
-                        className={`block truncate text-sm ${
-                          achievement.unlocked ? 'text-content' : 'text-content-secondary'
-                        }`}
-                      >
-                        {achievement.name}
-                      </span>
-                      {achievement.description && (
-                        <span className="block truncate text-2xs text-content-tertiary">
-                          {achievement.description}
-                        </span>
-                      )}
-                    </span>
-                  </button>
-                  <IconButton
-                    label={`删除成就「${achievement.name}」`}
-                    size="sm"
-                    icon={<Trash2 size={13} />}
-                    onClick={() => {
-                      if (!achievementGame) return;
-                      const snapshot = games;
-                      deleteAchievement(achievementGame.id, achievement.id);
-                      undoableRemove({
-                        message: `已删除成就「${achievement.name}」`,
-                        description: '点「撤销」可以恢复。',
-                        snapshot,
-                        restore: replaceGames,
-                      });
-                    }}
-                    className="hover:text-danger"
-                  />
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      </Modal>
-
-      <Modal
-        isOpen={noteGame !== null}
-        onClose={() => setNoteGameId(null)}
-        title={noteGame ? `《${noteGame.name}》的笔记` : '笔记'}
-        description="留空并保存即可清空"
-        footer={
-          <>
-            <Button variant="secondary" onClick={() => setNoteGameId(null)}>
-              取消
-            </Button>
-            <Button
-              onClick={() => {
-                if (noteGameId) updateGame(noteGameId, { notes: noteInput.trim() });
-                setNoteGameId(null);
-              }}
-            >
-              保存
-            </Button>
-          </>
-        }
-      >
-        <Textarea
-          label="笔记"
-          value={noteInput}
-          onChange={(event) => setNoteInput(event.target.value)}
-          rows={6}
-          placeholder="攻略、心得、待补的 DLC…"
-        />
       </Modal>
 
       <ConfirmDialog

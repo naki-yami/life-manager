@@ -8,6 +8,8 @@ import { useGameStore } from '../store/gameStore';
 import { todayKey } from '../utils/date';
 import { GameStatus } from '../types';
 import { requestPaletteFocus, resetPaletteFocus } from '../hooks/usePaletteFocus';
+import { MASTER_DETAIL_QUERY } from '../components/layout';
+import { mockMediaQueries } from '../test/matchMedia';
 
 beforeEach(() => {
   useGameStore.setState({ games: [], sessions: [] });
@@ -343,5 +345,112 @@ describe('GamesPage 标签', () => {
 
     expect(screen.getByText('星露谷物语')).toBeInTheDocument();
     expect(screen.queryByText('极乐迪斯科')).not.toBeInTheDocument();
+  });
+});
+describe('GamesPage 宽屏双栏', () => {
+  afterEach(() => {
+    resetPaletteFocus();
+  });
+
+  const expectWideLayout = (): void => mockMediaQueries({ [MASTER_DETAIL_QUERY]: true });
+  const panel = (name = '游戏详情'): HTMLElement => screen.getByRole('complementary', { name });
+
+  it('宽屏右栏常驻，没选中游戏时是占位内容', () => {
+    addGame('哈迪斯');
+    expectWideLayout();
+
+    render(<GamesPage />);
+
+    expect(within(panel()).getByText('还没有选中游戏')).toBeInTheDocument();
+    expect(screen.getByText('哈迪斯')).toBeInTheDocument();
+  });
+
+  it('点「管理成就」在右栏增删，不再弹对话框', async () => {
+    addGame('哈迪斯');
+    expectWideLayout();
+
+    render(<GamesPage />);
+    await userEvent.click(screen.getByRole('button', { name: '管理成就' }));
+
+    // 焦点没被搬进对话框，游戏库也还在
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.getByText('哈迪斯')).toBeInTheDocument();
+
+    const aside = panel('《哈迪斯》的成就');
+    expect(within(aside).getByText('还没有成就')).toBeInTheDocument();
+
+    await userEvent.type(within(aside).getByLabelText(/^成就名称/), '无伤通关');
+    await userEvent.type(within(aside).getByLabelText(/^描述/), '一次都不受伤');
+    await userEvent.click(within(aside).getByRole('button', { name: '添加' }));
+
+    const achievements = gameOf('哈迪斯').achievements;
+    expect(achievements).toHaveLength(1);
+    expect(achievements[0]!.description).toBe('一次都不受伤');
+    // 右栏没关，可以接着加第二条
+    expect(within(aside).getByRole('button', { name: /^无伤通关/ })).toBeInTheDocument();
+
+    await userEvent.click(within(aside).getByRole('button', { name: '删除成就「无伤通关」' }));
+    expect(gameOf('哈迪斯').achievements).toHaveLength(0);
+    expect(within(aside).getByText('还没有成就')).toBeInTheDocument();
+  });
+
+  it('点「笔记」在右栏保存与清空，不再弹对话框', async () => {
+    addGame('哈迪斯');
+    expectWideLayout();
+
+    render(<GamesPage />);
+    await userEvent.click(screen.getByRole('button', { name: '笔记' }));
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+    const aside = panel('《哈迪斯》的笔记');
+    await userEvent.type(within(aside).getByLabelText('笔记'), '先刷满武器再打冥王');
+    await userEvent.click(within(aside).getByRole('button', { name: '保存' }));
+
+    expect(gameOf('哈迪斯').notes).toBe('先刷满武器再打冥王');
+    expect(screen.getByText('先刷满武器再打冥王')).toBeInTheDocument();
+    // 存完右栏回到占位
+    expect(within(panel()).getByText('还没有选中游戏')).toBeInTheDocument();
+  });
+
+  it('「取消」只关右栏，不把草稿写回 store', async () => {
+    addGame('哈迪斯');
+    expectWideLayout();
+
+    render(<GamesPage />);
+    await userEvent.click(screen.getByRole('button', { name: '笔记' }));
+
+    const aside = panel('《哈迪斯》的笔记');
+    await userEvent.type(within(aside).getByLabelText('笔记'), '不该被保存');
+    await userEvent.click(within(aside).getByRole('button', { name: '取消' }));
+
+    expect(within(panel()).getByText('还没有选中游戏')).toBeInTheDocument();
+    expect(gameOf('哈迪斯').notes).toBe('');
+  });
+
+  it('成就与笔记共用一个右栏，切换按钮就切换内容', async () => {
+    addGame('哈迪斯');
+    expectWideLayout();
+
+    render(<GamesPage />);
+    await userEvent.click(screen.getByRole('button', { name: '管理成就' }));
+    expect(panel('《哈迪斯》的成就')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: '笔记' }));
+    expect(panel('《哈迪斯》的笔记')).toBeInTheDocument();
+    expect(screen.queryByText('还没有成就')).not.toBeInTheDocument();
+  });
+
+  it('宽屏下命令面板聚焦某款游戏，也直接进右栏', () => {
+    addGame('星露谷物语');
+    expectWideLayout();
+
+    render(<GamesPage />);
+    act(() => {
+      requestPaletteFocus('/games', gameOf('星露谷物语').id);
+    });
+
+    expect(panel('《星露谷物语》的笔记')).toBeInTheDocument();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 });
