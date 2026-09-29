@@ -1,30 +1,57 @@
 import React, { useMemo, useState } from 'react';
-import { BookOpen, CheckCircle2, NotebookPen, Play, Plus, StickyNote, Trash2 } from 'lucide-react';
+import {
+  BookOpen,
+  CheckCircle2,
+  Clock,
+  Hourglass,
+  NotebookPen,
+  Play,
+  Plus,
+  StickyNote,
+  Trash2,
+} from 'lucide-react';
 import {
   Badge,
   Button,
   Card,
   CardBody,
+  CardHeader,
   ConfirmDialog,
   EmptyState,
   IconButton,
   Input,
   Modal,
+  NumberInput,
   ProgressBar,
   ProgressRing,
   SegmentedControl,
+  Select,
   Slider,
 } from '../components/ui';
 import { PageHeader, Toolbar } from '../components/layout';
 import { useBookStore } from '../store/bookStore';
 import { useUndoableRemove } from '../hooks/useUndoableRemove';
+import { BarChart } from '../components/charts';
 import { filterByKeyword } from '../utils/search';
-import { percentOf } from '../utils/stats';
-import { Book, BookStatus } from '../types';
+import { percentOf, seriesByWeek } from '../utils/stats';
+import { daysBetween, formatDuration, formatNumber, formatShortDate, todayKey } from '../utils/date';
+import { Book, BookStatus, ReadingSession } from '../types';
 import { useNewEntryShortcut } from '../hooks/useShortcuts';
 
 /** 年度阅读目标：一年读完 12 本，进度环按它算 */
 const YEARLY_GOAL = 12;
+
+/** 「近期阅读」最多列几条流水 */
+const SESSION_PREVIEW_COUNT = 6;
+
+/** 投入图表画最近几周 */
+const WEEK_COUNT = 8;
+
+/** 开读超过这么多天还没读完就提醒 */
+const STALLED_AFTER_DAYS = 30;
+
+/** 删除阅读流水只影响 sessions 数组，撤销整表还原 */
+type ReadingLogSnapshot = ReadingSession[];
 
 type Filter = 'all' | BookStatus;
 
@@ -54,9 +81,14 @@ export const BooksPage: React.FC = () => {
     deleteBook,
     updateBookStatus,
     updateProgress,
+    updateBook,
     addNote,
     deleteNote,
     replaceBooks,
+    sessions,
+    addReadingSession,
+    deleteReadingSession,
+    replaceSessions,
   } = useBookStore();
   const undoableRemove = useUndoableRemove();
 
@@ -70,9 +102,86 @@ export const BooksPage: React.FC = () => {
   const [keyword, setKeyword] = useState('');
   const [filter, setFilter] = useState<Filter>('all');
   const [form, setForm] = useState({ title: '', author: '', category: '' });
+  const [showSessionModal, setShowSessionModal] = useState(false);
+  const [pendingSessionId, setPendingSessionId] = useState<string | null>(null);
+  const [sessionForm, setSessionForm] = useState<{
+    bookId: string;
+    date: string;
+    minutes: number | '';
+    note: string;
+  }>({ bookId: '', date: todayKey(), minutes: 30, note: '' });
+  const [notePage, setNotePage] = useState<number | ''>('');
 
   const countOf = (status: BookStatus): number =>
     books.filter((book) => book.status === status).length;
+
+  const today = todayKey();
+  const totalMinutes = sessions.reduce((sum, session) => sum + session.minutes, 0);
+
+  const weeklyMinutes = useMemo(
+    () =>
+      seriesByWeek(sessions, WEEK_COUNT, today, (session) => session.date, (session) => session.minutes),
+    [sessions, today],
+  );
+
+  const recentSessions = useMemo(
+    () =>
+      [...sessions]
+        .sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt))
+        .slice(0, SESSION_PREVIEW_COUNT),
+    [sessions],
+  );
+
+  /** 流水里只存 bookId，展示时换成书名 */
+  const bookNameOf = (id: string): string =>
+    books.find((book) => book.id === id)?.title ?? '已删除的书';
+
+  const pendingSession = sessions.find((session) => session.id === pendingSessionId) ?? null;
+
+  /** 按开读以来的平均速度估算还需几天读完；估不出来返回 null */
+  const estimateDaysLeft = (book: Book): number | null => {
+    if (book.status !== 'reading' || !book.startedAt) return null;
+    if (book.progress <= 0 || book.progress >= 100) return null;
+    const startDay = book.startedAt.slice(0, 10);
+    const days = Math.max(1, daysBetween(startDay, today) ?? 1);
+    const ratePerDay = book.progress / days;
+    return Math.min(999, Math.ceil((100 - book.progress) / ratePerDay));
+  };
+
+  /** 开读超过阈值还没读完的提醒 */
+  const stalledDaysOf = (book: Book): number | null => {
+    if (book.status !== 'reading' || !book.startedAt) return null;
+    const days = daysBetween(book.startedAt.slice(0, 10), today);
+    return days !== null && days >= STALLED_AFTER_DAYS ? days : null;
+  };
+
+  const openSessionModal = (bookId?: string): void => {
+    const fallback = books.length > 0 ? books[0].id : '';
+    setSessionForm({ bookId: bookId ?? fallback, date: today, minutes: 30, note: '' });
+    setShowSessionModal(true);
+  };
+
+  const sessionMinutes = typeof sessionForm.minutes === 'number' ? sessionForm.minutes : 0;
+  const canSaveSession = Boolean(sessionForm.bookId) && sessionMinutes > 0;
+
+  const handleAddSession = (): void => {
+    if (!canSaveSession) return;
+    addReadingSession(sessionForm.bookId, sessionForm.date || today, sessionMinutes, sessionForm.note.trim());
+    setShowSessionModal(false);
+  };
+
+  /** 当前页码 ↔ 进度百分比换算 */
+  const pageOf = (book: Book): number | '' => {
+    const total = book.totalPages;
+    if (!total || total <= 0) return '';
+    return Math.min(total, Math.round((book.progress / 100) * total));
+  };
+
+  const handlePageChange = (book: Book, page: number): void => {
+    if (!book.totalPages || book.totalPages <= 0) return;
+    const clamped = Math.max(0, Math.min(book.totalPages, page));
+    updateProgress(book.id, Math.round((clamped / book.totalPages) * 1000) / 10);
+  };
 
   const visibleBooks = useMemo(() => {
     const byStatus = filter === 'all' ? books : books.filter((book) => book.status === filter);
@@ -112,6 +221,7 @@ export const BooksPage: React.FC = () => {
     setNoteBookId(null);
     setNoteInput('');
     setNoteError(undefined);
+    setNotePage('');
   };
 
   const progressTone = (book: Book) => (book.progress >= 100 ? 'success' : 'accent');
@@ -123,15 +233,26 @@ export const BooksPage: React.FC = () => {
         description="书单、进度与读书笔记都在这里"
         icon={BookOpen}
         actions={
-          <Button
-            icon={<Plus size={16} aria-hidden />}
-            onClick={() => {
-              setForm({ title: '', author: '', category: '' });
-              setShowAddModal(true);
-            }}
-          >
-            添加书籍
-          </Button>
+          <>
+            {books.length > 0 && (
+              <Button
+                variant="secondary"
+                icon={<Clock size={16} aria-hidden />}
+                onClick={() => openSessionModal()}
+              >
+                记阅读
+              </Button>
+            )}
+            <Button
+              icon={<Plus size={16} aria-hidden />}
+              onClick={() => {
+                setForm({ title: '', author: '', category: '' });
+                setShowAddModal(true);
+              }}
+            >
+              添加书籍
+            </Button>
+          </>
         }
       />
 
@@ -158,6 +279,56 @@ export const BooksPage: React.FC = () => {
                 <Badge>笔记 {noteTotal} 条</Badge>
               </div>
             </div>
+          </CardBody>
+        </Card>
+      )}
+
+      {sessions.length > 0 && (
+        <Card>
+          <CardHeader
+            title="近期阅读"
+            subtitle={`累计 ${formatDuration(totalMinutes / 60)} · ${sessions.length} 条记录`}
+          />
+          <CardBody className="space-y-4">
+            <BarChart
+              data={weeklyMinutes}
+              label="近 8 周每周阅读分钟"
+              formatValue={(value) => `${formatNumber(value)} 分钟`}
+              formatDate={formatShortDate}
+            />
+
+            <ul className="divide-y divide-line-subtle rounded border border-line-subtle">
+              {recentSessions.map((session) => (
+                <li key={session.id} className="flex items-center gap-3 px-3 py-2">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-x-2">
+                      <span className="truncate text-sm text-content">
+                        {bookNameOf(session.bookId)}
+                      </span>
+                      <span className="text-xs text-content-tertiary tabular">
+                        {formatShortDate(session.date)} · {formatNumber(session.minutes)} 分钟
+                      </span>
+                    </div>
+                    {session.note && (
+                      <p className="mt-0.5 truncate text-xs text-content-tertiary">{session.note}</p>
+                    )}
+                  </div>
+                  <IconButton
+                    label={`删除 ${formatShortDate(session.date)} 的《${bookNameOf(session.bookId)}》阅读记录`}
+                    size="sm"
+                    icon={<Trash2 size={13} />}
+                    onClick={() => setPendingSessionId(session.id)}
+                    className="hover:text-danger"
+                  />
+                </li>
+              ))}
+            </ul>
+
+            {sessions.length > recentSessions.length && (
+              <p className="text-xs text-content-tertiary">
+                只显示最近 {recentSessions.length} 条，共 {sessions.length} 条记录。
+              </p>
+            )}
           </CardBody>
         </Card>
       )}
@@ -216,11 +387,27 @@ export const BooksPage: React.FC = () => {
                     <div className="flex flex-wrap items-center gap-2">
                       <h3 className="font-semibold text-content">{book.title}</h3>
                       <Badge tone={STATUS_TONE[book.status]}>{STATUS_LABEL[book.status]}</Badge>
+                      {(() => {
+                        const stalled = stalledDaysOf(book);
+                        return stalled !== null ? (
+                          <Badge tone="warning">开读 {stalled} 天未完</Badge>
+                        ) : null;
+                      })()}
                     </div>
                     <p className="mt-1 text-sm text-content-tertiary">
                       {[book.author, book.category].filter(Boolean).join(' · ') ||
                         '未填写作者与分类'}
                     </p>
+
+                    {(() => {
+                      const daysLeft = estimateDaysLeft(book);
+                      return daysLeft !== null ? (
+                        <p className="mt-1 inline-flex items-center gap-1 text-xs text-content-tertiary">
+                          <Hourglass size={11} aria-hidden />
+                          按当前速度约还需 {daysLeft} 天读完
+                        </p>
+                      ) : null;
+                    })()}
 
                     {book.status === 'reading' && (
                       <div className="mt-3 space-y-2">
@@ -230,13 +417,61 @@ export const BooksPage: React.FC = () => {
                           label="阅读进度"
                           tone={progressTone(book)}
                         />
-                        <Slider
-                          ariaLabel={`调整「${book.title}」的阅读进度`}
-                          value={book.progress}
-                          onChange={(value) => updateProgress(book.id, value)}
-                          showValue
-                          formatValue={(value) => `${value}%`}
-                        />
+                        {book.totalPages ? (
+                          <div className="flex flex-wrap items-end gap-3">
+                            <div className="w-32">
+                              <NumberInput
+                                label="总页数"
+                                value={book.totalPages}
+                                onChange={(value) =>
+                                  updateBook(book.id, {
+                                    totalPages: typeof value === 'number' && value > 0 ? value : undefined,
+                                  })
+                                }
+                                min={1}
+                                step={10}
+                                suffix="页"
+                              />
+                            </div>
+                            <div className="w-32">
+                              <NumberInput
+                                label="当前页码"
+                                value={pageOf(book)}
+                                onChange={(value) =>
+                                  handlePageChange(book, value === '' ? 0 : value)
+                                }
+                                min={0}
+                                step={10}
+                                suffix="页"
+                              />
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            <Slider
+                              ariaLabel={`调整「${book.title}」的阅读进度`}
+                              value={book.progress}
+                              onChange={(value) => updateProgress(book.id, value)}
+                              showValue
+                              formatValue={(value) => `${value}%`}
+                            />
+                            <div className="w-32">
+                              <NumberInput
+                                label="总页数"
+                                value={book.totalPages ?? 0}
+                                onChange={(value) =>
+                                  updateBook(book.id, {
+                                    totalPages: typeof value === 'number' && value > 0 ? value : undefined,
+                                  })
+                                }
+                                min={0}
+                                step={10}
+                                suffix="页"
+                                hint="填上总页数后可以用页码记录进度"
+                              />
+                            </div>
+                          </>
+                        )}
                       </div>
                     )}
 
@@ -267,10 +502,20 @@ export const BooksPage: React.FC = () => {
                       <Button
                         size="sm"
                         variant="ghost"
+                        icon={<Clock size={13} aria-hidden />}
+                        aria-label={`记录《${book.title}》的阅读`}
+                        onClick={() => openSessionModal(book.id)}
+                      >
+                        记阅读
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
                         icon={<StickyNote size={13} aria-hidden />}
                         onClick={() => {
                           setNoteInput('');
                           setNoteError(undefined);
+                          setNotePage('');
                           setNoteBookId(book.id);
                         }}
                       >
@@ -339,6 +584,18 @@ export const BooksPage: React.FC = () => {
         description="回车即可保存，笔记会按时间倒序排列"
       >
         <div className="space-y-4">
+          <div className="w-40">
+            <NumberInput
+              label="页码"
+              value={notePage}
+              onChange={(value) => setNotePage(value)}
+              min={0}
+              step={1}
+              suffix="页"
+              hint="可选"
+            />
+          </div>
+
           <div className="flex items-start gap-2">
             <div className="min-w-0 flex-1">
               <Input
@@ -381,6 +638,7 @@ export const BooksPage: React.FC = () => {
                   <div className="mt-2 flex items-center justify-between">
                     <span className="text-2xs text-content-tertiary">
                       {new Date(note.createdAt).toLocaleDateString('zh-CN')}
+                      {note.page ? ` · 第 ${note.page} 页` : ''}
                     </span>
                     <IconButton
                       label="删除这条笔记"
@@ -406,6 +664,81 @@ export const BooksPage: React.FC = () => {
           )}
         </div>
       </Modal>
+
+      <Modal
+        isOpen={showSessionModal}
+        onClose={() => setShowSessionModal(false)}
+        title="记录阅读"
+        description="记一次会写进阅读流水，用于统计每周阅读时长"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setShowSessionModal(false)}>
+              取消
+            </Button>
+            <Button onClick={handleAddSession} disabled={!canSaveSession}>
+              保存
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <Select
+            label="书籍"
+            value={sessionForm.bookId}
+            onChange={(value) => setSessionForm({ ...sessionForm, bookId: value })}
+            options={books.map((book) => ({ value: book.id, label: book.title }))}
+          />
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Input
+              label="日期"
+              type="date"
+              value={sessionForm.date}
+              onChange={(event) => setSessionForm({ ...sessionForm, date: event.target.value })}
+            />
+            <NumberInput
+              label="时长"
+              value={sessionForm.minutes}
+              onChange={(value) => setSessionForm({ ...sessionForm, minutes: value })}
+              min={0}
+              step={10}
+              suffix="分钟"
+            />
+          </div>
+          <Input
+            label="备注"
+            value={sessionForm.note}
+            onChange={(event) => setSessionForm({ ...sessionForm, note: event.target.value })}
+            placeholder="读到哪一章…（可选）"
+          />
+        </div>
+      </Modal>
+
+      <ConfirmDialog
+        isOpen={pendingSession !== null}
+        onClose={() => setPendingSessionId(null)}
+        onConfirm={() => {
+          const target = pendingSession;
+          const snapshot: ReadingLogSnapshot = sessions;
+          if (pendingSessionId) deleteReadingSession(pendingSessionId);
+          setPendingSessionId(null);
+          if (target) {
+            undoableRemove({
+              message: `已删除 ${formatShortDate(target.date)} 的阅读记录`,
+              description: `${bookNameOf(target.bookId)} 的 ${formatNumber(target.minutes)} 分钟已删除，点「撤销」可以恢复。`,
+              snapshot,
+              restore: replaceSessions,
+            });
+          }
+        }}
+        title="删除阅读记录"
+        description={
+          pendingSession
+            ? `确定要删除 ${formatShortDate(pendingSession.date)} 读《${bookNameOf(pendingSession.bookId)}》的 ${formatNumber(pendingSession.minutes)} 分钟记录吗？`
+            : ''
+        }
+        confirmText="删除"
+        tone="danger"
+      />
 
       <ConfirmDialog
         isOpen={deletingBook !== null}

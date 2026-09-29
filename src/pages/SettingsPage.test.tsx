@@ -58,6 +58,7 @@ const emptyBackup: BackupData = {
   dietRecords: [],
   games: [],
   gameSessions: [],
+  readingSessions: [],
   settings: { themeMode: 'system', density: 'comfortable', sidebarCollapsed: false },
 };
 

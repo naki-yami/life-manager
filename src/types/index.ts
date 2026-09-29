@@ -39,6 +39,8 @@ export interface BookNote {
   id: string;
   content: string;
   createdAt: string;
+  /** 笔记对应的页码；旧数据可能没有 */
+  page?: number;
 }
 
 export interface Book {
@@ -49,9 +51,26 @@ export interface Book {
   status: BookStatus;
   progress: number;
   notes: BookNote[];
-  createdAt: string;
+  /** 总页数；填了之后可以用页码换算进度。旧数据可能没有 */
+  totalPages?: number;
   /** 首次标记为「已读」的时间，用来做年度阅读统计；旧数据可能没有 */
   finishedAt?: string;
+  /** 最近一次开始阅读的时间，用来估算读完所需天数；旧数据可能没有 */
+  startedAt?: string;
+  createdAt: string;
+}
+
+/** 一次阅读记录；与游戏游玩流水、开发工时流水同一套模式 */
+export interface ReadingSession {
+  id: string;
+  /** 关联的 Book.id */
+  bookId: string;
+  /** 阅读日期 YYYY-MM-DD */
+  date: string;
+  /** 阅读时长（分钟） */
+  minutes: number;
+  note: string;
+  createdAt: string;
 }
 
 // Dev project types

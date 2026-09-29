@@ -7,7 +7,7 @@ import { z } from 'zod';
  */
 
 export const APP_ID = 'life-manager';
-export const BACKUP_SCHEMA_VERSION = 6;
+export const BACKUP_SCHEMA_VERSION = 7;
 
 const isoDateString = z.string();
 const percent = z.number().min(0).max(100).catch(0);
@@ -50,6 +50,8 @@ export const bookNoteSchema = z.object({
   id: z.string().min(1),
   content: z.string(),
   createdAt: isoDateString.default(() => new Date().toISOString()),
+  /** v7：笔记对应的页码；旧备份没有就不填 */
+  page: z.number().min(0).optional(),
 });
 
 export const bookSchema = z.object({
@@ -60,8 +62,21 @@ export const bookSchema = z.object({
   status: z.enum(['want-to-read', 'reading', 'finished']).default('want-to-read'),
   progress: percent,
   notes: z.array(bookNoteSchema).default([]),
+  /** v7：总页数与开始阅读时间；旧备份缺省时按注释处理 */
+  totalPages: z.number().min(0).optional(),
+  startedAt: isoDateString.optional(),
   createdAt: isoDateString.default(() => new Date().toISOString()),
   finishedAt: isoDateString.optional(),
+});
+
+/** 阅读流水；旧的备份文件里没有这个模块，导入时不会清空现有记录 */
+export const readingSessionSchema = z.object({
+  id: z.string().min(1),
+  bookId: z.string().default(''),
+  date: z.string().default(''),
+  minutes: z.number().min(0).catch(0),
+  note: z.string().default(''),
+  createdAt: isoDateString.default(() => new Date().toISOString()),
 });
 
 // ---------- 开发工作 ----------
@@ -206,6 +221,7 @@ export const backupDataSchema = z.object({
   dietRecords: z.array(mealRecordSchema).default([]),
   games: z.array(gameSchema).default([]),
   gameSessions: z.array(gameSessionSchema).default([]),
+  readingSessions: z.array(readingSessionSchema).default([]),
   settings: settingsSchema.optional(),
 });
 
@@ -223,6 +239,7 @@ export const BACKUP_MODULES = [
   'dietRecords',
   'games',
   'gameSessions',
+  'readingSessions',
 ] as const;
 
 export type BackupModule = (typeof BACKUP_MODULES)[number];
@@ -239,4 +256,5 @@ export const MODULE_LABELS: Record<BackupModule, string> = {
   dietRecords: '饮食记录',
   games: '游戏',
   gameSessions: '游玩记录',
+  readingSessions: '阅读记录',
 };

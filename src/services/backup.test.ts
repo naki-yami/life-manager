@@ -141,6 +141,16 @@ function sampleData(): BackupData {
         createdAt: '2026-09-20T22:00:00.000Z',
       },
     ],
+    readingSessions: [
+      {
+        id: 'read-1',
+        bookId: 'book-1',
+        date: '2026-09-26',
+        minutes: 45,
+        note: '读到不二法门',
+        createdAt: '2026-09-26T21:00:00.000Z',
+      },
+    ],
     settings: { theme: 'dark' },
   };
 }
@@ -157,6 +167,7 @@ const emptyData = (): BackupData => ({
   dietRecords: [],
   games: [],
   gameSessions: [],
+  readingSessions: [],
 });
 
 describe('导出 / 导入 往返', () => {
@@ -210,7 +221,7 @@ describe('导出 / 导入 往返', () => {
   it('信封结构包含 schemaVersion 与 exportedAt', () => {
     const envelope = buildBackupEnvelope(emptyData(), new Date('2026-09-28T00:00:00.000Z'));
     expect(envelope.app).toBe('life-manager');
-    expect(envelope.schemaVersion).toBe(6);
+    expect(envelope.schemaVersion).toBe(7);
     expect(envelope.exportedAt).toBe('2026-09-28T00:00:00.000Z');
   });
 });
@@ -426,6 +437,31 @@ describe('工时记录的导入兼容', () => {
   });
 });
 
+describe('阅读记录的导入兼容', () => {
+  it('旧备份没有 readingSessions 时该模块视为缺失，覆盖模式也不会清空现有记录', () => {
+    const legacy = sampleData() as Record<string, unknown>;
+    delete legacy.readingSessions;
+    const parsed = parseBackup(JSON.stringify(legacy));
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+
+    expect(parsed.backup.modules.readingSessions).toBeUndefined();
+
+    const plan = planImport(
+      {
+        readingSessions: [
+          { id: 'keep', bookId: 'b', date: '2026-01-01', minutes: 30, note: '', createdAt: 'x' },
+        ],
+      },
+      parsed.backup.modules,
+      'overwrite',
+    );
+    expect(plan.data.readingSessions).toEqual([
+      { id: 'keep', bookId: 'b', date: '2026-01-01', minutes: 30, note: '', createdAt: 'x' },
+    ]);
+  });
+});
+
 describe('导入模式', () => {
   const existing = [{ id: 'a', title: '现有' }];
 
@@ -491,6 +527,7 @@ describe('导入模式', () => {
       plan.data.dietRecords,
       plan.data.games,
       plan.data.gameSessions,
+      plan.data.readingSessions,
     ].reduce((sum, list) => sum + (list?.length ?? 0), 0);
 
     expect(totals.added).toBe(actual);

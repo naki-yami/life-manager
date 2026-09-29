@@ -196,8 +196,8 @@ describe('版本迁移', () => {
     expect(result).toEqual({ tasks: [], futureField: 'keep' });
   });
 
-  it('当前版本号是 7', () => {
-    expect(STORE_VERSION).toBe(7);
+  it('当前版本号是 8', () => {
+    expect(STORE_VERSION).toBe(8);
   });
 
   it('旧项目数据没有 hoursSpent，重新水合时补 0', async () => {
@@ -253,6 +253,40 @@ describe('其它 store', () => {
     expect(record.items.every((item) => Boolean(item.id))).toBe(true);
     expect(useDietStore.getState().getRecordsByDate('2026-09-28')).toHaveLength(1);
     expect(useDietStore.getState().getRecordsByDate('2026-09-29')).toHaveLength(0);
+  });
+
+  it('bookStore：记阅读流水与开始时间', () => {
+    const store = useBookStore.getState();
+    store.addBook('人类简史', '赫拉利', '历史');
+    const id = useBookStore.getState().books[0]!.id;
+
+    expect(useBookStore.getState().books[0]!.startedAt).toBeUndefined();
+    store.updateBookStatus(id, 'reading');
+    const startedAt = useBookStore.getState().books[0]!.startedAt;
+    expect(startedAt).toBeTruthy();
+
+    // 再次改状态再回来，不覆盖第一次的开始时间
+    store.updateBookStatus(id, 'want-to-read');
+    store.updateBookStatus(id, 'reading');
+    expect(useBookStore.getState().books[0]!.startedAt).toBe(startedAt);
+
+    store.addReadingSession(id, '2026-09-28', 45, '第一章');
+    const { sessions } = useBookStore.getState();
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0]!.bookId).toBe(id);
+    expect(sessions[0]!.minutes).toBe(45);
+
+    store.deleteReadingSession(sessions[0]!.id);
+    expect(useBookStore.getState().sessions).toHaveLength(0);
+  });
+
+  it('bookStore：进度页码换算写回百分比', () => {
+    const store = useBookStore.getState();
+    store.addBook('深入理解计算机系统', '', '技术');
+    const id = useBookStore.getState().books[0]!.id;
+    store.updateBook(id, { totalPages: 200, status: 'reading' });
+    store.updateProgress(id, 50);
+    expect(useBookStore.getState().books[0]!.progress).toBe(50);
   });
 
   it('gameStore：成就解锁切换', () => {

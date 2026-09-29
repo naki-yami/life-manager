@@ -9,11 +9,12 @@
  * - 5：devProjects 增加 hoursSpent；新增 dev 的 sessions（工时流水）
  * - 6：devProjects 增加技术栈 / 仓库地址 / 起止日期 / 归档标记
  * - 7：tasks 增加子任务（subtasks）与重复规则（repeat）
+ * - 8：books 增加总页数 / 开始阅读时间；新增 books 的 sessions（阅读流水）
  *
  * 注意：zustand persist 只在「存储里的 version 与当前 version 不一致」时
  * 才调用 migrate。所以结构变更必须靠 bump 版本号触发，不能只改 migrate 函数。
  */
-export const STORE_VERSION = 7;
+export const STORE_VERSION = 8;
 
 /**
  * 统一的状态迁移入口。

@@ -67,6 +67,7 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
         dietRecords: safeRead(() => useDietStore.getState().records, [], '饮食'),
         games: safeRead(() => useGameStore.getState().games, [], '游戏'),
         gameSessions: safeRead(() => useGameStore.getState().sessions, [], '游玩记录'),
+        readingSessions: safeRead(() => useBookStore.getState().sessions, [], '阅读记录'),
         settings: {
           themeMode: safeRead(() => useThemeStore.getState().themeMode, 'system' as const, '主题'),
           density: safeRead(() => useUiStore.getState().density, 'comfortable' as const, '密度'),

@@ -81,6 +81,7 @@ function readAllData(): BackupData {
     dietRecords: useDietStore.getState().records,
     games: useGameStore.getState().games,
     gameSessions: useGameStore.getState().sessions,
+    readingSessions: useBookStore.getState().sessions,
     settings: {
       themeMode: useThemeStore.getState().themeMode,
       density: useUiStore.getState().density,
@@ -102,6 +103,7 @@ function applyPlan(data: Partial<BackupData>): void {
   if (data.dietRecords) useDietStore.getState().replaceRecords(data.dietRecords);
   if (data.games) useGameStore.getState().replaceGames(data.games);
   if (data.gameSessions) useGameStore.getState().replaceSessions(data.gameSessions);
+  if (data.readingSessions) useBookStore.getState().replaceSessions(data.readingSessions);
   const settings = data.settings;
   if (settings) {
     // 旧备份只有二态 theme，按 themeMode 处理
@@ -176,6 +178,7 @@ export const SettingsPage: React.FC = () => {
   const dietCount = useDietStore((state) => state.records.length);
   const gameCount = useGameStore((state) => state.games.length);
   const sessionCount = useGameStore((state) => state.sessions.length);
+  const readingSessionCount = useBookStore((state) => state.sessions.length);
 
   const counts: { module: BackupModule; label: string; count: number }[] = [
     { module: 'tasks', label: MODULE_LABELS.tasks, count: taskCount },
@@ -189,6 +192,7 @@ export const SettingsPage: React.FC = () => {
     { module: 'dietRecords', label: MODULE_LABELS.dietRecords, count: dietCount },
     { module: 'games', label: MODULE_LABELS.games, count: gameCount },
     { module: 'gameSessions', label: MODULE_LABELS.gameSessions, count: sessionCount },
+    { module: 'readingSessions', label: MODULE_LABELS.readingSessions, count: readingSessionCount },
   ];
 
   const totalEntries = counts.reduce((sum, item) => sum + item.count, 0);
