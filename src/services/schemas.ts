@@ -21,8 +21,9 @@ export const APP_ID = 'life-manager';
  * 13：新增「身体指标」模块（体重 / 体脂 / 围度）；同样按缺失处理，不清空现有记录。
  * 14：新增「专注记录」模块，任务增加可选的时间盒字段。
  * 15：新增「复盘」模块（每日 / 每周三个固定问题）。
+ * 16：新增「目标」模块（指标 + 周期 + 目标值，进度现算不落库）。
  */
-export const BACKUP_SCHEMA_VERSION = 15;
+export const BACKUP_SCHEMA_VERSION = 16;
 
 const isoDateString = z.string();
 const percent = z.number().min(0).max(100).catch(0);
@@ -418,6 +419,29 @@ export const reviewSchema = z.object({
   updatedAt: isoDateString.default(() => new Date().toISOString()),
 });
 
+// ---------- 目标 ----------
+/**
+ * 一个目标。
+ *
+ * `metric` 用枚举而不是 `z.string()`：认不出的指标算不出进度，
+ * 与其让它在列表里显示成一行「—」，不如整条丢弃并在导入警告里说清楚
+ * （与复盘 `period` 同一套口径）。
+ */
+export const goalSchema = z.object({
+  id: z.string().min(1),
+  metric: z.enum([
+    'tasks.completed',
+    'focus.minutes',
+    'fitness.sessions',
+    'reading.minutes',
+    'dev.hours',
+    'habit.rate',
+  ]),
+  period: z.enum(['day', 'week', 'month']).default('week'),
+  target: z.number().min(1).max(100000).catch(1).default(1),
+  createdAt: isoDateString.default(() => new Date().toISOString()),
+});
+
 // ---------- 设置 ----------
 export const settingsSchema = z.object({
   /** 新字段（v3）：三态主题 */
@@ -446,6 +470,7 @@ export const backupDataSchema = z.object({
   habits: z.array(habitSchema).default([]),
   focusSessions: z.array(focusSessionSchema).default([]),
   reviews: z.array(reviewSchema).default([]),
+  goals: z.array(goalSchema).default([]),
   settings: settingsSchema.optional(),
 });
 
@@ -468,6 +493,7 @@ export const BACKUP_MODULES = [
   'habits',
   'focusSessions',
   'reviews',
+  'goals',
 ] as const;
 
 export type BackupModule = (typeof BACKUP_MODULES)[number];
@@ -489,4 +515,5 @@ export const MODULE_LABELS: Record<BackupModule, string> = {
   habits: '习惯',
   focusSessions: '专注记录',
   reviews: '复盘',
+  goals: '目标',
 };

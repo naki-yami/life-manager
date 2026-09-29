@@ -10,6 +10,7 @@ import { DevProjectPage } from '../pages/DevProjectPage';
 import { DietPage } from '../pages/DietPage';
 import { FitnessPage } from '../pages/FitnessPage';
 import { GamesPage } from '../pages/GamesPage';
+import { GoalsPage } from '../pages/GoalsPage';
 import { HomePage } from '../pages/HomePage';
 import { NotFoundPage } from '../pages/NotFoundPage';
 import { ReviewPage } from '../pages/ReviewPage';
@@ -23,6 +24,7 @@ import { useDevStore } from '../store/devStore';
 import { useDietStore } from '../store/dietStore';
 import { useFitnessStore } from '../store/fitnessStore';
 import { useGameStore } from '../store/gameStore';
+import { useGoalStore } from '../store/goalStore';
 import { useTaskStore } from '../store/taskStore';
 import { useWritingStore } from '../store/writingStore';
 import { todayKey } from '../utils/date';
@@ -112,6 +114,10 @@ beforeEach(() => {
   const gameId = useGameStore.getState().games[0]!.id;
   useGameStore.getState().addSession(gameId, today, 2, '');
   useGameStore.getState().addAchievement(gameId, '逃出冥界', '击败冥王');
+
+  useGoalStore.setState({ goals: [] });
+  useGoalStore.getState().addGoal({ metric: 'fitness.sessions', period: 'week', target: 4 });
+  useGoalStore.getState().addGoal({ metric: 'reading.minutes', period: 'month', target: 600 });
 });
 
 const PAGES: Array<{ label: string; element: React.ReactElement }> = [
@@ -126,6 +132,7 @@ const PAGES: Array<{ label: string; element: React.ReactElement }> = [
   { label: '游戏', element: <GamesPage /> },
   { label: '统计', element: <StatsPage /> },
   { label: '复盘', element: <ReviewPage /> },
+  { label: '目标', element: <GoalsPage /> },
   { label: '数据与设置', element: <SettingsPage /> },
   { label: '组件预览', element: <UiPage /> },
   { label: '404', element: <NotFoundPage /> },

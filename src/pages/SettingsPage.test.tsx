@@ -16,6 +16,7 @@ import { useDietStore } from '../store/dietStore';
 import { useGameStore } from '../store/gameStore';
 import { useHabitStore } from '../store/habitStore';
 import { useReviewStore } from '../store/reviewStore';
+import { useGoalStore } from '../store/goalStore';
 import { useThemeStore } from '../store/themeStore';
 import { useUiStore } from '../store/uiStore';
 
@@ -29,6 +30,7 @@ beforeEach(() => {
   useGameStore.setState({ games: [] });
   useHabitStore.setState({ habits: [] });
   useReviewStore.setState({ reviews: [] });
+  useGoalStore.setState({ goals: [] });
   useThemeStore.setState({ themeMode: 'system' });
   useUiStore.setState({ density: 'comfortable', sidebarCollapsed: false });
   localStorage.clear();
@@ -67,6 +69,7 @@ const emptyBackup: BackupData = {
   habits: [],
   focusSessions: [],
   reviews: [],
+  goals: [],
   settings: { themeMode: 'system', density: 'comfortable', sidebarCollapsed: false },
 };
 
@@ -137,6 +140,16 @@ describe('SettingsPage', () => {
 
     expect(screen.getByText('复盘')).toBeInTheDocument();
     expect(screen.getByText(/共 1 条数据/)).toBeInTheDocument();
+  });
+
+  it('数据概览会把目标也算进来', () => {
+    useGoalStore.getState().addGoal({ metric: 'fitness.sessions', period: 'week', target: 4 });
+    useGoalStore.getState().addGoal({ metric: 'reading.minutes', period: 'month', target: 600 });
+
+    renderSettings();
+
+    expect(screen.getByText('目标')).toBeInTheDocument();
+    expect(screen.getByText(/共 2 条数据/)).toBeInTheDocument();
   });
 
   it('数据概览列出各模块条数并在标题旁汇总', () => {

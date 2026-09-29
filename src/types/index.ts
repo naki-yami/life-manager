@@ -439,3 +439,39 @@ export interface ReviewEntry {
   createdAt: string;
   updatedAt: string;
 }
+// Goal types
+/** 目标的周期粒度：一天、一周、一月各算各的 */
+export type GoalPeriod = 'day' | 'week' | 'month';
+
+/**
+ * 可设目标的指标。
+ *
+ * 取值必须与 `src/utils/metrics.ts` 的 registry 对齐 —— 那边是取数的唯一实现，
+ * 这里只是把「哪些指标适合当目标」固化成类型：热量日均这类「越低越好」的指标不在其中，
+ * `达成率 = 当前值 / 目标值` 对它不成立。
+ */
+export type GoalMetric =
+  | 'tasks.completed'
+  | 'focus.minutes'
+  | 'fitness.sessions'
+  | 'reading.minutes'
+  | 'dev.hours'
+  | 'habit.rate';
+
+/**
+ * 一个目标。
+ *
+ * 两个取舍：
+ * - **只存「指标 + 周期 + 目标值」，不存进度**：进度每次从各模块流水现算，
+ *   存下来会在数据变动之后悄悄撒谎（与复盘汇总同一个道理）；
+ * - **同一指标同一周期只留一条**：`每周训练 4 次` 和 `每周训练 6 次` 同时存在着，
+ *   只会让人不知道该看哪个，要改就改那一条。
+ */
+export interface Goal {
+  id: string;
+  metric: GoalMetric;
+  period: GoalPeriod;
+  /** 目标值；`habit.rate` 按百分比（1–100） */
+  target: number;
+  createdAt: string;
+}

@@ -42,6 +42,7 @@ import { useHabitStore } from '../store/habitStore';
 import { useBodyStore } from '../store/bodyStore';
 import { useFocusStore } from '../store/focusStore';
 import { useReviewStore } from '../store/reviewStore';
+import { useGoalStore } from '../store/goalStore';
 import { useThemeStore } from '../store/themeStore';
 import { useUiStore } from '../store/uiStore';
 import { BACKUP_MODULES, MODULE_LABELS } from '../services/schemas';
@@ -90,6 +91,7 @@ function readAllData(): BackupData {
     habits: useHabitStore.getState().habits,
     focusSessions: useFocusStore.getState().sessions,
     reviews: useReviewStore.getState().reviews,
+    goals: useGoalStore.getState().goals,
     settings: {
       themeMode: useThemeStore.getState().themeMode,
       density: useUiStore.getState().density,
@@ -116,6 +118,7 @@ function applyPlan(data: Partial<BackupData>): void {
   if (data.habits) useHabitStore.getState().replaceHabits(data.habits);
   if (data.focusSessions) useFocusStore.getState().replaceSessions(data.focusSessions);
   if (data.reviews) useReviewStore.getState().replaceReviews(data.reviews);
+  if (data.goals) useGoalStore.getState().replaceGoals(data.goals);
   const settings = data.settings;
   if (settings) {
     // 旧备份只有二态 theme，按 themeMode 处理
@@ -145,6 +148,7 @@ function resetStores(): void {
   useHabitStore.getState().replaceHabits([]);
   useFocusStore.getState().replaceSessions([]);
   useReviewStore.getState().replaceReviews([]);
+  useGoalStore.getState().replaceGoals([]);
   // 进行中的专注也要停掉：清空数据后还挂着一个秒表，只会让人以为没清干净
   useFocusStore.getState().cancelFocus();
   // 外观也回到默认，避免「清除数据」后还停留在上一次的皮肤
@@ -201,6 +205,7 @@ export const SettingsPage: React.FC = () => {
   const habitCount = useHabitStore((state) => state.habits.length);
   const focusCount = useFocusStore((state) => state.sessions.length);
   const reviewCount = useReviewStore((state) => state.reviews.length);
+  const goalCount = useGoalStore((state) => state.goals.length);
 
   const counts: { module: BackupModule; label: string; count: number }[] = [
     { module: 'tasks', label: MODULE_LABELS.tasks, count: taskCount },
@@ -219,6 +224,7 @@ export const SettingsPage: React.FC = () => {
     { module: 'habits', label: MODULE_LABELS.habits, count: habitCount },
     { module: 'focusSessions', label: MODULE_LABELS.focusSessions, count: focusCount },
     { module: 'reviews', label: MODULE_LABELS.reviews, count: reviewCount },
+    { module: 'goals', label: MODULE_LABELS.goals, count: goalCount },
   ];
 
   const totalEntries = counts.reduce((sum, item) => sum + item.count, 0);

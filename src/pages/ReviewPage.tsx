@@ -119,11 +119,22 @@ export const ReviewPage: React.FC = () => {
           readingSessions,
           dietRecords: mealRecords,
           habits,
+          workSessions,
         },
         start,
         end,
       ),
-    [tasks, focusSessions, workoutRecords, readingSessions, mealRecords, habits, start, end],
+    [
+      tasks,
+      focusSessions,
+      workoutRecords,
+      readingSessions,
+      mealRecords,
+      habits,
+      workSessions,
+      start,
+      end,
+    ],
   );
 
   const stalled = useMemo(

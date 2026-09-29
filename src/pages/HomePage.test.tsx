@@ -14,6 +14,7 @@ import { useGameStore } from '../store/gameStore';
 import { useHabitStore } from '../store/habitStore';
 import { useBodyStore } from '../store/bodyStore';
 import { useFocusStore } from '../store/focusStore';
+import { useGoalStore } from '../store/goalStore';
 import { DASHBOARD_WIDGET_IDS, DEFAULT_DASHBOARD, useUiStore } from '../store/uiStore';
 import { ToastProvider } from '../components/ui';
 import { STORAGE_KEYS } from '../utils/storageKeys';
@@ -40,6 +41,7 @@ beforeEach(() => {
   useHabitStore.setState({ habits: [] });
   useBodyStore.setState({ records: [] });
   useFocusStore.setState({ sessions: [], active: null });
+  useGoalStore.setState({ goals: [] });
   useUiStore.setState({ dashboard: DEFAULT_DASHBOARD.map((widget) => ({ ...widget })) });
 });
 
@@ -544,5 +546,38 @@ describe('HomePage 今日时间轴', () => {
     await userEvent.click(await screen.findByRole('button', { name: '标记完成' }));
 
     expect(useTaskStore.getState().tasks[0]!.status).toBe('completed');
+  });
+});
+
+describe('HomePage 目标达成卡片', () => {
+  it('没有目标时不出这张卡片', () => {
+    renderHome();
+
+    expect(screen.queryByText('目标达成')).not.toBeInTheDocument();
+  });
+
+  it('有目标时显示进度，数字来自各模块记录', () => {
+    useGoalStore.setState({
+      goals: [
+        {
+          id: 'g1',
+          metric: 'fitness.sessions',
+          period: 'week',
+          target: 4,
+          createdAt: '2026-09-01T12:00:00',
+        },
+      ],
+    });
+    useFitnessStore
+      .getState()
+      .addRecord('推日', todayKey(), [{ name: '杠铃卧推', sets: 5, reps: 5, weight: 60 }], '');
+
+    renderHome();
+
+    expect(screen.getByRole('heading', { name: '目标达成' })).toBeInTheDocument();
+    expect(screen.getByText('训练次数')).toBeInTheDocument();
+    // 首页卡片带周期前缀（「每周 · 1 次 / 4 次」），用正则匹配数值部分
+    expect(screen.getByText(/1 次 \/ 4 次/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '管理目标' })).toBeInTheDocument();
   });
 });

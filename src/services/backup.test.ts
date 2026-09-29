@@ -253,6 +253,15 @@ function sampleData(): BackupData {
         updatedAt: '2026-09-27T12:00:00.000Z',
       },
     ],
+    goals: [
+      {
+        id: 'goal-1',
+        metric: 'fitness.sessions',
+        period: 'week',
+        target: 4,
+        createdAt: '2026-09-27T12:00:00.000Z',
+      },
+    ],
     settings: { theme: 'dark' },
   };
 }
@@ -274,6 +283,7 @@ const emptyData = (): BackupData => ({
   habits: [],
   focusSessions: [],
   reviews: [],
+  goals: [],
 });
 
 describe('导出 / 导入 往返', () => {
@@ -331,7 +341,7 @@ describe('导出 / 导入 往返', () => {
   it('信封结构包含 schemaVersion 与 exportedAt', () => {
     const envelope = buildBackupEnvelope(emptyData(), new Date('2026-09-28T00:00:00.000Z'));
     expect(envelope.app).toBe('life-manager');
-    expect(envelope.schemaVersion).toBe(15);
+    expect(envelope.schemaVersion).toBe(16);
     expect(envelope.exportedAt).toBe('2026-09-28T00:00:00.000Z');
   });
 });
@@ -907,6 +917,61 @@ describe('复盘的导入兼容', () => {
   });
 });
 
+describe('目标的导入兼容', () => {
+  const keptGoal = {
+    id: 'keep-goal',
+    metric: 'fitness.sessions' as const,
+    period: 'week' as const,
+    target: 4,
+    createdAt: '2026-09-27T12:00:00.000Z',
+  };
+
+  it('旧备份没有 goals 时该模块视为缺失，覆盖模式也不会清空现有目标', () => {
+    const legacy = sampleData() as Record<string, unknown>;
+    delete legacy.goals;
+
+    const parsed = parseBackup(JSON.stringify(legacy));
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+
+    expect(parsed.backup.modules.goals).toBeUndefined();
+
+    const plan = planImport({ goals: [keptGoal] }, parsed.backup.modules, 'overwrite');
+    expect(plan.data.goals).toEqual([keptGoal]);
+  });
+
+  it('缺周期与创建时间时补默认值，指标与目标值照常保留', () => {
+    const backup = sampleData() as unknown as { goals: Record<string, unknown>[] };
+    delete backup.goals[0]!.period;
+    delete backup.goals[0]!.createdAt;
+
+    const parsed = parseBackup(JSON.stringify(backup));
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+
+    const plan = planImport(emptyData(), parsed.backup.modules, 'merge');
+    expect(plan.data.goals?.[0]).toMatchObject({
+      id: 'goal-1',
+      metric: 'fitness.sessions',
+      period: 'week',
+      target: 4,
+    });
+    expect(plan.data.goals?.[0]?.createdAt).toBeTruthy();
+  });
+
+  it('指标不在枚举里时整条丢弃，并留下解析警告', () => {
+    const backup = sampleData() as unknown as { goals: Record<string, unknown>[] };
+    backup.goals[0]!.metric = 'diet.averageCalories';
+
+    const parsed = parseBackup(JSON.stringify(backup));
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+
+    expect(parsed.backup.modules.goals).toEqual([]);
+    expect(parsed.backup.warnings.some((issue) => issue.path.startsWith('goals'))).toBe(true);
+  });
+});
+
 describe('导入模式', () => {
   const existing = [{ id: 'a', title: '现有' }];
 
@@ -977,6 +1042,7 @@ describe('导入模式', () => {
       plan.data.habits,
       plan.data.focusSessions,
       plan.data.reviews,
+      plan.data.goals,
     ].reduce((sum, list) => sum + (list?.length ?? 0), 0);
 
     expect(totals.added).toBe(actual);

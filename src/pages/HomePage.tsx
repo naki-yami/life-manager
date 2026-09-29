@@ -35,6 +35,7 @@ import {
 } from '../components/ui';
 import { PageHeader } from '../components/layout';
 import { DashboardGrid, type DashboardWidgetView } from '../components/dashboard';
+import { GoalProgressList } from '../components/goals';
 import { DayTimeline, type TimelineEntry } from '../components/timeline/DayTimeline';
 import { FocusTimer, type FocusOption } from '../components/timeline/FocusTimer';
 import { useUndoableRemove } from '../hooks/useUndoableRemove';
@@ -50,6 +51,7 @@ import { useHabitStore } from '../store/habitStore';
 import { useBodyStore } from '../store/bodyStore';
 import { useFocusStore } from '../store/focusStore';
 import { useUiStore } from '../store/uiStore';
+import { useGoalStore } from '../store/goalStore';
 import {
   dayKeyOf,
   daysBetween,
@@ -85,6 +87,8 @@ import {
   timeboxedTasks,
 } from '../utils/focus';
 import { parseQuickTask } from '../utils/quickParse';
+import { goalProgress, sortGoals, summarizeGoals } from '../utils/goals';
+import type { MetricSnapshot } from '../utils/metrics';
 import type { Priority, Task } from '../types';
 
 const PRIORITY_ORDER: Record<Priority, number> = { high: 0, medium: 1, low: 2 };
@@ -158,6 +162,9 @@ export const HomePage: React.FC = () => {
   const habits = useHabitStore((state) => state.habits);
   const toggleHabitLog = useHabitStore((state) => state.toggleHabitLog);
   const bodyRecords = useBodyStore((state) => state.records);
+  const readingSessions = useBookStore((state) => state.sessions);
+  const workSessions = useDevStore((state) => state.sessions);
+  const goals = useGoalStore((state) => state.goals);
 
   const focusSessions = useFocusStore((state) => state.sessions);
   const activeFocus = useFocusStore((state) => state.active);
@@ -235,6 +242,31 @@ export const HomePage: React.FC = () => {
   ).length;
 
   const streak = currentStreak(activitySeries, today);
+
+  /** 目标达成：数字全走 metrics registry，与复盘页共用同一段取数 */
+  const goalProgressList = useMemo(() => {
+    const snapshot: MetricSnapshot = {
+      tasks,
+      focusSessions,
+      fitnessRecords: workoutRecords,
+      readingSessions,
+      dietRecords: mealRecords,
+      habits,
+      workSessions,
+    };
+    return sortGoals(goals).map((goal) => goalProgress(goal, snapshot, today));
+  }, [
+    goals,
+    tasks,
+    focusSessions,
+    workoutRecords,
+    readingSessions,
+    mealRecords,
+    habits,
+    workSessions,
+    today,
+  ]);
+  const goalSummary = summarizeGoals(goalProgressList);
 
   /** 今日时间轴上已排的任务（已按开始时间排好） */
   const planEntries = useMemo<TimelineEntry[]>(
@@ -863,6 +895,27 @@ export const HomePage: React.FC = () => {
           </CardBody>
         </Card>
       ) : null,
+    },
+    {
+      id: 'goals',
+      title: '目标达成',
+      content:
+        goalProgressList.length > 0 ? (
+          <Card>
+            <CardHeader
+              title="目标达成"
+              subtitle={`${goalSummary.reached}/${goalSummary.total} 个已达成 · 数字从各模块记录现算`}
+              action={
+                <Button variant="ghost" size="sm" onClick={() => navigate('/goals')}>
+                  管理目标
+                </Button>
+              }
+            />
+            <CardBody>
+              <GoalProgressList items={goalProgressList.slice(0, 4)} />
+            </CardBody>
+          </Card>
+        ) : null,
     },
     {
       id: 'activity',

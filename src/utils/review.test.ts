@@ -11,15 +11,14 @@ import type {
   WorkSession,
   WritingProject,
 } from '../types';
-import { addDays, formatDayLabel } from './date';
+import { addDays, daysInRange, formatDayLabel } from './date';
+import { habitProgress } from './habits';
 import {
   REVIEW_ANSWERS,
   REVIEW_PERIODS,
   REVIEW_PERIOD_LABELS,
   STALLED_DAYS,
-  daysInRange,
   findReview,
-  habitProgress,
   hasAnswer,
   periodDays,
   periodEndOf,
@@ -356,6 +355,7 @@ describe('reviewMetrics 自动汇总', () => {
         },
       }),
     ],
+    workSessions: [],
   };
 
   const metrics = reviewMetrics(snapshot, WEEK_START, WEEK_END);
@@ -432,6 +432,7 @@ describe('reviewMetrics 自动汇总', () => {
         readingSessions: [],
         dietRecords: [],
         habits: [],
+        workSessions: [],
       },
       WEEK_START,
       WEEK_END,

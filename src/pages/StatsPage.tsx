@@ -14,6 +14,7 @@ import {
 import { BarChart, Heatmap, Sparkline } from '../components/charts';
 import { ProgressBar } from '../components/ui';
 import { PageHeader } from '../components/layout';
+import { GoalProgressList } from '../components/goals';
 import { useTaskStore } from '../store/taskStore';
 import { useBookStore } from '../store/bookStore';
 import { useDevStore } from '../store/devStore';
@@ -21,6 +22,9 @@ import { useWritingStore } from '../store/writingStore';
 import { useFitnessStore } from '../store/fitnessStore';
 import { useDietStore } from '../store/dietStore';
 import { useGameStore } from '../store/gameStore';
+import { useFocusStore } from '../store/focusStore';
+import { useHabitStore } from '../store/habitStore';
+import { useGoalStore } from '../store/goalStore';
 import {
   activeDays,
   averageOf,
@@ -32,6 +36,8 @@ import {
   sumSeries,
 } from '../utils/stats';
 import { dayKeyOf, formatNumber, formatShortDate, todayKey } from '../utils/date';
+import { goalProgress, sortGoals, summarizeGoals } from '../utils/goals';
+import type { MetricSnapshot } from '../utils/metrics';
 
 const WINDOW_DAYS = 30;
 const CHART_DAYS = 14;
@@ -48,8 +54,36 @@ export const StatsPage: React.FC = () => {
   const devSessions = useDevStore((state) => state.sessions);
   const readingSessions = useBookStore((state) => state.sessions);
   const gameSessions = useGameStore((state) => state.sessions);
+  const focusSessions = useFocusStore((state) => state.sessions);
+  const habits = useHabitStore((state) => state.habits);
+  const goals = useGoalStore((state) => state.goals);
 
   const today = todayKey();
+
+  /** 目标达成：与首页、复盘共用 metrics registry，三处不会算出不同的数 */
+  const goalProgressList = useMemo(() => {
+    const snapshot: MetricSnapshot = {
+      tasks,
+      focusSessions,
+      fitnessRecords,
+      readingSessions,
+      dietRecords,
+      habits,
+      workSessions: devSessions,
+    };
+    return sortGoals(goals).map((goal) => goalProgress(goal, snapshot, today));
+  }, [
+    goals,
+    tasks,
+    focusSessions,
+    fitnessRecords,
+    readingSessions,
+    dietRecords,
+    habits,
+    devSessions,
+    today,
+  ]);
+  const goalSummary = summarizeGoals(goalProgressList);
 
   const taskSeries = useMemo(
     () =>
@@ -272,6 +306,18 @@ export const StatsPage: React.FC = () => {
               <Heatmap data={activitySeries} label="最近 30 天活动热力图" />
             </CardBody>
           </Card>
+
+          {goalProgressList.length > 0 && (
+            <Card>
+              <CardHeader
+                title="目标达成"
+                subtitle={`${goalSummary.reached}/${goalSummary.total} 个已达成 · 进度现算，不做快照`}
+              />
+              <CardBody>
+                <GoalProgressList items={goalProgressList} className="lg:grid lg:grid-cols-2 lg:gap-x-8 lg:space-y-0" />
+              </CardBody>
+            </Card>
+          )}
 
           <div className="grid gap-4 lg:grid-cols-2">
             <Card>

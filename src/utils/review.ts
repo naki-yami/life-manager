@@ -1,26 +1,13 @@
-import type {
-  DevProject,
-  FocusSession,
-  Habit,
-  MealRecord,
-  ReadingSession,
-  ReviewEntry,
-  ReviewPeriod,
-  Task,
-  WorkoutRecord,
-  WorkSession,
-  WritingProject,
-} from '../types';
-import { addDays, dayKeyOf, daysBetween, formatDayLabel, isDayKey } from './date';
+import type { DevProject, ReviewEntry, ReviewPeriod, WorkSession, WritingProject } from '../types';
+import { addDays, dayKeyOf, daysBetween, daysInRange, formatDayLabel, isDayKey } from './date';
+import { habitProgress, weekStartOf } from './habits';
 import {
-  habitCreatedDay,
-  isHabitDoneOn,
-  isHabitScheduledOn,
-  weekStartOf,
-  weeklyDoneCount,
-  weeklyTarget,
-} from './habits';
-import { formatFocusDuration } from './focus';
+  METRICS,
+  metricValue,
+  type MetricId,
+  type MetricRange,
+  type MetricSnapshot,
+} from './metrics';
 
 /**
  * 复盘的纯计算。
@@ -113,14 +100,11 @@ export function hasAnswer(entry: ReviewEntry): boolean {
 
 // ---------------------------------------------------------------- 自动汇总
 
-export interface ReviewSnapshot {
-  tasks: readonly Task[];
-  focusSessions: readonly FocusSession[];
-  fitnessRecords: readonly WorkoutRecord[];
-  readingSessions: readonly ReadingSession[];
-  dietRecords: readonly MealRecord[];
-  habits: readonly Habit[];
-}
+/**
+ * 复盘要用到的流水，与指标 registry 看到的是同一份。
+ * 直接复用 `MetricSnapshot`，保证「复盘里的数」和「目标里的数」出自同一段代码。
+ */
+export type ReviewSnapshot = MetricSnapshot;
 
 /** 与 `StatCard` 的 `StatTone` 结构一致；写成局部字面量让 utils 不必依赖组件层 */
 export type ReviewTone = 'default' | 'accent' | 'success' | 'warning' | 'danger';
@@ -134,144 +118,91 @@ export interface ReviewMetric {
   tone: ReviewTone;
 }
 
-/** 起止日之间的每一天（含首含尾）；比按周期推导更抗脏输入 */
-export function daysInRange(start: string, end: string): string[] {
-  const span = (daysBetween(start, end) ?? 0) + 1;
-  if (span <= 0) return [];
-  return Array.from({ length: span }, (_, offset) => addDays(start, offset));
-}
-
 const within = (day: string, start: string, end: string): boolean => day >= start && day <= end;
 
-export interface HabitProgress {
-  /** 周期内达标的次数 */
-  done: number;
-  /** 周期内到期的次数 */
-  due: number;
-  /** 0–1；没有到期项时为 0 */
-  rate: number;
-}
-
 /**
- * 周期内的习惯完成率。
+ * 周期内的自动汇总：六个数字，够看清这一段时间花在哪。
  *
- * 「每周 N 次」按**整周**结算：只有整个自然周都落在周期里才算这一周的份额，
- * 单日复盘里它不参与 —— 一天的数量说明不了这一周，硬算只会让完成率乱跳。
+ * 数字一律来自 `metrics.ts` 的 registry —— 「这周训练了几次」在复盘、目标、统计三处
+ * 各算一遍，迟早会出现两个不一样的结果。这里只补 registry 不关心的部分：
+ * footer 文案与配色。
  */
-export function habitProgress(habits: readonly Habit[], days: readonly string[]): HabitProgress {
-  let done = 0;
-  let due = 0;
-
-  for (const habit of habits) {
-    const created = habitCreatedDay(habit);
-    const buckets = new Map<string, string[]>();
-
-    for (const day of days) {
-      if (day < created) continue;
-      const bucket = habit.schedule.kind === 'weekly' ? weekStartOf(day) : day;
-      const list = buckets.get(bucket);
-      if (list) list.push(day);
-      else buckets.set(bucket, [day]);
-    }
-
-    for (const [bucket, list] of buckets) {
-      if (habit.schedule.kind === 'weekly') {
-        if (list.length < 7) continue;
-        const target = weeklyTarget(habit.schedule);
-        due += target;
-        done += Math.min(weeklyDoneCount(habit, bucket), target);
-        continue;
-      }
-      for (const day of list) {
-        if (!isHabitScheduledOn(habit, day)) continue;
-        due += 1;
-        if (isHabitDoneOn(habit, day)) done += 1;
-      }
-    }
-  }
-
-  return { done, due, rate: due === 0 ? 0 : done / due };
-}
-
-/** 周期内的自动汇总：六个数字，够看清这一段时间花在哪 */
 export function reviewMetrics(
   snapshot: ReviewSnapshot,
   start: string,
   end: string,
 ): ReviewMetric[] {
-  const completed = snapshot.tasks.filter((task) => {
-    if (task.status !== 'completed') return false;
+  const range: MetricRange = { start, end };
+  const show = (id: MetricId): string => METRICS[id].format(metricValue(id, snapshot, range));
+
+  const urgentDone = snapshot.tasks.filter((task) => {
+    if (task.status !== 'completed' || task.priority !== 'high') return false;
     const day = dayKeyOf(task.completedAt);
     return day !== undefined && within(day, start, end);
-  });
-  const urgentDone = completed.filter((task) => task.priority === 'high').length;
+  }).length;
 
   const focus = snapshot.focusSessions.filter((session) => within(session.date, start, end));
-  const focusTotal = focus.reduce((sum, session) => sum + session.minutes, 0);
 
-  const workouts = snapshot.fitnessRecords.filter((record) => within(record.date, start, end));
-  const sets = workouts.reduce(
-    (sum, record) => sum + record.exercises.reduce((count, item) => count + item.sets, 0),
-    0,
-  );
+  const sets = snapshot.fitnessRecords
+    .filter((record) => within(record.date, start, end))
+    .reduce((sum, record) => sum + record.exercises.reduce((n, item) => n + item.sets, 0), 0);
 
   const reading = snapshot.readingSessions.filter((session) => within(session.date, start, end));
-  const readingTotal = reading.reduce((sum, session) => sum + session.minutes, 0);
 
-  const meals = snapshot.dietRecords.filter((record) => within(record.date, start, end));
-  const mealDays = new Set(meals.map((record) => record.date));
-  const calories = meals.reduce((sum, record) => sum + record.totalCalories, 0);
-  // 只按「记过的天数」平均：漏记的那天不是 0 卡，算进去等于凭空拉低
-  const averageCalories = mealDays.size > 0 ? Math.round(calories / mealDays.size) : 0;
+  const mealDays = new Set(
+    snapshot.dietRecords
+      .filter((record) => within(record.date, start, end))
+      .map((record) => record.date),
+  );
 
   const habit = habitProgress(snapshot.habits, daysInRange(start, end));
 
   return [
     {
       key: 'tasks',
-      label: '完成任务',
-      value: String(completed.length),
-      unit: '件',
+      label: METRICS['tasks.completed'].label,
+      value: show('tasks.completed'),
+      unit: METRICS['tasks.completed'].unit,
       footer: urgentDone > 0 ? `其中紧急 ${urgentDone} 件` : '没有紧急任务',
       tone: 'success',
     },
     {
       key: 'focus',
-      label: '专注时长',
-      value: focusTotal > 0 ? formatFocusDuration(focusTotal) : '0 分钟',
-      unit: '',
+      label: METRICS['focus.minutes'].label,
+      value: show('focus.minutes'),
+      unit: METRICS['focus.minutes'].unit,
       footer: focus.length > 0 ? `共 ${focus.length} 次专注` : '这一段时间没有计时',
       tone: 'accent',
     },
     {
       key: 'workout',
-      label: '训练次数',
-      value: String(workouts.length),
-      unit: '次',
+      label: METRICS['fitness.sessions'].label,
+      value: show('fitness.sessions'),
+      unit: METRICS['fitness.sessions'].unit,
       footer: sets > 0 ? `累计 ${sets} 组` : '还没有训练记录',
       tone: 'warning',
     },
     {
       key: 'reading',
-      label: '阅读时长',
-      value: readingTotal > 0 ? formatFocusDuration(readingTotal) : '0 分钟',
-      unit: '',
+      label: METRICS['reading.minutes'].label,
+      value: show('reading.minutes'),
+      unit: METRICS['reading.minutes'].unit,
       footer: reading.length > 0 ? `共 ${reading.length} 次阅读` : '这一段时间没有阅读',
       tone: 'accent',
     },
     {
       key: 'diet',
-      label: '热量日均',
-      value: String(averageCalories),
-      unit: 'kcal',
+      label: METRICS['diet.averageCalories'].label,
+      value: show('diet.averageCalories'),
+      unit: METRICS['diet.averageCalories'].unit,
       footer: mealDays.size > 0 ? `按记过的 ${mealDays.size} 天算` : '还没有饮食记录',
       tone: 'danger',
     },
     {
       key: 'habits',
-      label: '习惯完成率',
-      value: String(Math.round(habit.rate * 100)),
-      unit: '%',
+      label: METRICS['habit.rate'].label,
+      value: show('habit.rate'),
+      unit: METRICS['habit.rate'].unit,
       footer: habit.due > 0 ? `${habit.done}/${habit.due} 次到期达成` : '这一段时间没有到期习惯',
       tone: habit.rate >= 0.8 ? 'success' : habit.rate >= 0.4 ? 'accent' : 'warning',
     },

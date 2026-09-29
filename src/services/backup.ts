@@ -21,6 +21,7 @@ import {
   focusSessionSchema,
   gameSchema,
   gameSessionSchema,
+  goalSchema,
   habitSchema,
   readingSessionSchema,
   mealRecordSchema,
@@ -159,6 +160,7 @@ export function parseBackup(
   modules.habits = pick(habitSchema, 'habits');
   modules.focusSessions = pick(focusSessionSchema, 'focusSessions');
   modules.reviews = pick(reviewSchema, 'reviews');
+  modules.goals = pick(goalSchema, 'goals');
 
   const settings = settingsSchema.safeParse(source.settings);
   if (settings.success) modules.settings = settings.data;
@@ -267,6 +269,7 @@ export function planImport(
   const habits = merge('habits', current.habits ?? []);
   const focusSessions = merge('focusSessions', current.focusSessions ?? []);
   const reviews = merge('reviews', current.reviews ?? []);
+  const goals = merge('goals', current.goals ?? []);
 
   const count = (incoming: unknown[] | undefined) => (incoming ?? []).length;
 
@@ -288,6 +291,7 @@ export function planImport(
       habits: habits.items,
       focusSessions: focusSessions.items,
       reviews: reviews.items,
+      goals: goals.items,
       settings: backup.settings,
     },
     stats: {
@@ -351,6 +355,7 @@ export function planImport(
         added: reviews.added,
         skipped: reviews.skipped,
       },
+      goals: { incoming: count(backup.goals), added: goals.added, skipped: goals.skipped },
     },
   };
 }

@@ -31,6 +31,14 @@ describe('navItems', () => {
     expect(new Set(paths).size).toBe(paths.length);
   });
 
+  it('目标页挂在主导航上，命令面板也能按「目标 / 达成率」搜到', () => {
+    const goals = findNavItem('/goals');
+
+    expect(goals).toMatchObject({ label: '目标', group: 'main' });
+    expect(goals?.keywords).toContain('目标');
+    expect(goals?.keywords).toContain('达成率');
+  });
+
   it('复盘页挂在主导航上，命令面板也能按「复盘 / 周报」搜到', () => {
     const review = findNavItem('/review');
 

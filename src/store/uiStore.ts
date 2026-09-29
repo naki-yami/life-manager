@@ -19,6 +19,7 @@ export type DashboardWidgetId =
   | 'memos'
   | 'habits'
   | 'body'
+  | 'goals'
   | 'activity'
   | 'modules';
 
@@ -40,6 +41,7 @@ export const DASHBOARD_WIDGET_IDS: readonly DashboardWidgetId[] = [
   'memos',
   'habits',
   'body',
+  'goals',
   'activity',
   'modules',
 ];
@@ -48,7 +50,7 @@ export const DASHBOARD_WIDGET_SIZES: readonly DashboardWidgetSize[] = ['sm', 'md
 
 /**
  * 默认排布：统计整行 → 今日时间轴整行（时间轴 + 专注计时）→ 快速添加 + 今日聚焦
- * → 待办 + 备忘 → 习惯 + 身体指标 → 热力图 → 模块概览
+ * → 待办 + 备忘 → 习惯 + 身体指标 → 目标达成 + 热力图 → 模块概览
  */
 export const DEFAULT_DASHBOARD: readonly DashboardWidget[] = [
   { id: 'stats', size: 'lg', hidden: false },
@@ -59,6 +61,7 @@ export const DEFAULT_DASHBOARD: readonly DashboardWidget[] = [
   { id: 'memos', size: 'sm', hidden: false },
   { id: 'habits', size: 'md', hidden: false },
   { id: 'body', size: 'sm', hidden: false },
+  { id: 'goals', size: 'md', hidden: false },
   { id: 'activity', size: 'lg', hidden: false },
   { id: 'modules', size: 'lg', hidden: false },
 ];

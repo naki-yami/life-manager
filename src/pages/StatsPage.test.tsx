@@ -11,6 +11,7 @@ import { useWritingStore } from '../store/writingStore';
 import { useFitnessStore } from '../store/fitnessStore';
 import { useDietStore } from '../store/dietStore';
 import { useGameStore } from '../store/gameStore';
+import { useGoalStore } from '../store/goalStore';
 import { addDays, todayKey } from '../utils/date';
 
 const renderStats = () =>
@@ -41,6 +42,7 @@ beforeEach(() => {
   useFitnessStore.setState({ plans: [], records: [] });
   useDietStore.setState({ records: [] });
   useGameStore.setState({ games: [], sessions: [] });
+  useGoalStore.setState({ goals: [] });
 });
 
 describe('StatsPage', () => {
@@ -206,5 +208,28 @@ describe('StatsPage', () => {
     // 工时趋势卡出现
     expect(screen.getByText('工时趋势')).toBeInTheDocument();
     expect(screen.getByRole('img', { name: /近 8 周每周投入工时/ })).toBeInTheDocument();
+  });
+
+  it('有目标时单列一张达成卡片，进度与首页同源', () => {
+    useGoalStore.setState({
+      goals: [
+        {
+          id: 'g1',
+          metric: 'fitness.sessions',
+          period: 'week',
+          target: 4,
+          createdAt: '2026-09-01T12:00:00',
+        },
+      ],
+    });
+    useFitnessStore.getState().addRecord('推日', todayKey(), workout, '');
+
+    renderStats();
+
+    expect(screen.getByText('目标达成')).toBeInTheDocument();
+    expect(screen.getByText('训练次数')).toBeInTheDocument();
+    // 统计页同样带周期前缀（「每周 · 1 次 / 4 次」）
+    expect(screen.getByText(/1 次 \/ 4 次/)).toBeInTheDocument();
+    expect(screen.getByText('0/1 个已达成', { exact: false })).toBeInTheDocument();
   });
 });

@@ -28,6 +28,7 @@ const HabitsPage = lazy(() =>
 const ReviewPage = lazy(() =>
   import('./pages/ReviewPage').then((m) => ({ default: m.ReviewPage })),
 );
+const GoalsPage = lazy(() => import('./pages/GoalsPage').then((m) => ({ default: m.GoalsPage })));
 const SettingsPage = lazy(() =>
   import('./pages/SettingsPage').then((m) => ({ default: m.SettingsPage })),
 );
@@ -54,6 +55,7 @@ const App: React.FC = () => {
             <Route path="/stats" element={<StatsPage />} />
             <Route path="/habits" element={<HabitsPage />} />
             <Route path="/review" element={<ReviewPage />} />
+            <Route path="/goals" element={<GoalsPage />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/ui" element={<UiPage />} />
             <Route path="*" element={<NotFoundPage />} />

@@ -11,6 +11,7 @@ import {
   PenTool,
   Settings,
   Target,
+  Trophy,
   UtensilsCrossed,
   type LucideIcon,
 } from 'lucide-react';
@@ -116,6 +117,14 @@ export const NAV_ITEMS: NavItem[] = [
     description: '每日 / 每周回顾：数字自动汇总，判断留给自己写',
     icon: NotebookPen,
     keywords: ['review', 'retro', 'fupan', '复盘', '周报', '总结', '回顾'],
+    group: 'main',
+  },
+  {
+    path: '/goals',
+    label: '目标',
+    description: '给指标定个数字，达成率从记录里自动算',
+    icon: Trophy,
+    keywords: ['goals', 'goal', 'mubiao', '目标', '达成率', '打卡'],
     group: 'main',
   },
   {

@@ -277,3 +277,55 @@ export function goalLabel(habit: Habit): string {
   const unit = habit.unit.trim();
   return unit === '' ? `${habitTarget(habit)} 次` : `${habitTarget(habit)} ${unit}`;
 }
+
+export interface HabitProgress {
+  /** 区间内达标的次数 */
+  done: number;
+  /** 区间内到期的次数 */
+  due: number;
+  /** 0–1；没有到期项时为 0 */
+  rate: number;
+}
+
+/**
+ * 一段日期里的习惯完成率。
+ *
+ * 「每周 N 次」按**整周**结算：只有整个自然周都落在区间里才算这一周的份额，
+ * 单日区间里它不参与 —— 一天的数量说明不了这一周，硬算只会让完成率乱跳。
+ *
+ * 复盘与目标共用这一份实现：同一个「习惯完成率」在两处不该是两个数。
+ */
+export function habitProgress(habits: readonly Habit[], days: readonly string[]): HabitProgress {
+  let done = 0;
+  let due = 0;
+
+  for (const habit of habits) {
+    const created = habitCreatedDay(habit);
+    const buckets = new Map<string, string[]>();
+
+    for (const day of days) {
+      if (day < created) continue;
+      const bucket = habit.schedule.kind === 'weekly' ? weekStartOf(day) : day;
+      const list = buckets.get(bucket);
+      if (list) list.push(day);
+      else buckets.set(bucket, [day]);
+    }
+
+    for (const [bucket, list] of buckets) {
+      if (habit.schedule.kind === 'weekly') {
+        if (list.length < 7) continue;
+        const target = weeklyTarget(habit.schedule);
+        due += target;
+        done += Math.min(weeklyDoneCount(habit, bucket), target);
+        continue;
+      }
+      for (const day of list) {
+        if (!isHabitScheduledOn(habit, day)) continue;
+        due += 1;
+        if (isHabitDoneOn(habit, day)) done += 1;
+      }
+    }
+  }
+
+  return { done, due, rate: due === 0 ? 0 : done / due };
+}

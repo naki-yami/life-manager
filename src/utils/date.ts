@@ -132,3 +132,15 @@ export function daysBetween(from: string, to: string): number | null {
   if (fromMs === null || toMs === null) return null;
   return Math.round((toMs - fromMs) / 86_400_000);
 }
+
+/**
+ * 起止日之间的每一天（含首含尾）。
+ *
+ * 按 `daysBetween` 推导而不是按星期几循环，脏输入（反向区间、非法日期）只会得到空数组，
+ * 不会绕出一个死循环。
+ */
+export function daysInRange(start: string, end: string): string[] {
+  const span = (daysBetween(start, end) ?? 0) + 1;
+  if (span <= 0) return [];
+  return Array.from({ length: span }, (_, offset) => addDays(start, offset));
+}
