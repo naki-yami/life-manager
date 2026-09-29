@@ -30,11 +30,11 @@ import {
   TagEditor,
   TagInput,
 } from '../components/ui';
-import { MasterDetail, PageHeader, Toolbar } from '../components/layout';
+import { ListEmptyState, MasterDetail, PageHeader, Toolbar } from '../components/layout';
 import { useBookStore } from '../store/bookStore';
+import { useEntityList } from '../hooks/useEntityList';
 import { useUndoableRemove } from '../hooks/useUndoableRemove';
 import { BarChart } from '../components/charts';
-import { filterByKeyword } from '../utils/search';
 import { percentOf, seriesByWeek } from '../utils/stats';
 import {
   dayKeyOf,
@@ -78,6 +78,16 @@ const STATUS_TONE: Record<BookStatus, 'default' | 'accent' | 'success'> = {
   finished: 'success',
 };
 
+/** 搜索时参与匹配的字段；模块级常量，引用稳定，useEntityList 的缓存才不会白费 */
+const bookSearchFields = (book: Book): string[] => [
+  book.title,
+  book.author,
+  book.category,
+  ...book.tags,
+];
+
+const bookStatusOf = (book: Book): BookStatus => book.status;
+
 const FILTER_OPTIONS: Array<{ value: Filter; label: string }> = [
   { value: 'all', label: '全部' },
   { value: 'want-to-read', label: '想读' },
@@ -111,8 +121,7 @@ export const BooksPage: React.FC = () => {
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [noteInput, setNoteInput] = useState('');
   const [noteError, setNoteError] = useState<string | undefined>();
-  const [keyword, setKeyword] = useState('');
-  const [filter, setFilter] = useState<Filter>('all');
+
   const [form, setForm] = useState({ title: '', author: '', category: '', tags: [] as string[] });
   const [showSessionModal, setShowSessionModal] = useState(false);
   const [pendingSessionId, setPendingSessionId] = useState<string | null>(null);
@@ -124,8 +133,21 @@ export const BooksPage: React.FC = () => {
   }>({ bookId: '', date: todayKey(), minutes: 30, note: '' });
   const [notePage, setNotePage] = useState<number | ''>('');
 
-  const countOf = (status: BookStatus): number =>
-    books.filter((book) => book.status === status).length;
+  /** 关键词 + 状态筛选 + 计数 + 「是空书单还是没筛出来」，六个列表页共用同一份实现 */
+  const {
+    keyword,
+    setKeyword,
+    filter,
+    setFilter,
+    visible: visibleBooks,
+    countOf,
+    filteredOut,
+    clearFilters,
+  } = useEntityList<Book, BookStatus>({
+    items: books,
+    searchFields: bookSearchFields,
+    statusOf: bookStatusOf,
+  });
 
   const today = todayKey();
   const totalMinutes = sessions.reduce((sum, session) => sum + session.minutes, 0);
@@ -206,15 +228,6 @@ export const BooksPage: React.FC = () => {
     updateProgress(book.id, Math.round((clamped / book.totalPages) * 1000) / 10);
   };
 
-  const visibleBooks = useMemo(() => {
-    const byStatus = filter === 'all' ? books : books.filter((book) => book.status === filter);
-    return filterByKeyword(byStatus, keyword, (book) => [
-      book.title,
-      book.author,
-      book.category,
-      ...book.tags,
-    ]);
-  }, [books, filter, keyword]);
 
   const currentYear = new Date().getFullYear();
   const finishedThisYear = books.filter(
@@ -473,41 +486,27 @@ export const BooksPage: React.FC = () => {
               onChange={setFilter}
               options={FILTER_OPTIONS.map((option) => ({
                 ...option,
-                count: option.value === 'all' ? books.length : countOf(option.value),
+                count: countOf(option.value),
               }))}
             />
           }
         />
 
         {visibleBooks.length === 0 ? (
-          <Card>
-            <EmptyState
-              icon={<BookOpen size={22} aria-hidden />}
-              title={books.length === 0 ? '书单还是空的' : '没有符合条件的书'}
-              description={
-                books.length === 0
-                  ? '把想读的书加进来，之后可以记录进度和笔记。'
-                  : '换个关键词，或者切换上面的状态筛选。'
-              }
-              action={
-                books.length === 0 ? (
-                  <Button icon={<Plus size={16} aria-hidden />} onClick={() => setShowAddModal(true)}>
-                    添加书籍
-                  </Button>
-                ) : (
-                  <Button
-                    variant="secondary"
-                    onClick={() => {
-                      setKeyword('');
-                      setFilter('all');
-                    }}
-                  >
-                    清除筛选
-                  </Button>
-                )
-              }
-            />
-          </Card>
+          <ListEmptyState
+            icon={<BookOpen size={22} aria-hidden />}
+            filtered={filteredOut}
+            emptyTitle="书单还是空的"
+            emptyDescription="把想读的书加进来，之后可以记录进度和笔记。"
+            emptyAction={
+              <Button icon={<Plus size={16} aria-hidden />} onClick={() => setShowAddModal(true)}>
+                添加书籍
+              </Button>
+            }
+            filteredTitle="没有符合条件的书"
+            filteredDescription="换个关键词，或者切换上面的状态筛选。"
+            onClearFilters={clearFilters}
+          />
         ) : (
           <ul className="grid gap-4">
             {visibleBooks.map((book) => (

@@ -21,11 +21,11 @@ import {
   TagInput,
   Textarea,
 } from '../components/ui';
-import { MasterDetail, PageHeader, Toolbar } from '../components/layout';
+import { ListEmptyState, MasterDetail, PageHeader, Toolbar } from '../components/layout';
 import { BarChart } from '../components/charts';
 import { useGameStore } from '../store/gameStore';
+import { useEntityList } from '../hooks/useEntityList';
 import { useUndoableRemove } from '../hooks/useUndoableRemove';
-import { filterByKeyword } from '../utils/search';
 import {
   formatDuration,
   formatMonthLabel,
@@ -55,6 +55,17 @@ const STATUS_OPTIONS = (Object.keys(STATUS_LABEL) as GameStatus[]).map((value) =
   value,
   label: STATUS_LABEL[value],
 }));
+
+/** 搜索时参与匹配的字段；模块级常量，引用稳定，useEntityList 的缓存才不会白费 */
+const gameSearchFields = (game: Game): string[] => [
+  game.name,
+  game.platform,
+  game.notes,
+  ...game.tags,
+  ...game.achievements.map((achievement) => achievement.name),
+];
+
+const gameStatusOf = (game: Game): GameStatus => game.status;
 
 const FILTER_OPTIONS: Array<{ value: Filter; label: string }> = [
   { value: 'all', label: '全部' },
@@ -112,8 +123,22 @@ export const GamesPage: React.FC = () => {
   const undoableRemove = useUndoableRemove();
   const tagSuggestions = useTagSuggestions();
 
-  const [keyword, setKeyword] = useState('');
-  const [filter, setFilter] = useState<Filter>('all');
+  /** 关键词 + 状态筛选 + 计数 + 「是空库还是没筛出来」，六个列表页共用同一份实现 */
+  const {
+    keyword,
+    setKeyword,
+    filter,
+    setFilter,
+    visible: visibleGames,
+    countOf,
+    filteredOut,
+    clearFilters,
+  } = useEntityList<Game, GameStatus>({
+    items: games,
+    searchFields: gameSearchFields,
+    statusOf: gameStatusOf,
+  });
+
   const [showAddModal, setShowAddModal] = useState(false);
   useNewEntryShortcut(() => setShowAddModal(true));
 
@@ -141,9 +166,6 @@ export const GamesPage: React.FC = () => {
     hours: number | '';
     note: string;
   }>({ gameId: '', date: todayKey(), hours: 1, note: '' });
-
-  const countOf = (status: GameStatus): number =>
-    games.filter((game) => game.status === status).length;
 
   const totalHours = games.reduce((sum, game) => sum + game.hoursPlayed, 0);
 
@@ -183,16 +205,6 @@ export const GamesPage: React.FC = () => {
     [sessions],
   );
 
-  const visibleGames = useMemo(() => {
-    const byStatus = filter === 'all' ? games : games.filter((game) => game.status === filter);
-    return filterByKeyword(byStatus, keyword, (game) => [
-      game.name,
-      game.platform,
-      game.notes,
-      ...game.tags,
-      ...game.achievements.map((achievement) => achievement.name),
-    ]);
-  }, [games, filter, keyword]);
 
   const detailGame = games.find((game) => game.id === detail?.gameId) ?? null;
   /** 详情栏标题：宽屏是卡片标题，窄屏是抽屉的可访问名称 */
@@ -541,44 +553,27 @@ export const GamesPage: React.FC = () => {
               onChange={setFilter}
               options={FILTER_OPTIONS.map((option) => ({
                 ...option,
-                count: option.value === 'all' ? games.length : countOf(option.value),
+                count: countOf(option.value),
               }))}
             />
           }
         />
 
         {visibleGames.length === 0 ? (
-          <Card>
-            <EmptyState
-              icon={<Gamepad2 size={22} aria-hidden />}
-              title={games.length === 0 ? '游戏库还是空的' : '没有符合条件的游戏'}
-              description={
-                games.length === 0
-                  ? '把在玩的、想玩的都加进来，时长和成就可以慢慢补。'
-                  : '换个关键词，或者切换上面的状态筛选。'
-              }
-              action={
-                games.length === 0 ? (
-                  <Button
-                    icon={<Plus size={16} aria-hidden />}
-                    onClick={() => setShowAddModal(true)}
-                  >
-                    添加游戏
-                  </Button>
-                ) : (
-                  <Button
-                    variant="secondary"
-                    onClick={() => {
-                      setKeyword('');
-                      setFilter('all');
-                    }}
-                  >
-                    清除筛选
-                  </Button>
-                )
-              }
-            />
-          </Card>
+          <ListEmptyState
+            icon={<Gamepad2 size={22} aria-hidden />}
+            filtered={filteredOut}
+            emptyTitle="游戏库还是空的"
+            emptyDescription="把在玩的、想玩的都加进来，时长和成就可以慢慢补。"
+            emptyAction={
+              <Button icon={<Plus size={16} aria-hidden />} onClick={() => setShowAddModal(true)}>
+                添加游戏
+              </Button>
+            }
+            filteredTitle="没有符合条件的游戏"
+            filteredDescription="换个关键词，或者切换上面的状态筛选。"
+            onClearFilters={clearFilters}
+          />
         ) : (
           <ul className="grid gap-4 sm:grid-cols-2">
             {visibleGames.map((game) => {

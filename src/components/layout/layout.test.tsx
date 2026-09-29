@@ -7,6 +7,7 @@ import { Layout } from './Layout';
 import { NavList, Sidebar } from './Sidebar';
 import { PageHeader } from './PageHeader';
 import { Toolbar } from './Toolbar';
+import { ListEmptyState } from './ListEmptyState';
 import { NAV_ITEMS, findNavItem, isNavItemActive } from './navItems';
 import { useUiStore } from '../../store/uiStore';
 import { Header } from './Header';
@@ -539,5 +540,64 @@ describe('Header 手动保存', () => {
       .filter((key) => key.startsWith('lm:backup:auto:'))
       .map((key) => (JSON.parse(localStorage.getItem(key) ?? '{}') as { reason?: string }).reason);
     expect(reasons).toContain('手动保存');
+  });
+});
+
+describe('ListEmptyState', () => {
+  it('一条数据都没有时讲「去添加第一条」，并给出主操作', () => {
+    render(
+      <ListEmptyState
+        icon={<span />}
+        filtered={false}
+        emptyTitle="书单还是空的"
+        emptyDescription="把想读的书加进来。"
+        emptyAction={<button type="button">添加书籍</button>}
+        filteredTitle="没有符合条件的书"
+        filteredDescription="换个关键词。"
+      />,
+    );
+
+    expect(screen.getByText('书单还是空的')).toBeInTheDocument();
+    expect(screen.getByText('把想读的书加进来。')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '添加书籍' })).toBeInTheDocument();
+    // 空库时不该出现「清除筛选」——没有筛选可清
+    expect(screen.queryByRole('button', { name: '清除筛选' })).not.toBeInTheDocument();
+  });
+
+  it('有数据但被筛掉时换成筛选文案，并给一个「清除筛选」', async () => {
+    const onClearFilters = vi.fn();
+    render(
+      <ListEmptyState
+        icon={<span />}
+        filtered
+        emptyTitle="书单还是空的"
+        emptyDescription="把想读的书加进来。"
+        emptyAction={<button type="button">添加书籍</button>}
+        filteredTitle="没有符合条件的书"
+        filteredDescription="换个关键词。"
+        onClearFilters={onClearFilters}
+      />,
+    );
+
+    expect(screen.getByText('没有符合条件的书')).toBeInTheDocument();
+    expect(screen.queryByText('书单还是空的')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '添加书籍' })).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: '清除筛选' }));
+    expect(onClearFilters).toHaveBeenCalledTimes(1);
+  });
+
+  it('没给 onClearFilters 时被筛空也不渲染按钮', () => {
+    render(
+      <ListEmptyState
+        icon={<span />}
+        filtered
+        emptyTitle="书单还是空的"
+        filteredTitle="没有符合条件的书"
+      />,
+    );
+
+    expect(screen.getByText('没有符合条件的书')).toBeInTheDocument();
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
 });

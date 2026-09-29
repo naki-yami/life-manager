@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useState } from 'react';
 import {
   CheckCircle2,
   Download,
@@ -28,13 +28,13 @@ import {
   TagInput,
   Textarea,
 } from '../components/ui';
-import { MasterDetail, PageHeader, Toolbar } from '../components/layout';
+import { ListEmptyState, MasterDetail, PageHeader, Toolbar } from '../components/layout';
 import { useWritingStore } from '../store/writingStore';
+import { useEntityList } from '../hooks/useEntityList';
 import { useUndoableRemove } from '../hooks/useUndoableRemove';
 import { useTagSuggestions } from '../hooks/useTagSuggestions';
-import { filterByKeyword } from '../utils/search';
 import { formatNumber } from '../utils/date';
-import { WritingStatus, WritingType } from '../types';
+import { WritingProject, WritingStatus, WritingType } from '../types';
 import { useNewEntryShortcut } from '../hooks/useShortcuts';
 import { usePaletteFocus } from '../hooks/usePaletteFocus';
 import { ToastContext } from '../components/ui/toastContext';
@@ -70,6 +70,16 @@ const TYPE_OPTIONS = (Object.keys(TYPE_LABEL) as WritingType[]).map((value) => (
   label: TYPE_LABEL[value],
 }));
 
+/** 搜索时参与匹配的字段；模块级常量，引用稳定，useEntityList 的缓存才不会白费 */
+const projectSearchFields = (project: WritingProject): string[] => [
+  project.title,
+  project.notes,
+  TYPE_LABEL[project.type],
+  ...project.tags,
+];
+
+const projectStatusOf = (project: WritingProject): WritingStatus => project.status;
+
 const FILTER_OPTIONS: Array<{ value: Filter; label: string }> = [
   { value: 'all', label: '全部' },
   { value: 'draft', label: '草稿' },
@@ -102,29 +112,31 @@ export const WritingPage: React.FC = () => {
   const [noteInput, setNoteInput] = useState('');
   const [editorId, setEditorId] = useState<string | null>(null);
   const [contentDraft, setContentDraft] = useState('');
-  const [keyword, setKeyword] = useState('');
-  const [filter, setFilter] = useState<Filter>('all');
+
   const [form, setForm] = useState<{ title: string; type: WritingType; tags: string[] }>({
     title: '',
     type: 'article',
     tags: [],
   });
 
-  const countOf = (status: WritingStatus): number =>
-    projects.filter((project) => project.status === status).length;
+  /** 关键词 + 状态筛选 + 计数 + 「是空列表还是没筛出来」，六个列表页共用同一份实现 */
+  const {
+    keyword,
+    setKeyword,
+    filter,
+    setFilter,
+    visible: visibleProjects,
+    countOf,
+    filteredOut,
+    clearFilters,
+  } = useEntityList<WritingProject, WritingStatus>({
+    items: projects,
+    searchFields: projectSearchFields,
+    statusOf: projectStatusOf,
+  });
 
   const totalWords = projects.reduce((sum, project) => sum + project.wordCount, 0);
 
-  const visibleProjects = useMemo(() => {
-    const byStatus =
-      filter === 'all' ? projects : projects.filter((project) => project.status === filter);
-    return filterByKeyword(byStatus, keyword, (project) => [
-      project.title,
-      project.notes,
-      TYPE_LABEL[project.type],
-      ...project.tags,
-    ]);
-  }, [projects, filter, keyword]);
 
   const noteProject = projects.find((project) => project.id === noteId) ?? null;
   const deletingProject = projects.find((project) => project.id === pendingDeleteId) ?? null;
@@ -300,41 +312,27 @@ export const WritingPage: React.FC = () => {
               onChange={setFilter}
               options={FILTER_OPTIONS.map((option) => ({
                 ...option,
-                count: option.value === 'all' ? projects.length : countOf(option.value),
+                count: countOf(option.value),
               }))}
             />
           }
         />
 
         {visibleProjects.length === 0 ? (
-          <Card>
-            <EmptyState
-              icon={<PenLine size={22} aria-hidden />}
-              title={projects.length === 0 ? '还没有写作项目' : '没有符合条件的项目'}
-              description={
-                projects.length === 0
-                  ? '新建一个项目，把想写的东西先记下来，再慢慢推进。'
-                  : '换个关键词，或者切换上面的状态筛选。'
-              }
-              action={
-                projects.length === 0 ? (
-                  <Button icon={<Plus size={16} aria-hidden />} onClick={openAddModal}>
-                    新建项目
-                  </Button>
-                ) : (
-                  <Button
-                    variant="secondary"
-                    onClick={() => {
-                      setKeyword('');
-                      setFilter('all');
-                    }}
-                  >
-                    清除筛选
-                  </Button>
-                )
-              }
-            />
-          </Card>
+          <ListEmptyState
+            icon={<PenLine size={22} aria-hidden />}
+            filtered={filteredOut}
+            emptyTitle="还没有写作项目"
+            emptyDescription="新建一个项目，把想写的东西先记下来，再慢慢推进。"
+            emptyAction={
+              <Button icon={<Plus size={16} aria-hidden />} onClick={openAddModal}>
+                新建项目
+              </Button>
+            }
+            filteredTitle="没有符合条件的项目"
+            filteredDescription="换个关键词，或者切换上面的状态筛选。"
+            onClearFilters={clearFilters}
+          />
         ) : (
           <ul className="grid gap-4">
             {visibleProjects.map((project) => (
