@@ -3,7 +3,13 @@ import { persist } from 'zustand/middleware';
 import type { Habit, HabitKind, HabitSchedule } from '../types';
 import { createId } from '../utils/id';
 import { STORAGE_KEYS } from '../utils/storageKeys';
-import { MAX_HABIT_AMOUNT, habitTarget, isDayKey, sanitizeHabitLogs } from '../utils/habits';
+import {
+  MAX_HABIT_AMOUNT,
+  habitTarget,
+  isDayKey,
+  normalizeSchedule,
+  sanitizeHabitLogs,
+} from '../utils/habits';
 import { persistOptions } from './persist';
 import { asRecord, normalizeArray } from './normalize';
 import { habitSchema } from '../services/schemas';
@@ -56,13 +62,7 @@ function withLog(habit: Habit, day: string, amount: number): Habit {
 
 function normalizePatch(habit: Habit, patch: HabitPatch): Habit {
   const next: Habit = { ...habit, ...patch };
-  if (patch.schedule) {
-    next.schedule = {
-      kind: patch.schedule.kind,
-      timesPerWeek: clamp(patch.schedule.timesPerWeek, 1, 7),
-      everyDays: clamp(patch.schedule.everyDays, 1, 365),
-    };
-  }
+  if (patch.schedule) next.schedule = normalizeSchedule(patch.schedule);
   if (patch.name !== undefined) next.name = patch.name.trim();
   if (patch.unit !== undefined) next.unit = patch.unit.trim();
   if (patch.target !== undefined) next.target = clamp(patch.target, 1, MAX_HABIT_AMOUNT);
@@ -86,13 +86,7 @@ export const useHabitStore = create<HabitState>()(
               kind,
               target: kind === 'count' ? clamp(target, 1, MAX_HABIT_AMOUNT) : 1,
               unit: unit.trim(),
-              schedule: schedule
-                ? {
-                    kind: schedule.kind,
-                    timesPerWeek: clamp(schedule.timesPerWeek, 1, 7),
-                    everyDays: clamp(schedule.everyDays, 1, 365),
-                  }
-                : { ...DEFAULT_SCHEDULE },
+              schedule: normalizeSchedule(schedule ?? DEFAULT_SCHEDULE),
               logs: {},
               createdAt: new Date().toISOString(),
             },

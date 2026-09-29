@@ -11,6 +11,7 @@ import { useWritingStore } from '../store/writingStore';
 import { useFitnessStore } from '../store/fitnessStore';
 import { useDietStore } from '../store/dietStore';
 import { useGameStore } from '../store/gameStore';
+import { useHabitStore } from '../store/habitStore';
 import { DASHBOARD_WIDGET_IDS, DEFAULT_DASHBOARD, useUiStore } from '../store/uiStore';
 import { STORAGE_KEYS } from '../utils/storageKeys';
 import { todayKey } from '../utils/date';
@@ -33,6 +34,7 @@ beforeEach(() => {
   useFitnessStore.setState({ plans: [], records: [] });
   useDietStore.setState({ records: [] });
   useGameStore.setState({ games: [] });
+  useHabitStore.setState({ habits: [] });
   useUiStore.setState({ dashboard: DEFAULT_DASHBOARD.map((widget) => ({ ...widget })) });
 });
 
@@ -385,6 +387,29 @@ describe('HomePage 仪表盘', () => {
     expect(screen.getByText('今日完成率').closest('div')!.parentElement!).toHaveTextContent('1');
     const streakCard = screen.getByText('连续打卡').closest('div')!.parentElement!;
     expect(within(streakCard).getByText('1')).toBeInTheDocument();
+  });
+
+  it('今日习惯卡片列出没打卡的习惯，点一下即可完成', async () => {
+    useHabitStore.getState().addHabit({ name: '晨跑' });
+    useHabitStore.getState().addHabit({ name: '读书' });
+    useHabitStore.getState().toggleHabitLog(useHabitStore.getState().habits[0]!.id, todayKey());
+
+    renderHome();
+
+    expect(screen.getByText('今日习惯')).toBeInTheDocument();
+    expect(screen.getByText('还有 1 个没打卡 · 点一下即可')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('checkbox', { name: '读书' }));
+
+    expect(useHabitStore.getState().habits[1]!.logs[todayKey()]).toBe(1);
+    expect(screen.getByText('今天该打卡的都完成了')).toBeInTheDocument();
+  });
+
+  it('没有习惯时首页不渲染这张卡片', () => {
+    renderHome();
+
+    expect(screen.queryByText('今日习惯')).not.toBeInTheDocument();
+    expect(screen.queryByText('今日习惯暂无数据')).not.toBeInTheDocument();
   });
 
   it('所有卡片都被隐藏时给出恢复指引', () => {

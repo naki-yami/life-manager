@@ -9,6 +9,7 @@ import {
   LayoutGrid,
   PenTool,
   Settings,
+  Target,
   UtensilsCrossed,
   type LucideIcon,
 } from 'lucide-react';
@@ -98,6 +99,14 @@ export const NAV_ITEMS: NavItem[] = [
     description: '活动热力图、趋势与各模块进度',
     icon: BarChart3,
     keywords: ['stats', 'chart', 'tongji', '统计', '图表', '趋势'],
+    group: 'main',
+  },
+  {
+    path: '/habits',
+    label: '习惯养成',
+    description: '每日打卡、节奏追踪与强度分数',
+    icon: Target,
+    keywords: ['habits', 'habit', 'xiguan', '习惯', '打卡'],
     group: 'main',
   },
   {

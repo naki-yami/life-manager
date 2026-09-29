@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { normalizeTags } from '../utils/tags';
-import { sanitizeHabitLogs } from '../utils/habits';
+import { normalizeSchedule, sanitizeHabitLogs } from '../utils/habits';
 import type { HabitSchedule } from '../types';
 
 /**
@@ -271,13 +271,17 @@ export const gameSessionSchema = z.object({
 });
 
 // ---------- 习惯 ----------
-export const habitScheduleSchema = z.object({
-  kind: z.enum(['daily', 'weekly', 'interval']).default('daily'),
-  /** kind = 'weekly' 时生效：每周目标次数 */
-  timesPerWeek: z.number().min(1).max(7).catch(1).default(1),
-  /** kind = 'interval' 时生效：间隔天数 */
-  everyDays: z.number().min(1).max(365).catch(1).default(1),
-});
+export const habitScheduleSchema = z
+  .object({
+    kind: z.enum(['daily', 'weekly', 'interval']).default('daily'),
+    /** kind = 'weekly' 时生效：每周目标次数 */
+    timesPerWeek: z.number().min(1).max(7).catch(1).default(1),
+    /** kind = 'interval' 时生效：间隔天数 */
+    everyDays: z.number().min(1).max(365).catch(1).default(1),
+  })
+  // 旧数据（以及缺 schedule 的脏数据）统一退回「每天」
+  .default((): HabitSchedule => ({ kind: 'daily', timesPerWeek: 1, everyDays: 1 }))
+  .transform((schedule) => normalizeSchedule(schedule));
 
 /**
  * 打卡日志。
@@ -296,12 +300,7 @@ export const habitSchema = z.object({
   kind: z.enum(['binary', 'count']).default('binary'),
   target: z.number().min(1).max(9999).catch(1).default(1),
   unit: z.string().default(''),
-  // 旧数据（以及缺 schedule 的脏数据）统一退回「每天」，thunk 避免所有记录共用同一个对象
-  schedule: habitScheduleSchema.default((): HabitSchedule => ({
-    kind: 'daily',
-    timesPerWeek: 1,
-    everyDays: 1,
-  })),
+  schedule: habitScheduleSchema,
   logs: habitLogs,
   createdAt: isoDateString.default(() => new Date().toISOString()),
 });

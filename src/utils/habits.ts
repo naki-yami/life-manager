@@ -56,17 +56,33 @@ export function habitTarget(habit: Habit): number {
 }
 
 /** 每周目标次数（1-7） */
-export function weeklyTarget(habit: Habit): number {
-  const value = Math.round(habit.schedule.timesPerWeek);
+export function weeklyTarget(schedule: HabitSchedule): number {
+  const value = Math.round(schedule.timesPerWeek);
   if (!Number.isFinite(value)) return 1;
   return Math.min(7, Math.max(1, value));
 }
 
 /** 间隔天数（>=1） */
-export function intervalDays(habit: Habit): number {
-  const value = Math.round(habit.schedule.everyDays);
+export function intervalDays(schedule: HabitSchedule): number {
+  const value = Math.round(schedule.everyDays);
   if (!Number.isFinite(value)) return 1;
   return Math.max(1, value);
+}
+
+/**
+ * 只保留当前节奏真正会用到的那一个字段。
+ *
+ * 「每天」的习惯不该存下 timesPerWeek=3 这种没意义的数字 —— 数据要能自解释，
+ * 否则以后读日志、比对备份时会误以为它还有别的含义。
+ */
+export function normalizeSchedule(schedule: HabitSchedule): HabitSchedule {
+  if (schedule.kind === 'weekly') {
+    return { kind: 'weekly', timesPerWeek: weeklyTarget(schedule), everyDays: 1 };
+  }
+  if (schedule.kind === 'interval') {
+    return { kind: 'interval', timesPerWeek: 1, everyDays: intervalDays(schedule) };
+  }
+  return { kind: 'daily', timesPerWeek: 1, everyDays: 1 };
 }
 
 /** 习惯的建立日：createdAt 换算成本地日期键；解析不了就按今天算 */
@@ -140,7 +156,7 @@ export function isHabitScheduledOn(habit: Habit, day: string): boolean {
   if (habit.schedule.kind !== 'interval') return true;
   const since = daysBetween(lastDoneBefore(habit, day), day);
   if (since === null) return true;
-  return since >= intervalDays(habit);
+  return since >= intervalDays(habit.schedule);
 }
 
 /**
@@ -149,7 +165,7 @@ export function isHabitScheduledOn(habit: Habit, day: string): boolean {
  */
 export function isHabitPending(habit: Habit, day: string = todayKey()): boolean {
   if (habit.schedule.kind === 'weekly') {
-    return weeklyDoneCount(habit, day) < weeklyTarget(habit);
+    return weeklyDoneCount(habit, day) < weeklyTarget(habit.schedule);
   }
   if (isHabitDoneOn(habit, day)) return false;
   return isHabitScheduledOn(habit, day);
@@ -170,7 +186,7 @@ export function habitStreak(habit: Habit, day: string = todayKey()): number {
   const created = habitCreatedDay(habit);
 
   if (habit.schedule.kind === 'weekly') {
-    const target = weeklyTarget(habit);
+    const target = weeklyTarget(habit.schedule);
     let streak = 0;
     for (let week = 0; week < MAX_LOOKBACK_WEEKS; week += 1) {
       const start = weekStartOf(addDays(day, -7 * week));
@@ -203,7 +219,7 @@ export function habitStrength(habit: Habit, day: string = todayKey()): number {
   const created = habitCreatedDay(habit);
 
   if (habit.schedule.kind === 'weekly') {
-    const target = weeklyTarget(habit);
+    const target = weeklyTarget(habit.schedule);
     let weighted = 0;
     let total = 0;
     for (let week = 0; week < HABIT_WEEK_WINDOW; week += 1) {

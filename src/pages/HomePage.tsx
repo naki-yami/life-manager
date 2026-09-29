@@ -43,6 +43,7 @@ import { useWritingStore } from '../store/writingStore';
 import { useFitnessStore } from '../store/fitnessStore';
 import { useDietStore } from '../store/dietStore';
 import { useGameStore } from '../store/gameStore';
+import { useHabitStore } from '../store/habitStore';
 import { useUiStore } from '../store/uiStore';
 import {
   dayKeyOf,
@@ -60,6 +61,7 @@ import {
   sumOf,
   sumSeries,
 } from '../utils/stats';
+import { habitAmountOn, habitTarget, pendingHabits, scheduleLabel } from '../utils/habits';
 import { parseQuickTask } from '../utils/quickParse';
 import type { Priority, Task } from '../types';
 
@@ -130,6 +132,8 @@ export const HomePage: React.FC = () => {
   const workoutRecords = useFitnessStore((state) => state.records);
   const mealRecords = useDietStore((state) => state.records);
   const games = useGameStore((state) => state.games);
+  const habits = useHabitStore((state) => state.habits);
+  const toggleHabitLog = useHabitStore((state) => state.toggleHabitLog);
 
   // 仪表盘排布存在 lm:ui 里，这里只读出来渲染
   const dashboard = useUiStore((state) => state.dashboard);
@@ -143,6 +147,9 @@ export const HomePage: React.FC = () => {
   const [quickInput, setQuickInput] = useState('');
   const [editingLayout, setEditingLayout] = useState(false);
   const today = todayKey();
+
+  /** 今天还没打卡的习惯：既喂「今日习惯」卡片，也用来算欢迎语里的提醒 */
+  const pendingHabitList = useMemo(() => pendingHabits(habits, today), [habits, today]);
 
   /** 完成任务 / 训练 / 饮食任意一条都算一次活动，用来喂热力图与环比 */
   const activitySeries = useMemo(
@@ -543,6 +550,57 @@ export const HomePage: React.FC = () => {
           </CardBody>
         </Card>
       ),
+    },
+    {
+      id: 'habits',
+      title: '今日习惯',
+      content:
+        habits.length > 0 ? (
+          <Card>
+            <CardHeader
+              title="今日习惯"
+              subtitle={
+                pendingHabitList.length === 0
+                  ? '今天该打卡的都完成了'
+                  : `还有 ${pendingHabitList.length} 个没打卡 · 点一下即可`
+              }
+              action={
+                <Button variant="ghost" size="sm" onClick={() => navigate('/habits')}>
+                  管理习惯
+                </Button>
+              }
+            />
+            <CardBody>
+              {pendingHabitList.length === 0 ? (
+                <p className="text-sm text-content-secondary">全部完成，明天继续保持 ✨</p>
+              ) : (
+                <ul className="space-y-1">
+                  {pendingHabitList.slice(0, 6).map((habit) => {
+                    const amount = habitAmountOn(habit, today);
+                    return (
+                      <li key={habit.id} className="flex items-center gap-3 rounded px-1.5 py-1">
+                        <CheckboxRow
+                          className="min-w-0 flex-1"
+                          checked={false}
+                          onChange={() => toggleHabitLog(habit.id, today)}
+                          label={habit.name}
+                        />
+                        {habit.kind === 'count' && (
+                          <Badge tone="info">
+                            {amount}/{habitTarget(habit)} {habit.unit}
+                          </Badge>
+                        )}
+                        <Badge tone="default" dot>
+                          {scheduleLabel(habit.schedule)}
+                        </Badge>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </CardBody>
+          </Card>
+        ) : null,
     },
     {
       id: 'activity',
