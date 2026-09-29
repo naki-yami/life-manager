@@ -1,5 +1,15 @@
 import React, { useMemo, useState } from 'react';
-import { CheckCircle2, FileText, Hash, PenLine, Plus, StickyNote, Trash2 } from 'lucide-react';
+import {
+  CheckCircle2,
+  Download,
+  FileText,
+  Hash,
+  History,
+  PenLine,
+  Plus,
+  StickyNote,
+  Trash2,
+} from 'lucide-react';
 import {
   Badge,
   Button,
@@ -9,6 +19,7 @@ import {
   IconButton,
   Input,
   Modal,
+  ProgressBar,
   NumberInput,
   SegmentedControl,
   Select,
@@ -22,6 +33,8 @@ import { filterByKeyword } from '../utils/search';
 import { formatNumber } from '../utils/date';
 import { WritingStatus, WritingType } from '../types';
 import { useNewEntryShortcut } from '../hooks/useShortcuts';
+import { ToastContext } from '../components/ui/toastContext';
+import { downloadTextFile } from '../utils/download';
 
 type Filter = 'all' | WritingStatus;
 
@@ -68,9 +81,12 @@ export const WritingPage: React.FC = () => {
     updateStatus,
     updateWordCount,
     updateNotes,
+    updateContent,
+    setTargetWords,
     replaceProjects,
   } = useWritingStore();
   const undoableRemove = useUndoableRemove();
+  const toastContext = React.useContext(ToastContext);
 
   const [showAddModal, setShowAddModal] = useState(false);
   useNewEntryShortcut(() => setShowAddModal(true));
@@ -78,6 +94,8 @@ export const WritingPage: React.FC = () => {
   const [noteId, setNoteId] = useState<string | null>(null);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [noteInput, setNoteInput] = useState('');
+  const [editorId, setEditorId] = useState<string | null>(null);
+  const [contentDraft, setContentDraft] = useState('');
   const [keyword, setKeyword] = useState('');
   const [filter, setFilter] = useState<Filter>('all');
   const [form, setForm] = useState<{ title: string; type: WritingType }>({
@@ -113,6 +131,54 @@ export const WritingPage: React.FC = () => {
     if (!title) return;
     addProject(title, form.type);
     setShowAddModal(false);
+  };
+
+  const editorProject = projects.find((project) => project.id === editorId) ?? null;
+  const draftWords = contentDraft.length;
+  const draftParagraphs = contentDraft.split(/\n+/).filter((part) => part.trim()).length;
+  const draftMinutes = Math.max(1, Math.round(draftWords / 400));
+
+  const openEditor = (id: string): void => {
+    const project = projects.find((item) => item.id === id);
+    if (!project) return;
+    setContentDraft(project.content);
+    setEditorId(id);
+  };
+
+  const handleSaveContent = (): void => {
+    if (!editorId) return;
+    const project = projects.find((item) => item.id === editorId);
+    if (!project) return;
+    const before = project.wordCount;
+    updateContent(editorId, contentDraft);
+    if (
+      project.targetWords > 0 &&
+      before < project.targetWords &&
+      contentDraft.length >= project.targetWords
+    ) {
+      toastContext?.toast({
+        tone: 'success',
+        title: `🎉 《${project.title}》达标了！`,
+        description: `正文达到 ${contentDraft.length} 字，完成了 ${project.targetWords} 字的目标。`,
+      });
+    }
+    setEditorId(null);
+  };
+
+  const handleExport = (id: string): void => {
+    const project = projects.find((item) => item.id === id);
+    if (!project) return;
+    const lines = [
+      `# ${project.title}`,
+      '',
+      `> 类型：${TYPE_LABEL[project.type]} · 状态：${STATUS_LABEL[project.status]} · 字数：${project.wordCount}`,
+      '',
+      project.content.trim() || '（正文为空）',
+    ];
+    if (project.notes.trim()) {
+      lines.push('', '## 创作笔记', '', project.notes.trim());
+    }
+    downloadTextFile(`${project.title}.md`, lines.join('\n'));
   };
 
   const openNotes = (id: string, notes: string): void => {
@@ -236,6 +302,23 @@ export const WritingPage: React.FC = () => {
                       {project.notes.trim() || '还没有创作笔记'}
                     </p>
 
+                    {project.content.trim() ? (
+                      <p className="mt-1.5 line-clamp-2 text-sm text-content-tertiary">
+                        {project.content.trim().split('\n')[0]}
+                      </p>
+                    ) : null}
+                    {project.targetWords > 0 && (
+                      <div className="mt-2 max-w-md">
+                        <ProgressBar
+                          value={project.wordCount}
+                          max={project.targetWords}
+                          showValue
+                          label={`目标 ${formatNumber(project.targetWords)} 字`}
+                          tone={project.wordCount >= project.targetWords ? 'success' : 'accent'}
+                        />
+                      </div>
+                    )}
+
                     <div className="mt-3 flex flex-wrap items-end gap-3">
                       <div className="w-36">
                         <NumberInput
@@ -247,6 +330,17 @@ export const WritingPage: React.FC = () => {
                           min={0}
                           step={100}
                           suffix="字"
+                        />
+                      </div>
+                      <div className="w-36">
+                        <NumberInput
+                          ariaLabel={`「${project.title}」的目标字数`}
+                          value={project.targetWords}
+                          onChange={(value) => setTargetWords(project.id, value === '' ? 0 : value)}
+                          min={0}
+                          step={1000}
+                          suffix="目标"
+                          hint="0 表示未设置"
                         />
                       </div>
                       <div className="w-36">
@@ -275,11 +369,28 @@ export const WritingPage: React.FC = () => {
                       )}
                       <Button
                         size="sm"
+                        variant="secondary"
+                        icon={<PenLine size={13} aria-hidden />}
+                        onClick={() => openEditor(project.id)}
+                      >
+                        编辑正文
+                      </Button>
+                      <Button
+                        size="sm"
                         variant="ghost"
                         icon={<StickyNote size={13} aria-hidden />}
                         onClick={() => openNotes(project.id, project.notes)}
                       >
                         创作笔记
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        icon={<Download size={13} aria-hidden />}
+                        aria-label={`导出《${project.title}》为 Markdown`}
+                        onClick={() => handleExport(project.id)}
+                      >
+                        导出
                       </Button>
                     </div>
                   </div>
@@ -328,6 +439,78 @@ export const WritingPage: React.FC = () => {
             onChange={(value) => setForm({ ...form, type: value as WritingType })}
             options={TYPE_OPTIONS}
           />
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={editorProject !== null}
+        onClose={() => setEditorId(null)}
+        title={editorProject ? `《${editorProject.title}》编辑正文` : '编辑正文'}
+        size="lg"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setEditorId(null)}>
+              取消
+            </Button>
+            <Button onClick={handleSaveContent}>保存</Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <Textarea
+            label="正文"
+            value={contentDraft}
+            onChange={(event) => setContentDraft(event.target.value)}
+            rows={14}
+            placeholder="从这里开始写……"
+          />
+          <div className="flex flex-wrap gap-2 text-xs text-content-tertiary">
+            <Badge tone="info">字数 {formatNumber(draftWords)}</Badge>
+            <Badge>段落 {draftParagraphs}</Badge>
+            <Badge>约读 {draftMinutes} 分钟</Badge>
+            {editorProject && editorProject.targetWords > 0 && (
+              <Badge tone={draftWords >= editorProject.targetWords ? 'success' : 'default'}>
+                目标 {formatNumber(editorProject.targetWords)} 字
+              </Badge>
+            )}
+          </div>
+
+          {editorProject && editorProject.snapshots.length > 0 && (
+            <div>
+              <p className="mb-1.5 flex items-center gap-1 text-sm font-medium text-content-secondary">
+                <History size={14} aria-hidden />
+                版本快照（最近 {editorProject.snapshots.length} 版）
+              </p>
+              <ul className="max-h-40 space-y-1 overflow-y-auto rounded border border-line-subtle">
+                {editorProject.snapshots.map((snapshot) => (
+                  <li
+                    key={snapshot.id}
+                    className="flex items-center gap-3 px-3 py-1.5 text-xs"
+                  >
+                    <span className="text-content-tertiary tabular">
+                      {new Date(snapshot.createdAt).toLocaleString('zh-CN')}
+                    </span>
+                    <span className="text-content-secondary tabular">
+                      {formatNumber(snapshot.wordCount)} 字
+                    </span>
+                    <span className="min-w-0 flex-1 truncate text-content-tertiary">
+                      {snapshot.content.trim().slice(0, 30) || '（空）'}
+                    </span>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setContentDraft(snapshot.content)}
+                    >
+                      回滚到此版
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-1 text-2xs text-content-tertiary">
+                回滚会把那一版载入编辑器，点「保存」才会写回。
+              </p>
+            </div>
+          )}
         </div>
       </Modal>
 

@@ -7,7 +7,7 @@ import { z } from 'zod';
  */
 
 export const APP_ID = 'life-manager';
-export const BACKUP_SCHEMA_VERSION = 8;
+export const BACKUP_SCHEMA_VERSION = 9;
 
 const isoDateString = z.string();
 const percent = z.number().min(0).max(100).catch(0);
@@ -116,6 +116,13 @@ export const workSessionSchema = z.object({
 });
 
 // ---------- 写作 ----------
+export const writingSnapshotSchema = z.object({
+  id: z.string().min(1),
+  wordCount: z.number().min(0).catch(0),
+  content: z.string().default(''),
+  createdAt: isoDateString.default(() => new Date().toISOString()),
+});
+
 export const writingProjectSchema = z.object({
   id: z.string().min(1),
   title: z.string(),
@@ -123,6 +130,10 @@ export const writingProjectSchema = z.object({
   status: z.enum(['draft', 'in-progress', 'completed']).default('draft'),
   wordCount: z.number().min(0).catch(0),
   notes: z.string().default(''),
+  /** v9：正文、目标字数与版本快照；旧备份缺省补齐（目标字数补 0） */
+  content: z.string().default(''),
+  targetWords: z.number().min(0).catch(0),
+  snapshots: z.array(writingSnapshotSchema).default([]),
   createdAt: isoDateString.default(() => new Date().toISOString()),
   updatedAt: isoDateString.default(() => new Date().toISOString()),
 });

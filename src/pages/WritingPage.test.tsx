@@ -1,13 +1,15 @@
 import React from 'react';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { WritingPage } from './WritingPage';
+import { ToastProvider } from '../components/ui';
 import { useWritingStore } from '../store/writingStore';
 import { WritingStatus } from '../types';
 
 beforeEach(() => {
   useWritingStore.setState({ projects: [] });
+  vi.stubGlobal('URL', Object.assign(URL, { createObjectURL: vi.fn(() => 'blob:mock'), revokeObjectURL: vi.fn() }));
 });
 
 const projectOf = (title: string) =>
@@ -177,5 +179,66 @@ describe('WritingPage', () => {
 
     await userEvent.click(screen.getByRole('button', { name: '清除筛选' }));
     expect(screen.getByText('长文')).toBeInTheDocument();
+  });
+
+  it('编辑正文保存后字数同步并留快照，可回滚', async () => {
+    useWritingStore.getState().addProject('新文章', 'article');
+    const id = projectOf('新文章').id;
+    useWritingStore.getState().setTargetWords(id, 100);
+    render(<WritingPage />);
+
+    await userEvent.click(screen.getByRole('button', { name: '编辑正文' }));
+    const dialog = screen.getByRole('dialog', { name: /编辑正文/ });
+    await userEvent.type(within(dialog).getByLabelText('正文'), '第一段内容');
+    expect(within(dialog).getByText('字数 5')).toBeInTheDocument();
+    await userEvent.click(within(dialog).getByRole('button', { name: '保存' }));
+
+    expect(projectOf('新文章').wordCount).toBe(5);
+    expect(projectOf('新文章').snapshots).toHaveLength(1);
+
+    // 目标进度条出现
+    expect(screen.getByText('目标 100 字')).toBeInTheDocument();
+  });
+
+  it('快照可以载回编辑器', async () => {
+    useWritingStore.getState().addProject('新文章', 'article');
+    const id = projectOf('新文章').id;
+    useWritingStore.getState().updateContent(id, '第一版');
+    useWritingStore.getState().updateContent(id, '第二版更长一些');
+    render(<WritingPage />);
+
+    await userEvent.click(screen.getByRole('button', { name: '编辑正文' }));
+    const dialog = screen.getByRole('dialog', { name: /编辑正文/ });
+    // 快照列表里有两版，回滚到第一版
+    await userEvent.click(within(dialog).getAllByRole('button', { name: '回滚到此版' })[1]!);
+    expect(within(dialog).getByLabelText('正文')).toHaveValue('第一版');
+  });
+
+  it('达到目标字数时弹庆祝提示', async () => {
+    useWritingStore.getState().addProject('新文章', 'article');
+    useWritingStore.getState().setTargetWords(projectOf('新文章').id, 5);
+    render(
+      <ToastProvider>
+        <WritingPage />
+      </ToastProvider>,
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: '编辑正文' }));
+    const dialog = screen.getByRole('dialog', { name: /编辑正文/ });
+    await userEvent.type(within(dialog).getByLabelText('正文'), '正好五个字');
+    await userEvent.click(within(dialog).getByRole('button', { name: '保存' }));
+
+    expect(screen.getByText(/《新文章》达标了！/)).toBeInTheDocument();
+  });
+
+  it('导出会生成 Markdown 下载', async () => {
+    useWritingStore.getState().addProject('可导出的稿子', 'article');
+    useWritingStore.getState().updateContent(projectOf('可导出的稿子').id, '正文内容');
+    render(<WritingPage />);
+
+    await userEvent.click(screen.getByRole('button', { name: '导出《可导出的稿子》为 Markdown' }));
+
+    const createObjectURL = URL.createObjectURL as unknown as ReturnType<typeof vi.fn>;
+    expect(createObjectURL).toHaveBeenCalledTimes(1);
   });
 });

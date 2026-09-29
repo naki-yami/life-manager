@@ -11,11 +11,12 @@
  * - 7：tasks 增加子任务（subtasks）与重复规则（repeat）
  * - 8：books 增加总页数 / 开始阅读时间；新增 books 的 sessions（阅读流水）
  * - 9：饮食增加三大营养素合计、每日目标与饮水打卡
+ * - 10：写作项目增加正文 / 目标字数 / 版本快照
  *
  * 注意：zustand persist 只在「存储里的 version 与当前 version 不一致」时
  * 才调用 migrate。所以结构变更必须靠 bump 版本号触发，不能只改 migrate 函数。
  */
-export const STORE_VERSION = 9;
+export const STORE_VERSION = 10;
 
 /**
  * 统一的状态迁移入口。

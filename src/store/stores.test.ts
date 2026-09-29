@@ -4,6 +4,7 @@ import { useBookStore } from './bookStore';
 import { useGameStore } from './gameStore';
 import { useDietStore } from './dietStore';
 import { useFitnessStore } from './fitnessStore';
+import { useWritingStore } from './writingStore';
 import { useDevStore } from './devStore';
 import { useThemeStore } from './themeStore';
 import { STORAGE_KEYS } from '../utils/storageKeys';
@@ -196,8 +197,8 @@ describe('版本迁移', () => {
     expect(result).toEqual({ tasks: [], futureField: 'keep' });
   });
 
-  it('当前版本号是 9', () => {
-    expect(STORE_VERSION).toBe(9);
+  it('当前版本号是 10', () => {
+    expect(STORE_VERSION).toBe(10);
   });
 
   it('旧项目数据没有 hoursSpent，重新水合时补 0', async () => {
@@ -312,6 +313,45 @@ describe('其它 store', () => {
     expect(useDietStore.getState().water['2026-09-28']).toBe(99);
     useDietStore.getState().setWater('2026-09-28', -2);
     expect(useDietStore.getState().water['2026-09-28']).toBe(0);
+  });
+
+  it('writingStore：保存正文同步字数并留快照', () => {
+    const store = useWritingStore.getState();
+    store.addProject('新文章', 'article');
+    const id = useWritingStore.getState().projects[0]!.id;
+
+    store.updateContent(id, '第一段内容');
+    let project = useWritingStore.getState().projects[0]!;
+    expect(project.wordCount).toBe(5);
+    expect(project.snapshots).toHaveLength(1);
+
+    // 内容没变就不重复留版
+    store.updateContent(id, '第一段内容');
+    expect(useWritingStore.getState().projects[0]!.snapshots).toHaveLength(1);
+
+    store.updateContent(id, ['第一段内容', '第二段'].join(String.fromCharCode(10)));
+    project = useWritingStore.getState().projects[0]!;
+    expect(project.wordCount).toBe(9); // 5 + 1(换行) + 3
+    expect(project.snapshots).toHaveLength(2);
+
+    store.setTargetWords(id, 5000);
+    expect(useWritingStore.getState().projects[0]!.targetWords).toBe(5000);
+    // 负数钳到 0
+    store.setTargetWords(id, -3);
+    expect(useWritingStore.getState().projects[0]!.targetWords).toBe(0);
+  });
+
+  it('writingStore：快照滚动保留 20 版', () => {
+    const store = useWritingStore.getState();
+    store.addProject('日记', 'article');
+    const id = useWritingStore.getState().projects[0]!.id;
+    for (let i = 1; i <= 25; i += 1) {
+      store.updateContent(id, `第 ${i} 版内容`);
+    }
+    const project = useWritingStore.getState().projects[0]!;
+    expect(project.snapshots).toHaveLength(20);
+    // 最新的一版在最前
+    expect(project.snapshots[0]!.content).toBe('第 25 版内容');
   });
 
   it('gameStore：成就解锁切换', () => {

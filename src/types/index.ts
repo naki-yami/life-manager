@@ -120,6 +120,14 @@ export interface WorkSession {
 export type WritingType = 'article' | 'copy' | 'book';
 export type WritingStatus = 'draft' | 'in-progress' | 'completed';
 
+/** 保存正文时留下的版本快照，保留最近 20 版 */
+export interface WritingSnapshot {
+  id: string;
+  wordCount: number;
+  content: string;
+  createdAt: string;
+}
+
 export interface WritingProject {
   id: string;
   title: string;
@@ -127,6 +135,11 @@ export interface WritingProject {
   status: WritingStatus;
   wordCount: number;
   notes: string;
+  /** 正文；编辑器保存时更新，字数随之自动同步。旧数据可能没有 */
+  content: string;
+  /** 目标字数；0 表示未设置。旧数据可能没有 */
+  targetWords: number;
+  snapshots: WritingSnapshot[];
   createdAt: string;
   updatedAt: string;
 }

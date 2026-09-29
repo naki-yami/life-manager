@@ -87,6 +87,16 @@ function sampleData(): BackupData {
         status: 'in-progress',
         wordCount: 3200,
         notes: '第三章需要重写',
+        content: '第一章 良质……',
+        targetWords: 50000,
+        snapshots: [
+          {
+            id: 'snap-1',
+            wordCount: 3200,
+            content: '第一章 良质……',
+            createdAt: '2026-09-27T05:00:00.000Z',
+          },
+        ],
         createdAt: '2026-09-10T00:00:00.000Z',
         updatedAt: '2026-09-27T05:00:00.000Z',
       },
@@ -234,7 +244,7 @@ describe('导出 / 导入 往返', () => {
   it('信封结构包含 schemaVersion 与 exportedAt', () => {
     const envelope = buildBackupEnvelope(emptyData(), new Date('2026-09-28T00:00:00.000Z'));
     expect(envelope.app).toBe('life-manager');
-    expect(envelope.schemaVersion).toBe(8);
+    expect(envelope.schemaVersion).toBe(9);
     expect(envelope.exportedAt).toBe('2026-09-28T00:00:00.000Z');
   });
 });
