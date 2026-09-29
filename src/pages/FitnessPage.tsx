@@ -37,6 +37,7 @@ import { activeDays, seriesByDay, seriesByWeek } from '../utils/stats';
 import { epley1RM, personalBests } from '../utils/fitness';
 import { ToastContext } from '../components/ui/toastContext';
 import { useNewEntryShortcut } from '../hooks/useShortcuts';
+import { MonthCalendar, type CalendarMark } from '../components/ui';
 
 type View = 'plans' | 'records';
 
@@ -99,9 +100,23 @@ export const FitnessPage: React.FC = () => {
   const [planForm, setPlanForm] = useState({ name: '', description: '' });
   const [workoutForm, setWorkoutForm] = useState(emptyWorkoutForm);
   const toastContext = React.useContext(ToastContext);
+  const [recordDateFilter, setRecordDateFilter] = useState<string | null>(null);
 
   const totalVolume = records.reduce((sum, record) => sum + volumeOf(record.exercises), 0);
   const bests = useMemo(() => personalBests(records), [records]);
+
+  /** 日历标记：每天的训练次数 */
+  const calendarMarks = useMemo(() => {
+    const map: Record<string, CalendarMark> = {};
+    for (const record of records) {
+      const entry = map[record.date] ?? { count: 0, label: '' };
+      entry.count += 1;
+      entry.label = `${entry.count} 次训练`;
+      map[record.date] = entry;
+    }
+    return map;
+  }, [records]);
+
   const weekStart = weekStartKey();
   const today = todayKey();
   const thisWeekCount = records.filter(
@@ -153,6 +168,14 @@ export const FitnessPage: React.FC = () => {
       return groups;
     }, []);
   }, [visibleRecords]);
+
+  const filteredGroupedRecords = useMemo(
+    () =>
+      recordDateFilter
+        ? groupedRecords.filter((group) => group.date === recordDateFilter)
+        : groupedRecords,
+    [groupedRecords, recordDateFilter],
+  );
 
   const pendingPlan = plans.find((plan) => plan.id === pendingPlanId) ?? null;
   const pendingRecord = records.find((record) => record.id === pendingRecordId) ?? null;
@@ -371,6 +394,34 @@ export const FitnessPage: React.FC = () => {
         }
       />
 
+      {view === 'records' && (
+        <Card>
+          <CardHeader
+            title="训练日历"
+            subtitle="点一天可以只看那天的训练"
+            action={
+              recordDateFilter ? (
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => setRecordDateFilter(null)}
+                >
+                  只看 {recordDateFilter} · 清除
+                </Button>
+              ) : null
+            }
+          />
+          <CardBody>
+            <MonthCalendar
+              label="训练日历"
+              selected={recordDateFilter ?? undefined}
+              onSelect={setRecordDateFilter}
+              marks={calendarMarks}
+            />
+          </CardBody>
+        </Card>
+      )}
+
       {view === 'plans' ? (
         visiblePlans.length === 0 ? (
           <Card>
@@ -428,7 +479,7 @@ export const FitnessPage: React.FC = () => {
             ))}
           </ul>
         )
-      ) : groupedRecords.length === 0 ? (
+      ) : filteredGroupedRecords.length === 0 ? (
         <Card>
           <EmptyState
             icon={<Dumbbell size={22} aria-hidden />}
@@ -453,7 +504,7 @@ export const FitnessPage: React.FC = () => {
         </Card>
       ) : (
         <div className="space-y-section">
-          {groupedRecords.map((group) => (
+          {filteredGroupedRecords.map((group) => (
             <section key={group.date} className="space-y-3">
               <Divider label={group.date} />
               <ul className="grid gap-3">

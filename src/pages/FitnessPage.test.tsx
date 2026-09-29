@@ -258,4 +258,22 @@ describe('FitnessPage', () => {
     // 75×5 → 1RM 87.5 > 70，破纪录
     expect(screen.getByText(/新纪录！「杠铃卧推」/)).toBeInTheDocument();
   });
+
+  it('训练日历点某一天只看那天的记录', async () => {
+    addRecord('推日', todayKey(), 60);
+    addRecord('腿日', '2026-09-01', 100);
+    render(<FitnessPage />);
+
+    // 记录视图下才有日历
+    await userEvent.click(screen.getByRole('button', { name: /训练记录/ }));
+    expect(screen.getByText('训练日历')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: /2026-09-01，1 次训练/ }));
+    expect(screen.getByText('只看 2026-09-01 · 清除')).toBeInTheDocument();
+    expect(screen.getByText('腿日')).toBeInTheDocument();
+    expect(screen.queryByText('推日')).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: '只看 2026-09-01 · 清除' }));
+    expect(screen.getByText('推日')).toBeInTheDocument();
+  });
 });

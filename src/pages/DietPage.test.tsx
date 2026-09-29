@@ -261,4 +261,15 @@ describe('DietPage', () => {
     expect(todays[0]!.type).toBe('breakfast');
     expect(todays[0]!.items[0]!.name).toBe('燕麦');
   });
+
+  it('饮食日历可以切换日期', async () => {
+    addMeal(today, 'lunch', [{ name: '牛肉面', category: '主食', calories: 620 }]);
+    render(<DietPage />);
+
+    expect(screen.getByText('饮食日历')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /2026-09-01/ }));
+
+    // 切到 9 月 1 日后，当日摄入归零（那天没记录）
+    expect(screen.getByText(/这天还是空的/)).toBeInTheDocument();
+  });
 });

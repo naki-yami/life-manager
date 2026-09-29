@@ -38,6 +38,8 @@ export type { SliderProps } from './Slider';
 export { SegmentedControl } from './SegmentedControl';
 export type { SegmentedControlProps, SegmentedOption } from './SegmentedControl';
 export { KanbanBoard } from './KanbanBoard';
+export { MonthCalendar } from './MonthCalendar';
+export type { MonthCalendarProps, CalendarMark } from './MonthCalendar';
 export type {
   KanbanBoardProps,
   KanbanColumnData,

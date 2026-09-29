@@ -38,6 +38,7 @@ import {
 } from '../components/ui';
 import { PageHeader, Toolbar } from '../components/layout';
 import { BarChart, Sparkline } from '../components/charts';
+import { MonthCalendar, type CalendarMark } from '../components/ui';
 import { useDietStore } from '../store/dietStore';
 import { useUndoableRemove } from '../hooks/useUndoableRemove';
 import { filterByKeyword, matchesKeyword } from '../utils/search';
@@ -164,6 +165,18 @@ export const DietPage: React.FC = () => {
   const proteinGoal = goals.protein > 0 ? goals.protein : 0;
   const waterGlasses = water[selectedDate] ?? 0;
   const WATER_GOAL = 8;
+
+/** 日历标记：每天记录的条数 */
+  const calendarMarks = useMemo(() => {
+    const map: Record<string, CalendarMark> = {};
+    for (const record of records) {
+      const entry = map[record.date] ?? { count: 0, label: '' };
+      entry.count += 1;
+      entry.label = `${entry.count} 条记录`;
+      map[record.date] = entry;
+    }
+    return map;
+  }, [records]);
 
   const yesterday = addDays(selectedDate, -1);
   const yesterdayRecords = records.filter((record) => record.date === yesterday);
@@ -514,6 +527,20 @@ export const DietPage: React.FC = () => {
           </div>
         )}
       </Toolbar>
+
+      {view === 'day' && (
+        <Card>
+          <CardHeader title="饮食日历" subtitle="点一天可以切换到那天查看与记录" />
+          <CardBody>
+            <MonthCalendar
+              label="饮食日历"
+              selected={selectedDate}
+              onSelect={setSelectedDate}
+              marks={calendarMarks}
+            />
+          </CardBody>
+        </Card>
+      )}
 
       {view === 'day' ? (
         dayRecords.length === 0 && keyword.trim() !== '' ? (
