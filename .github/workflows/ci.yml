@@ -1,0 +1,36 @@
+name: CI
+
+# 只在主分支与 PR 上跑，避免每个临时分支都触发一遍
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: 类型检查
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: 单元测试
+        run: npm run test
+
+      - name: 构建
+        run: npm run build
+
+      # 体积预算跑在构建之后：首屏（入口 JS / CSS + 首页 chunk）gzip 合计 ≤ 300KB
+      - name: 首屏体积预算
+        run: npm run size
