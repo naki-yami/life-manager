@@ -4,6 +4,8 @@ import {
   buildBackupEnvelope,
   clearAutoSnapshots,
   createAutoSnapshot,
+  DAILY_SNAPSHOT_REASON,
+  ensureDailySnapshot,
   listAutoSnapshots,
   mergeById,
   parseBackup,
@@ -12,6 +14,7 @@ import {
   restoreAutoSnapshot,
   serializeBackup,
 } from './backup';
+import { STORAGE_KEYS } from '../utils/storageKeys';
 
 /** 一份覆盖所有模块的完整数据，用于往返测试 */
 function sampleData(): BackupData {
@@ -630,5 +633,63 @@ describe('自动备份快照', () => {
     localStorage.clear();
     localStorage.setItem('lm:backup:auto:broken', 'not-json');
     expect(restoreAutoSnapshot('lm:backup:auto:broken')).toBe(false);
+  });
+});
+
+describe('每日自动备份', () => {
+  const seedTasks = (): void => {
+    localStorage.setItem(
+      STORAGE_KEYS.tasks,
+      JSON.stringify({ state: { tasks: [{ id: 't1' }], memos: [] }, version: 11 }),
+    );
+  };
+
+  it('有数据时每天第一次打开会留一份快照', () => {
+    localStorage.clear();
+    seedTasks();
+
+    const key = ensureDailySnapshot();
+
+    expect(key).not.toBeNull();
+    const snapshots = listAutoSnapshots();
+    expect(snapshots).toHaveLength(1);
+    expect(snapshots[0]!.reason).toBe(DAILY_SNAPSHOT_REASON);
+  });
+
+  it('同一天再打开不会重复创建', () => {
+    localStorage.clear();
+    seedTasks();
+
+    expect(ensureDailySnapshot()).not.toBeNull();
+    expect(ensureDailySnapshot()).toBeNull();
+    expect(listAutoSnapshots()).toHaveLength(1);
+  });
+
+  it('跨到第二天会再留一份', () => {
+    localStorage.clear();
+    seedTasks();
+
+    ensureDailySnapshot();
+    const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    expect(ensureDailySnapshot(tomorrow)).not.toBeNull();
+    expect(listAutoSnapshots()).toHaveLength(2);
+  });
+
+  it('空库不占快照位', () => {
+    localStorage.clear();
+    localStorage.setItem(
+      STORAGE_KEYS.tasks,
+      JSON.stringify({ state: { tasks: [], memos: [] }, version: 11 }),
+    );
+
+    expect(ensureDailySnapshot()).toBeNull();
+    expect(listAutoSnapshots()).toHaveLength(0);
+  });
+
+  it('数据整个坏掉时不会抛错', () => {
+    localStorage.clear();
+    localStorage.setItem(STORAGE_KEYS.tasks, 'not-json');
+
+    expect(() => ensureDailySnapshot()).not.toThrow();
   });
 });

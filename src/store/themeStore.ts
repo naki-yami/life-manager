@@ -1,7 +1,8 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { STORAGE_KEYS } from '../utils/storageKeys';
-import { STORE_VERSION, migrateState } from './persist';
+import { persistOptions } from './persist';
+import { asRecord } from './normalize';
 
 export type ThemeMode = 'light' | 'dark' | 'system';
 /** 三种模式解析之后一定是亮或暗，组件只需要关心这个 */
@@ -24,20 +25,6 @@ interface ThemeState {
 
 const defaultState: { themeMode: ThemeMode } = { themeMode: 'system' };
 
-/**
- * 兼容 v2 及更早存下来的 { theme: 'light' | 'dark' }。
- * 由 STORE_VERSION 升到 3 触发调用；同时做一层就地探测，
- * 防止某些环境里版本号没写进存储的情况。
- */
-function migrateTheme(persisted: unknown): { themeMode: ThemeMode } {
-  if (typeof persisted !== 'object' || persisted === null) return defaultState;
-
-  const raw = persisted as Record<string, unknown>;
-  if (isThemeMode(raw.themeMode)) return { themeMode: raw.themeMode };
-  if (isThemeMode(raw.theme)) return { themeMode: raw.theme };
-
-  return migrateState(persisted, defaultState);
-}
 
 export const useThemeStore = create<ThemeState>()(
   persist(
@@ -51,12 +38,17 @@ export const useThemeStore = create<ThemeState>()(
         }),
       setTheme: (theme) => set({ themeMode: theme }),
     }),
-    {
+    persistOptions<ThemeState, Pick<ThemeState, 'themeMode'>>({
       name: STORAGE_KEYS.theme,
-      version: STORE_VERSION,
       partialize: (state) => ({ themeMode: state.themeMode }),
-      migrate: migrateTheme,
-    },
+      // 兼容 v2 存下来的二态 { theme: 'light' | 'dark' }，非法值挡回默认
+      normalize: (persisted) => {
+        const raw = asRecord(persisted);
+        if (isThemeMode(raw.themeMode)) return { themeMode: raw.themeMode };
+        if (isThemeMode(raw.theme)) return { themeMode: raw.theme };
+        return { themeMode: defaultState.themeMode };
+      },
+    }),
   ),
 );
 

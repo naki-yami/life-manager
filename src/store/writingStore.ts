@@ -3,7 +3,9 @@ import { persist } from 'zustand/middleware';
 import { WritingProject, WritingSnapshot, WritingType, WritingStatus } from '../types';
 import { createId } from '../utils/id';
 import { STORAGE_KEYS } from '../utils/storageKeys';
-import { STORE_VERSION, migrateState } from './persist';
+import { persistOptions } from './persist';
+import { asRecord, normalizeArray } from './normalize';
+import { writingProjectSchema } from '../services/schemas';
 
 interface WritingState {
   projects: WritingProject[];
@@ -105,23 +107,13 @@ export const useWritingStore = create<WritingState>()(
         })),
       replaceProjects: (projects) => set({ projects }),
     }),
-    {
+    persistOptions<WritingState, Pick<WritingState, 'projects'>>({
       name: STORAGE_KEYS.writing,
-      version: STORE_VERSION,
       partialize: (state) => ({ projects: state.projects }),
-      // 旧数据没有正文、目标字数与快照，补默认值
-      migrate: (persisted) => {
-        const state = migrateState(persisted, defaultState);
-        return {
-          ...state,
-          projects: state.projects.map((project) => ({
-            ...project,
-            content: project.content ?? '',
-            targetWords: project.targetWords ?? 0,
-            snapshots: project.snapshots ?? [],
-          })),
-        };
-      },
-    },
+      // 旧数据没有正文、目标字数与快照，按 schema 补默认值
+      normalize: (persisted) => ({
+        projects: normalizeArray(writingProjectSchema, asRecord(persisted).projects),
+      }),
+    }),
   ),
 );

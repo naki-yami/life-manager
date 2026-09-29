@@ -15,8 +15,16 @@
  * - 11：开发项目增加里程碑 / 开发日志，工作项增加分类
  *
  * 注意：zustand persist 只在「存储里的 version 与当前 version 不一致」时
- * 才调用 migrate。所以结构变更必须靠 bump 版本号触发，不能只改 migrate 函数。
+ * 才调用 migrate。所以**根级**结构变更必须靠 bump 版本号触发。
+ *
+ * 而「数组里单条记录新增字段」（例如给 Task 加 subtasks）不该依赖版本号：
+ * 版本号一旦升到最新，手写在 migrate 里的补字段代码就再也不会执行了。
+ * 这类补齐统一交给 persistOptions() 的 normalize，它挂在 merge 上，
+ * 每次 rehydrate 都会跑且幂等。
  */
+import type { PersistOptions, PersistStorage } from 'zustand/middleware';
+import { persistStorage } from './storage';
+
 export const STORE_VERSION = 11;
 
 /**
@@ -36,4 +44,34 @@ export function migrateState<T extends object>(persisted: unknown, defaults: T):
     result[key] = value;
   }
   return result as T;
+}
+
+type PersistConfig<S, P> = {
+  name: string;
+  /** 只持久化数据字段，动作函数不进存储 */
+  partialize: (state: S) => P;
+  /** 把持久化数据补齐成当前结构；必须幂等 */
+  normalize: (persisted: unknown) => P;
+};
+
+/**
+ * 各 store 共用的 persist 配置。
+ *
+ * 三件事集中在这里，避免每个 store 各写一遍、各漏一处：
+ * 1. `storage` —— 用 storage.ts 的安全后端，写入失败不会把异常抛进 React；
+ * 2. `migrate` —— 版本号变化时原样交回数据，绝不返回 undefined（那等于清空用户数据）；
+ * 3. `merge` —— 挂归一化。merge 每次 rehydrate 都会执行，所以单条记录的字段补齐
+ *    不再受版本号影响。
+ */
+export function persistOptions<S extends object, P extends object>(
+  config: PersistConfig<S, P>,
+): PersistOptions<S, P> {
+  return {
+    name: config.name,
+    version: STORE_VERSION,
+    storage: persistStorage as PersistStorage<P>,
+    partialize: config.partialize,
+    migrate: (persisted) => (persisted ?? {}) as P,
+    merge: (persisted, current) => ({ ...current, ...config.normalize(persisted) }),
+  };
 }

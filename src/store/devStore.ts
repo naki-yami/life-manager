@@ -11,7 +11,9 @@ import {
 } from '../types';
 import { createId } from '../utils/id';
 import { STORAGE_KEYS } from '../utils/storageKeys';
-import { STORE_VERSION, migrateState } from './persist';
+import { persistOptions } from './persist';
+import { asRecord, normalizeArray } from './normalize';
+import { devProjectSchema, workSessionSchema } from '../services/schemas';
 
 interface DevState {
   projects: DevProject[];
@@ -212,28 +214,18 @@ export const useDevStore = create<DevState>()(
       replaceProjects: (projects) => set({ projects }),
       replaceSessions: (sessions) => set({ sessions }),
     }),
-    {
+    persistOptions<DevState, Pick<DevState, 'projects' | 'sessions'>>({
       name: STORAGE_KEYS.dev,
-      version: STORE_VERSION,
       partialize: (state) => ({ projects: state.projects, sessions: state.sessions }),
-      // 旧数据里的项目没有 hoursSpent，补齐成 0，免得界面上出现 NaN；
-      // v6 补齐技术栈 / 仓库地址 / 归档；v11 补齐里程碑 / 日志，工作项补分类
-      migrate: (persisted) => {
-        const state = migrateState(persisted, defaultState);
+      // 工时、技术栈、归档、里程碑、日志、工作项分类都是历次迭代新加的字段，
+      // 现在统一由 schema 补齐（含项目内嵌的工作项），不再逐版手写 map
+      normalize: (persisted) => {
+        const raw = asRecord(persisted);
         return {
-          ...state,
-          projects: state.projects.map((project) => ({
-            ...project,
-            hoursSpent: project.hoursSpent ?? 0,
-            techStack: project.techStack ?? [],
-            repoUrl: project.repoUrl ?? '',
-            archived: project.archived ?? false,
-            milestones: project.milestones ?? [],
-            logs: project.logs ?? [],
-            tasks: project.tasks.map((task) => ({ ...task, type: task.type ?? 'feature' })),
-          })),
+          projects: normalizeArray(devProjectSchema, raw.projects),
+          sessions: normalizeArray(workSessionSchema, raw.sessions),
         };
       },
-    },
+    }),
   ),
 );

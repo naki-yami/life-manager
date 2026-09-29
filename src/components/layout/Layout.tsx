@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom';
 import { Drawer } from '../ui';
 import { Header } from './Header';
 import { Sidebar, NavList } from './Sidebar';
+import { StorageAlert } from './StorageAlert';
 import { CommandPaletteProvider } from './CommandPalette';
 import { useCommandPalette } from './commandPaletteContext';
 import { useTheme } from '../../hooks/useTheme';
@@ -81,7 +82,11 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
             tabIndex={-1}
             className="min-w-0 flex-1 overflow-y-auto p-page focus:outline-none"
           >
-            <div className="mx-auto w-full max-w-5xl">{children}</div>
+            <div className="mx-auto w-full max-w-5xl">
+              {/* 只在写入失败时渲染，正常情况下不占位 */}
+              <StorageAlert />
+              {children}
+            </div>
           </main>
         </div>
 

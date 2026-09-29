@@ -201,10 +201,14 @@ export const mealRecordSchema = z.object({
   type: z.enum(['breakfast', 'lunch', 'dinner', 'snack']).default('breakfast'),
   items: z.array(foodItemSchema).default([]),
   totalCalories: z.number().min(0).catch(0),
-  /** v8：营养素合计；旧备份没有就保持缺省 */
-  totalProtein: z.number().min(0).optional(),
-  totalCarbs: z.number().min(0).optional(),
-  totalFat: z.number().min(0).optional(),
+  /**
+   * v8：营养素合计。这三项是「由条目累加而来」的派生值，不是用户填的原始信息，
+   * 所以旧数据缺省时统一补 0（表示这餐没记营养素），而不是留成 undefined ——
+   * 否则每个读取处都要写 `?? 0`。
+   */
+  totalProtein: z.number().min(0).catch(0).default(0),
+  totalCarbs: z.number().min(0).catch(0).default(0),
+  totalFat: z.number().min(0).catch(0).default(0),
 });
 
 // ---------- 游戏 ----------

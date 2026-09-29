@@ -53,7 +53,7 @@ import {
   restoreAutoSnapshot,
 } from '../services/backup';
 import type { ImportMode, ImportPlan, ParseIssue } from '../services/backup';
-import { MAX_AUTO_BACKUPS, clearAppStorage, estimateStorageBytes } from '../utils/storageKeys';
+import { MAX_AUTO_BACKUPS, clearAppStorage, getStorageUsage } from '../utils/storageKeys';
 import { Kbd } from '../components/ui';
 
 /** 快捷键说明表的数据；与 useShortcuts 里真正实现的按键保持一致 */
@@ -196,7 +196,7 @@ export const SettingsPage: React.FC = () => {
   ];
 
   const totalEntries = counts.reduce((sum, item) => sum + item.count, 0);
-  const storageBytes = estimateStorageBytes();
+  const usage = getStorageUsage();
 
   const handleExport = useCallback((): void => {
     const fileName = downloadBackup(readAllData());
@@ -300,7 +300,7 @@ export const SettingsPage: React.FC = () => {
         icon={SettingsIcon}
         meta={
           <Badge tone="default">
-            共 {totalEntries} 条数据 · 占用 {formatBytes(storageBytes)}
+            共 {totalEntries} 条数据 · 占用 {formatBytes(usage.bytes)}
           </Badge>
         }
       />
@@ -365,9 +365,15 @@ export const SettingsPage: React.FC = () => {
       <Card>
         <CardHeader
           title="数据概览"
-          subtitle={`本应用占用本地存储约 ${formatBytes(storageBytes)}`}
+          subtitle={`本应用占用本地存储约 ${formatBytes(usage.bytes)}`}
         />
         <CardBody>
+          {usage.level === 'warning' && (
+            <Alert tone="warning" title="本地存储快满了" className="mb-3">
+              已用 {formatBytes(usage.bytes)}，接近浏览器给单个站点的上限（约 5MB）。
+              建议先在上方导出备份，再到下面删除不需要的自动快照。
+            </Alert>
+          )}
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
             {counts.map((item) => (
               <div key={item.module} className="rounded bg-inset px-3 py-2">

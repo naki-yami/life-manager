@@ -3,7 +3,9 @@ import { persist } from 'zustand/middleware';
 import { DietGoals, MealRecord, MealType, FoodItem } from '../types';
 import { createId } from '../utils/id';
 import { STORAGE_KEYS } from '../utils/storageKeys';
-import { STORE_VERSION, migrateState } from './persist';
+import { persistOptions } from './persist';
+import { asRecord, normalizeArray, pickNumber, pickNumberMap } from './normalize';
+import { mealRecordSchema } from '../services/schemas';
 
 interface DietState {
   records: MealRecord[];
@@ -19,9 +21,20 @@ interface DietState {
   replaceRecords: (records: MealRecord[]) => void;
 }
 
+const DEFAULT_GOALS: DietGoals = { calories: 2000, protein: 80 };
+
+/** 每日目标是用户可改的设置项，脏数据回退默认值即可，不涉及用户记录 */
+const normalizeGoals = (raw: unknown): DietGoals => {
+  const record = asRecord(raw);
+  return {
+    calories: pickNumber(record.calories, DEFAULT_GOALS.calories),
+    protein: pickNumber(record.protein, DEFAULT_GOALS.protein),
+  };
+};
+
 const defaultState = {
   records: [] as MealRecord[],
-  goals: { calories: 2000, protein: 80 } as DietGoals,
+  goals: { ...DEFAULT_GOALS },
   water: {} as Record<string, number>,
 };
 
@@ -58,25 +71,18 @@ export const useDietStore = create<DietState>()(
       getRecordsByDate: (date) => get().records.filter((r) => r.date === date),
       replaceRecords: (records) => set({ records }),
     }),
-    {
+    persistOptions<DietState, Pick<DietState, 'records' | 'goals' | 'water'>>({
       name: STORAGE_KEYS.diet,
-      version: STORE_VERSION,
       partialize: (state) => ({ records: state.records, goals: state.goals, water: state.water }),
-      // 旧数据的记录没有营养素合计，补 0 免得界面出现 undefined
-      migrate: (persisted) => {
-        const state = migrateState(persisted, defaultState);
+      // 营养素合计是后加的字段，按 schema 补 0；goals / water 属于设置项，脏值直接回退默认
+      normalize: (persisted) => {
+        const raw = asRecord(persisted);
         return {
-          ...state,
-          records: state.records.map((record) => ({
-            ...record,
-            totalProtein: record.totalProtein ?? 0,
-            totalCarbs: record.totalCarbs ?? 0,
-            totalFat: record.totalFat ?? 0,
-          })),
-          goals: state.goals ?? { calories: 2000, protein: 80 },
-          water: state.water ?? {},
+          records: normalizeArray(mealRecordSchema, raw.records),
+          goals: normalizeGoals(raw.goals),
+          water: pickNumberMap(raw.water),
         };
       },
-    },
+    }),
   ),
 );

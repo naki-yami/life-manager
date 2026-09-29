@@ -1,6 +1,7 @@
 export { Header } from './Header';
 export { Sidebar, NavList } from './Sidebar';
 export { Layout } from './Layout';
+export { StorageAlert } from './StorageAlert';
 export { PageHeader } from './PageHeader';
 export type { PageHeaderProps } from './PageHeader';
 export { Toolbar } from './Toolbar';

@@ -1,7 +1,8 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { STORAGE_KEYS } from '../utils/storageKeys';
-import { STORE_VERSION, migrateState } from './persist';
+import { persistOptions } from './persist';
+import { asRecord, pickBoolean, pickEnum } from './normalize';
 
 export type Density = 'comfortable' | 'compact';
 
@@ -20,6 +21,8 @@ const defaultState: Pick<UiState, 'sidebarCollapsed' | 'density'> = {
   density: 'comfortable',
 };
 
+const DENSITIES: readonly Density[] = ['comfortable', 'compact'];
+
 export const useUiStore = create<UiState>()(
   persist(
     (set) => ({
@@ -30,14 +33,19 @@ export const useUiStore = create<UiState>()(
       toggleDensity: () =>
         set((state) => ({ density: state.density === 'compact' ? 'comfortable' : 'compact' })),
     }),
-    {
+    persistOptions<UiState, Pick<UiState, 'sidebarCollapsed' | 'density'>>({
       name: STORAGE_KEYS.ui,
-      version: STORE_VERSION,
       partialize: (state) => ({
         sidebarCollapsed: state.sidebarCollapsed,
         density: state.density,
       }),
-      migrate: (persisted) => migrateState(persisted, defaultState),
-    },
+      normalize: (persisted) => {
+        const raw = asRecord(persisted);
+        return {
+          sidebarCollapsed: pickBoolean(raw.sidebarCollapsed, defaultState.sidebarCollapsed),
+          density: pickEnum(raw.density, DENSITIES, defaultState.density),
+        };
+      },
+    }),
   ),
 );

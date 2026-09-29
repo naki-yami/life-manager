@@ -3,7 +3,9 @@ import { persist } from 'zustand/middleware';
 import { Book, BookStatus, ReadingSession } from '../types';
 import { createId } from '../utils/id';
 import { STORAGE_KEYS } from '../utils/storageKeys';
-import { STORE_VERSION, migrateState } from './persist';
+import { persistOptions } from './persist';
+import { asRecord, normalizeArray } from './normalize';
+import { bookSchema, readingSessionSchema } from '../services/schemas';
 
 interface BookState {
   books: Book[];
@@ -114,11 +116,17 @@ export const useBookStore = create<BookState>()(
         set((state) => ({ sessions: state.sessions.filter((s) => s.id !== id) })),
       replaceSessions: (sessions) => set({ sessions }),
     }),
-    {
+    persistOptions<BookState, Pick<BookState, 'books' | 'sessions'>>({
       name: STORAGE_KEYS.books,
-      version: STORE_VERSION,
       partialize: (state) => ({ books: state.books, sessions: state.sessions }),
-      migrate: (persisted) => migrateState(persisted, defaultState),
-    },
+      // 总页数、开始/读完时间、笔记页码都是后加的字段，读出来统一按 schema 补齐
+      normalize: (persisted) => {
+        const raw = asRecord(persisted);
+        return {
+          books: normalizeArray(bookSchema, raw.books),
+          sessions: normalizeArray(readingSessionSchema, raw.sessions),
+        };
+      },
+    }),
   ),
 );

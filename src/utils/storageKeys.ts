@@ -21,6 +21,23 @@ export const STORAGE_KEYS = {
 
 export type StorageKeyName = keyof typeof STORAGE_KEYS;
 
+/**
+ * 「用户数据」key：只有这些算进容量告警。
+ * 主题与界面偏好只是几字节的设置项，把它们算进来只会造成误报。
+ */
+export const DATA_STORAGE_KEYS: readonly string[] = [
+  STORAGE_KEYS.tasks,
+  STORAGE_KEYS.books,
+  STORAGE_KEYS.dev,
+  STORAGE_KEYS.writing,
+  STORAGE_KEYS.fitness,
+  STORAGE_KEYS.diet,
+  STORAGE_KEYS.games,
+];
+
+/** 浏览器普遍在 5MB 左右封顶，取 3MB 作为「该清理了」的预警线 */
+export const STORAGE_WARN_BYTES = 3 * 1024 * 1024;
+
 /** 旧版本（v1）使用的无前缀 key，迁移后保留不删除，作为兜底 */
 export const LEGACY_STORAGE_KEYS: Record<string, string> = {
   'tasks-storage': STORAGE_KEYS.tasks,
@@ -84,6 +101,24 @@ export function estimateStorageBytes(): number {
 
 export function isAppStorageKey(key: string): boolean {
   return key.startsWith(LM_PREFIX);
+}
+
+export type StorageLevel = 'ok' | 'warning';
+
+export interface StorageUsage {
+  bytes: number;
+  level: StorageLevel;
+}
+
+/**
+ * 存储占用与告警级别。
+ *
+ * 这里不用 navigator.storage.estimate()：它返回的是整个 origin 的配额
+ * （主要服务于 IndexedDB / Cache Storage），对 localStorage 的约 5MB 上限没有参考价值。
+ */
+export function getStorageUsage(): StorageUsage {
+  const bytes = estimateStorageBytes();
+  return { bytes, level: bytes >= STORAGE_WARN_BYTES ? 'warning' : 'ok' };
 }
 
 /**

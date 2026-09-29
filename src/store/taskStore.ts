@@ -3,7 +3,9 @@ import { persist } from 'zustand/middleware';
 import { Task, Priority, SubTask, TaskStatus, Memo, RepeatRule } from '../types';
 import { createId } from '../utils/id';
 import { STORAGE_KEYS } from '../utils/storageKeys';
-import { STORE_VERSION, migrateState } from './persist';
+import { persistOptions } from './persist';
+import { asRecord, normalizeArray } from './normalize';
+import { memoSchema, taskSchema } from '../services/schemas';
 import { nextDueDate } from '../utils/repeat';
 import { todayKey } from '../utils/date';
 
@@ -132,22 +134,18 @@ export const useTaskStore = create<TaskState>()(
       replaceTasks: (tasks) => set({ tasks }),
       replaceMemos: (memos) => set({ memos }),
     }),
-    {
+    persistOptions<TaskState, Pick<TaskState, 'tasks' | 'memos'>>({
       name: STORAGE_KEYS.tasks,
-      version: STORE_VERSION,
       partialize: (state) => ({ tasks: state.tasks, memos: state.memos }),
-      // 旧数据的任务没有子任务与重复规则，补默认值，避免界面上出现 undefined
-      migrate: (persisted) => {
-        const state = migrateState(persisted, defaultState);
+      // 旧数据的任务没有子任务与重复规则，按 schema 补默认值。
+      // 这一步挂在 merge 上，每次启动都会补齐，不再依赖版本号变化。
+      normalize: (persisted) => {
+        const raw = asRecord(persisted);
         return {
-          ...state,
-          tasks: state.tasks.map((task) => ({
-            ...task,
-            subtasks: task.subtasks ?? [],
-            repeat: task.repeat ?? null,
-          })),
+          tasks: normalizeArray(taskSchema, raw.tasks),
+          memos: normalizeArray(memoSchema, raw.memos),
         };
       },
-    },
+    }),
   ),
 );

@@ -3,7 +3,9 @@ import { persist } from 'zustand/middleware';
 import { Game, GamePlatform, GameSession, GameStatus } from '../types';
 import { createId } from '../utils/id';
 import { STORAGE_KEYS } from '../utils/storageKeys';
-import { STORE_VERSION, migrateState } from './persist';
+import { persistOptions } from './persist';
+import { asRecord, normalizeArray } from './normalize';
+import { gameSchema, gameSessionSchema } from '../services/schemas';
 
 interface GameState {
   games: Game[];
@@ -132,11 +134,16 @@ export const useGameStore = create<GameState>()(
       replaceGames: (games) => set({ games }),
       replaceSessions: (sessions) => set({ sessions }),
     }),
-    {
+    persistOptions<GameState, Pick<GameState, 'games' | 'sessions'>>({
       name: STORAGE_KEYS.games,
-      version: STORE_VERSION,
       partialize: (state) => ({ games: state.games, sessions: state.sessions }),
-      migrate: (persisted) => migrateState(persisted, defaultState),
-    },
+      normalize: (persisted) => {
+        const raw = asRecord(persisted);
+        return {
+          games: normalizeArray(gameSchema, raw.games),
+          sessions: normalizeArray(gameSessionSchema, raw.sessions),
+        };
+      },
+    }),
   ),
 );

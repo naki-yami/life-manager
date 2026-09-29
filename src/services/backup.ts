@@ -2,11 +2,14 @@ import { z } from 'zod';
 import { createId } from '../utils/id';
 import {
   BACKUP_KEY_PREFIX,
+  DATA_STORAGE_KEYS,
   MAX_AUTO_BACKUPS,
   appStorageKeys,
   clearAppStorage,
   isAppStorageKey,
 } from '../utils/storageKeys';
+import { todayKey } from '../utils/date';
+import { reportStorageFailure } from '../store/storage';
 import {
   APP_ID,
   BACKUP_MODULES,
@@ -403,10 +406,18 @@ export function createAutoSnapshot(reason: string): string | null {
     if (value !== null) entries[key] = value;
   }
 
+  // 先按上限裁剪再写入：快照自己也占空间，空间紧张时先腾地方成功率更高
+  pruneAutoSnapshots();
+
   // 同一毫秒内连续快照（例如批量操作）也要各自独立，所以后缀带上随机片段
   const key = `${BACKUP_KEY_PREFIX}${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-  storage.setItem(key, JSON.stringify({ createdAt: new Date().toISOString(), reason, entries }));
-  pruneAutoSnapshots();
+  try {
+    storage.setItem(key, JSON.stringify({ createdAt: new Date().toISOString(), reason, entries }));
+  } catch (error) {
+    // 快照写不进去属于可接受的降级（当前数据本身仍在），但要让用户知道存储已经满了
+    reportStorageFailure(key, error);
+    return null;
+  }
   return key;
 }
 
@@ -474,6 +485,65 @@ export function restoreAutoSnapshot(key: string): boolean {
   } catch {
     return false;
   }
+}
+
+// ---------------------------------------------------------------- 每日自动备份
+
+export const DAILY_SNAPSHOT_REASON = '每日自动备份';
+
+/** 快照创建时间落在哪一天（按应用统一的 todayKey 口径）；解析不了就返回空串 */
+function snapshotDay(createdAt: string): string {
+  const date = new Date(createdAt);
+  if (Number.isNaN(date.getTime())) return '';
+  return todayKey(date);
+}
+
+function isNonEmptyObject(value: unknown): boolean {
+  return typeof value === 'object' && value !== null && Object.keys(value).length > 0;
+}
+
+/** 本地是否已经有真实数据。空库不占快照位，免得新用户一进来就攒一堆空快照 */
+function hasUserData(): boolean {
+  const storage = safeStorage();
+  if (!storage) return false;
+
+  for (const key of DATA_STORAGE_KEYS) {
+    const raw = storage.getItem(key);
+    if (raw === null) continue;
+    try {
+      const parsed = JSON.parse(raw) as { state?: Record<string, unknown> };
+      const state = parsed?.state;
+      if (typeof state !== 'object' || state === null) continue;
+      for (const value of Object.values(state)) {
+        if (Array.isArray(value) ? value.length > 0 : isNonEmptyObject(value)) return true;
+      }
+    } catch {
+      // 单个模块的数据坏了不影响判断其它模块
+      continue;
+    }
+  }
+  return false;
+}
+
+/**
+ * 每天第一次打开应用时自动留一份快照。
+ *
+ * 为什么按「天」而不是按「次」或「每次改动」：快照池只有 MAX_AUTO_BACKUPS 份，
+ * 按次写会把池子冲干净，反而失去「回到上周某天」的能力。而真正要防的是
+ * 「清缓存 / 误操作」这类低频事故，一天一份就够了。
+ */
+export function ensureDailySnapshot(now: Date = new Date()): string | null {
+  if (!safeStorage()) return null;
+
+  const day = todayKey(now);
+  const already = listAutoSnapshots().some(
+    (snapshot) =>
+      snapshot.reason === DAILY_SNAPSHOT_REASON && snapshotDay(snapshot.createdAt) === day,
+  );
+  if (already) return null;
+  if (!hasUserData()) return null;
+
+  return createAutoSnapshot(DAILY_SNAPSHOT_REASON);
 }
 
 export { clearAppStorage };

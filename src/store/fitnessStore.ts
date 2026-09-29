@@ -3,7 +3,9 @@ import { persist } from 'zustand/middleware';
 import { FitnessPlan, WorkoutRecord, Exercise } from '../types';
 import { createId } from '../utils/id';
 import { STORAGE_KEYS } from '../utils/storageKeys';
-import { STORE_VERSION, migrateState } from './persist';
+import { persistOptions } from './persist';
+import { asRecord, normalizeArray } from './normalize';
+import { fitnessPlanSchema, workoutRecordSchema } from '../services/schemas';
 
 interface FitnessState {
   plans: FitnessPlan[];
@@ -48,11 +50,16 @@ export const useFitnessStore = create<FitnessState>()(
       replacePlans: (plans) => set({ plans }),
       replaceRecords: (records) => set({ records }),
     }),
-    {
+    persistOptions<FitnessState, Pick<FitnessState, 'plans' | 'records'>>({
       name: STORAGE_KEYS.fitness,
-      version: STORE_VERSION,
       partialize: (state) => ({ plans: state.plans, records: state.records }),
-      migrate: (persisted) => migrateState(persisted, defaultState),
-    },
+      normalize: (persisted) => {
+        const raw = asRecord(persisted);
+        return {
+          plans: normalizeArray(fitnessPlanSchema, raw.plans),
+          records: normalizeArray(workoutRecordSchema, raw.records),
+        };
+      },
+    }),
   ),
 );

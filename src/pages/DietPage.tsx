@@ -156,9 +156,10 @@ export const DietPage: React.FC = () => {
   }, [visibleAllRecords]);
 
   const dayCalories = dayRecords.reduce((sum, record) => sum + record.totalCalories, 0);
-  const dayProtein = dayRecords.reduce((sum, record) => sum + (record.totalProtein ?? 0), 0);
-  const dayCarbs = dayRecords.reduce((sum, record) => sum + (record.totalCarbs ?? 0), 0);
-  const dayFat = dayRecords.reduce((sum, record) => sum + (record.totalFat ?? 0), 0);
+  // 营养素合计在归一化时已经补齐，这里直接加即可
+  const dayProtein = dayRecords.reduce((sum, record) => sum + record.totalProtein, 0);
+  const dayCarbs = dayRecords.reduce((sum, record) => sum + record.totalCarbs, 0);
+  const dayFat = dayRecords.reduce((sum, record) => sum + record.totalFat, 0);
 
   const caloriesGoal = goals.calories > 0 ? goals.calories : 0;
   const caloriesLeft = caloriesGoal > 0 ? caloriesGoal - dayCalories : null;
@@ -277,9 +278,9 @@ export const DietPage: React.FC = () => {
           </div>
           <p className="mt-1.5 text-2xs text-content-tertiary">
             共 {formatNumber(record.totalCalories)} kcal
-            {(record.totalProtein ?? 0) > 0 && ` · 蛋白 ${Math.round(record.totalProtein ?? 0)}g`}
-            {(record.totalCarbs ?? 0) > 0 && ` · 碳水 ${Math.round(record.totalCarbs ?? 0)}g`}
-            {(record.totalFat ?? 0) > 0 && ` · 脂肪 ${Math.round(record.totalFat ?? 0)}g`}
+            {record.totalProtein > 0 && ` · 蛋白 ${Math.round(record.totalProtein)}g`}
+            {record.totalCarbs > 0 && ` · 碳水 ${Math.round(record.totalCarbs)}g`}
+            {record.totalFat > 0 && ` · 脂肪 ${Math.round(record.totalFat)}g`}
             {view === 'all' ? ` · ${MEAL_LABEL[mealType]} · ${recordDate}` : ''}
           </p>
         </div>

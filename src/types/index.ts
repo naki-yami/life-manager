@@ -217,10 +217,13 @@ export interface MealRecord {
   type: MealType;
   items: FoodItem[];
   totalCalories: number;
-  /** 三大营养素合计（克），由条目累加而来；旧数据可能没有 */
-  totalProtein?: number;
-  totalCarbs?: number;
-  totalFat?: number;
+  /**
+   * 三大营养素合计（克），由条目累加而来。
+   * 旧数据缺省时由归一化补 0，所以这里不是可选的 —— 读取处不必再写 `?? 0`。
+   */
+  totalProtein: number;
+  totalCarbs: number;
+  totalFat: number;
 }
 
 /** 每日饮食目标；0 表示未设置 */
