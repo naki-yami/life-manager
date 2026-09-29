@@ -12,6 +12,7 @@ import {
   StatCard,
 } from '../components/ui';
 import { BarChart, Heatmap, Sparkline } from '../components/charts';
+import { ProgressBar } from '../components/ui';
 import { PageHeader } from '../components/layout';
 import { useTaskStore } from '../store/taskStore';
 import { useBookStore } from '../store/bookStore';
@@ -26,10 +27,11 @@ import {
   currentStreak,
   percentOf,
   seriesByDay,
+  seriesByWeek,
   sumOf,
   sumSeries,
 } from '../utils/stats';
-import { formatNumber, todayKey } from '../utils/date';
+import { formatNumber, formatShortDate, todayKey } from '../utils/date';
 
 const WINDOW_DAYS = 30;
 const CHART_DAYS = 14;
@@ -43,6 +45,9 @@ export const StatsPage: React.FC = () => {
   const fitnessRecords = useFitnessStore((state) => state.records);
   const dietRecords = useDietStore((state) => state.records);
   const games = useGameStore((state) => state.games);
+  const devSessions = useDevStore((state) => state.sessions);
+  const readingSessions = useBookStore((state) => state.sessions);
+  const gameSessions = useGameStore((state) => state.sessions);
 
   const today = todayKey();
 
@@ -121,6 +126,38 @@ export const StatsPage: React.FC = () => {
     fitnessRecords.length > 0 ||
     dietRecords.length > 0 ||
     games.length > 0;
+
+/** 三类流水的近 8 周趋势（周一起始） */
+  const WEEKS = 8;
+  const devWeekly = useMemo(
+    () => seriesByWeek(devSessions, WEEKS, today, (session) => session.date, (session) => session.hours),
+    [devSessions, today],
+  );
+  const readingWeekly = useMemo(
+    () =>
+      seriesByWeek(readingSessions, WEEKS, today, (session) => session.date, (session) => session.minutes),
+    [readingSessions, today],
+  );
+  const gameWeekly = useMemo(
+    () => seriesByWeek(gameSessions, WEEKS, today, (session) => session.date, (session) => session.hours),
+    [gameSessions, today],
+  );
+
+  /** 各模块的数据量分布 */
+  const moduleDistribution = useMemo(
+    () =>
+      [
+        { label: '今日计划', count: tasks.length, tone: 'success' as const },
+        { label: '读书', count: books.length, tone: 'accent' as const },
+        { label: '开发项目', count: devProjects.length, tone: 'accent' as const },
+        { label: '写作', count: writingProjects.length, tone: 'success' as const },
+        { label: '训练记录', count: fitnessRecords.length, tone: 'warning' as const },
+        { label: '饮食记录', count: dietRecords.length, tone: 'danger' as const },
+        { label: '游戏', count: games.length, tone: 'warning' as const },
+      ].sort((a, b) => b.count - a.count),
+    [tasks, books, devProjects, writingProjects, fitnessRecords, dietRecords, games],
+  );
+  const maxModuleCount = Math.max(1, ...moduleDistribution.map((item) => item.count));
 
   const rings = [
     {
@@ -261,6 +298,73 @@ export const StatsPage: React.FC = () => {
               </CardBody>
             </Card>
           </div>
+
+          {moduleDistribution.some((item) => item.count > 0) && (
+            <Card>
+              <CardHeader title="各模块数据分布" subtitle="每个模块累计的记录条数" />
+              <CardBody className="space-y-3">
+                {moduleDistribution.map((item) => (
+                  <div key={item.label} className="flex items-center gap-3">
+                    <span className="w-16 shrink-0 text-xs text-content-secondary">{item.label}</span>
+                    <ProgressBar
+                      className="min-w-0 flex-1"
+                      value={item.count}
+                      max={maxModuleCount}
+                      label={`${item.label} ${item.count} 条`}
+                      tone={item.count > 0 ? item.tone : 'accent'}
+                    />
+                    <span className="w-10 shrink-0 text-right text-xs text-content-tertiary tabular">
+                      {item.count}
+                    </span>
+                  </div>
+                ))}
+              </CardBody>
+            </Card>
+          )}
+
+          {(devSessions.length > 0 || readingSessions.length > 0 || gameSessions.length > 0) && (
+            <div className="grid gap-4 lg:grid-cols-3">
+              {devSessions.length > 0 && (
+                <Card>
+                  <CardHeader title="工时趋势" subtitle="近 8 周每周投入的开发工时" />
+                  <CardBody>
+                    <BarChart
+                      data={devWeekly}
+                      label="近 8 周每周投入工时"
+                      formatValue={(value) => `${formatNumber(value)} 小时`}
+                      formatDate={formatShortDate}
+                    />
+                  </CardBody>
+                </Card>
+              )}
+              {readingSessions.length > 0 && (
+                <Card>
+                  <CardHeader title="阅读趋势" subtitle="近 8 周每周阅读时长" />
+                  <CardBody>
+                    <BarChart
+                      data={readingWeekly}
+                      label="近 8 周每周阅读分钟"
+                      formatValue={(value) => `${formatNumber(value)} 分钟`}
+                      formatDate={formatShortDate}
+                    />
+                  </CardBody>
+                </Card>
+              )}
+              {gameSessions.length > 0 && (
+                <Card>
+                  <CardHeader title="游玩趋势" subtitle="近 8 周每周游玩时长" />
+                  <CardBody>
+                    <BarChart
+                      data={gameWeekly}
+                      label="近 8 周每周游玩小时"
+                      formatValue={(value) => `${formatNumber(value)} 小时`}
+                      formatDate={formatShortDate}
+                    />
+                  </CardBody>
+                </Card>
+              )}
+            </div>
+          )}
 
           <Card>
             <CardHeader title="各模块进度" subtitle="阅读 / 写作 / 开发 / 游戏的整体完成情况" />

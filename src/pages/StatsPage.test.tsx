@@ -35,12 +35,12 @@ const meal = [{ name: '鸡胸肉', category: 'protein', calories: 600 }];
 
 beforeEach(() => {
   useTaskStore.setState({ tasks: [], memos: [] });
-  useBookStore.setState({ books: [] });
-  useDevStore.setState({ projects: [] });
+  useBookStore.setState({ books: [], sessions: [] });
+  useDevStore.setState({ projects: [], sessions: [] });
   useWritingStore.setState({ projects: [] });
   useFitnessStore.setState({ plans: [], records: [] });
   useDietStore.setState({ records: [] });
-  useGameStore.setState({ games: [] });
+  useGameStore.setState({ games: [], sessions: [] });
 });
 
 describe('StatsPage', () => {
@@ -184,5 +184,27 @@ describe('StatsPage', () => {
       '0',
     );
     expect(screen.queryByText(/NaN/)).not.toBeInTheDocument();
+  });
+
+  it('各模块数据分布与流水趋势图表', async () => {
+    useTaskStore.getState().addTask('写周报', '', 'high', '');
+    useDevStore.getState().addProject('写作助手', '');
+    useDevStore.getState().addSession(
+      useDevStore.getState().projects[0]!.id,
+      todayKey(),
+      2,
+      '',
+    );
+
+    renderStats();
+
+    expect(screen.getByText('各模块数据分布')).toBeInTheDocument();
+    // 今日计划 1 条、开发项目 1 条，都在分布里
+    expect(screen.getByText('今日计划')).toBeInTheDocument();
+    expect(screen.getByText('开发项目')).toBeInTheDocument();
+
+    // 工时趋势卡出现
+    expect(screen.getByText('工时趋势')).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: /近 8 周每周投入工时/ })).toBeInTheDocument();
   });
 });
