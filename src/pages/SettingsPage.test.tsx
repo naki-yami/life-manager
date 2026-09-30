@@ -384,4 +384,36 @@ describe('SettingsPage', () => {
     await userEvent.click(screen.getByRole('button', { name: '立即写入' }));
     expect(await screen.findByText('已授权')).toBeInTheDocument();
   });
+
+  it('从外部导入：Goodreads CSV 先预览再写入，去重跳过已有书', async () => {
+    render(
+      <MemoryRouter initialEntries={['/settings']}>
+        <Routes>
+          <Route path="/settings" element={<ToastProvider><SettingsPage /></ToastProvider>} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText('从外部导入')).toBeInTheDocument();
+
+    const fileInput = screen.getByLabelText('选择 CSV 文件');
+    const csv = ['Title,Author,Date Read,Bookshelves', '新的一本书,某作者,2024/5/1,read', '1984,Orwell,,to-read'].join('\n');
+    const file = new File([csv], 'goodreads.csv', { type: 'text/csv' });
+    // 1984 已在库里（beforeEach 铺的种子没有，这里直接种一本）
+    useBookStore.getState().addBook('1984', 'Orwell');
+    fireEvent.change(fileInput, { target: { files: [file] } });
+
+    // 预览出现：新增 1、去重跳过 1
+    expect(await screen.findByText('将新增 1 条')).toBeInTheDocument();
+    expect(screen.getByText('去重跳过 1 条')).toBeInTheDocument();
+    expect(screen.getByText('新的一本书')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: '导入 1 条' }));
+
+    const titles = useBookStore.getState().books.map((book) => book.title);
+    expect(titles).toContain('新的一本书');
+    expect(titles.filter((title) => title === '1984')).toHaveLength(1);
+    const added = useBookStore.getState().books.find((book) => book.title === '新的一本书')!;
+    expect(added.status).toBe('finished');
+  });
 });

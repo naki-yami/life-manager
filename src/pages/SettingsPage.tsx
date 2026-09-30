@@ -1,5 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import type { Book, Game } from '../types';
+import { formatNumber } from '../utils/date';
 import {
   Database,
   Download,
@@ -30,11 +32,19 @@ import {
   Spinner,
   Switch,
   useToast,
+  Select,
 } from '../components/ui';
 import { PageHeader } from '../components/layout';
 import { useTheme } from '../hooks/useTheme';
 import { useTaskStore } from '../store/taskStore';
 import { useBookStore } from '../store/bookStore';
+import {
+  CSV_SOURCES,
+  planBookCsvImport,
+  planGameCsvImport,
+  type CsvImportPlan,
+  type CsvImportSource,
+} from '../services/csvImport';
 import { useDevStore } from '../store/devStore';
 import { useWritingStore } from '../store/writingStore';
 import { useFitnessStore } from '../store/fitnessStore';
@@ -256,6 +266,49 @@ export const SettingsPage: React.FC = () => {
   useEffect(() => {
     void refreshStorage();
   }, [refreshStorage, totalEntries]);
+
+  // ---------- 外部导入（F10）：CSV 预览与写入 ----------
+  const [csvSource, setCsvSource] = useState<CsvImportSource>('goodreads');
+  const [csvPlan, setCsvPlan] = useState<((CsvImportPlan<Book, 'books'> | CsvImportPlan<Game, 'games'>) & { fileName: string }) | null>(null);
+  const [csvBusy, setCsvBusy] = useState(false);
+
+  const currentSource = CSV_SOURCES.find((source) => source.id === csvSource)!;
+
+  const handleCsvFile = async (file: File): Promise<void> => {
+    setCsvBusy(true);
+    try {
+      const text = await file.text();
+      const plan =
+        csvSource === 'steam'
+          ? planGameCsvImport(text, useGameStore.getState().games)
+          : planBookCsvImport(csvSource, text, useBookStore.getState().books);
+      setCsvPlan({ ...plan, fileName: file.name });
+    } finally {
+      setCsvBusy(false);
+    }
+  };
+
+  const confirmCsvImport = (): void => {
+    if (!csvPlan || csvPlan.toAdd.length === 0) return;
+    // 写库前先留一份快照，和「导入数据」卡的安全网保持一致
+    void (async () => {
+      const { createAutoSnapshot } = await import('../services/backup');
+      createAutoSnapshot('外部导入前');
+      if (csvPlan.target === 'books') {
+        const books = useBookStore.getState().books;
+        useBookStore.getState().replaceBooks([...books, ...csvPlan.toAdd]);
+      } else {
+        const games = useGameStore.getState().games;
+        useGameStore.getState().replaceGames([...games, ...csvPlan.toAdd]);
+      }
+      toast({
+        tone: 'success',
+        title: `已导入 ${csvPlan.toAdd.length} 条`,
+        description: `来源：${csvPlan.fileName}（去重跳过 ${csvPlan.skipped} 条）。`,
+      });
+      setCsvPlan(null);
+    })();
+  };
 
   const handleExport = useCallback((): void => {
     const fileName = downloadBackup(readAllData());
@@ -700,6 +753,133 @@ export const SettingsPage: React.FC = () => {
                 </li>
               ))}
             </ul>
+          )}
+        </CardBody>
+      </Card>
+
+      <Card>
+        <CardHeader
+          title="从外部导入"
+          subtitle="把别的平台导出的 CSV 批量搬进来：先预览、按名字去重，确认后才写入"
+        />
+        <CardBody className="space-y-4">
+          <div className="flex flex-wrap items-end gap-2">
+            <div className="w-56">
+              <Select
+                label="来源"
+                value={csvSource}
+                onChange={(value) => {
+                  setCsvSource(value as CsvImportSource);
+                  setCsvPlan(null);
+                }}
+                options={CSV_SOURCES.map((source) => ({
+                  value: source.id,
+                  label: source.label,
+                }))}
+              />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="pb-2 text-xs text-content-tertiary">{currentSource.hint}</p>
+            </div>
+            <input
+              type="file"
+              accept=".csv,text/csv"
+              aria-label="选择 CSV 文件"
+              disabled={csvBusy}
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (file) void handleCsvFile(file);
+                // 允许重复选择同一个文件
+                event.target.value = '';
+              }}
+              className="block w-full max-w-xs rounded border border-line-subtle bg-surface p-2 text-sm text-content-secondary file:mr-3 file:rounded file:border-0 file:bg-inset file:px-3 file:py-1.5 file:text-xs file:text-content-secondary"
+            />
+          </div>
+
+          {csvPlan && (
+            <div className="space-y-3 rounded border border-line-subtle p-3">
+              <div className="flex flex-wrap items-center gap-2 text-sm">
+                <Badge tone="info">{csvPlan.fileName}</Badge>
+                <Badge tone="default">共 {csvPlan.total} 行</Badge>
+                <Badge tone={csvPlan.toAdd.length > 0 ? 'success' : 'default'}>
+                  将新增 {csvPlan.toAdd.length} 条
+                </Badge>
+                {csvPlan.skipped > 0 && <Badge tone="warning">去重跳过 {csvPlan.skipped} 条</Badge>}
+              </div>
+
+              {csvPlan.warnings.length > 0 && (
+                <Alert tone="warning" title="有几点要注意">
+                  <ul className="list-disc space-y-0.5 pl-4">
+                    {csvPlan.warnings.slice(0, 5).map((warning) => (
+                      <li key={warning}>{warning}</li>
+                    ))}
+                    {csvPlan.warnings.length > 5 && (
+                      <li>…还有 {csvPlan.warnings.length - 5} 条警告</li>
+                    )}
+                  </ul>
+                </Alert>
+              )}
+
+              {csvPlan.toAdd.length > 0 && (
+                <div className="max-h-48 overflow-auto rounded border border-line-subtle">
+                  <table className="w-full text-left text-xs">
+                    <thead className="sticky top-0 bg-surface">
+                      <tr className="text-content-tertiary">
+                        {csvPlan.target === 'books' ? (
+                          <>
+                            <th scope="col" className="px-3 py-1.5 font-medium">标题</th>
+                            <th scope="col" className="px-3 py-1.5 font-medium">作者</th>
+                            <th scope="col" className="px-3 py-1.5 font-medium">状态</th>
+                          </>
+                        ) : (
+                          <>
+                            <th scope="col" className="px-3 py-1.5 font-medium">游戏</th>
+                            <th scope="col" className="px-3 py-1.5 font-medium">时长</th>
+                          </>
+                        )}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-line-subtle">
+                      {csvPlan.toAdd.slice(0, 8).map((item) =>
+                        csvPlan.target === 'books' ? (
+                          <tr key={item.id}>
+                            <td className="max-w-40 truncate px-3 py-1.5 text-content">{(item as Book).title}</td>
+                            <td className="max-w-32 truncate px-3 py-1.5 text-content-secondary">{(item as Book).author || '—'}</td>
+                            <td className="px-3 py-1.5 text-content-tertiary">
+                              {(item as Book).status === 'finished' ? '已读' : '想读'}
+                            </td>
+                          </tr>
+                        ) : (
+                          <tr key={item.id}>
+                            <td className="max-w-40 truncate px-3 py-1.5 text-content">{(item as Game).name}</td>
+                            <td className="px-3 py-1.5 text-content-tertiary tabular">
+                              {formatNumber((item as Game).hoursPlayed)} 小时
+                            </td>
+                          </tr>
+                        ),
+                      )}
+                    </tbody>
+                  </table>
+                  {csvPlan.toAdd.length > 8 && (
+                    <p className="border-t border-line-subtle px-3 py-1.5 text-2xs text-content-tertiary">
+                      只预览前 8 条，共 {csvPlan.toAdd.length} 条。
+                    </p>
+                  )}
+                </div>
+              )}
+
+              <div className="flex items-center justify-end gap-2">
+                <Button variant="secondary" onClick={() => setCsvPlan(null)}>
+                  放弃
+                </Button>
+                <Button
+                  onClick={confirmCsvImport}
+                  disabled={csvPlan.toAdd.length === 0}
+                >
+                  导入 {csvPlan.toAdd.length} 条
+                </Button>
+              </div>
+            </div>
           )}
         </CardBody>
       </Card>
