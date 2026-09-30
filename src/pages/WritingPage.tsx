@@ -38,7 +38,8 @@ import { WritingProject, WritingStatus, WritingType } from '../types';
 import { useNewEntryShortcut } from '../hooks/useShortcuts';
 import { usePaletteFocus } from '../hooks/usePaletteFocus';
 import { ToastContext } from '../components/ui/toastContext';
-import { downloadTextFile } from '../utils/download';
+import { downloadBlob, downloadTextFile } from '../utils/download';
+import { buildDocxBlob, composeExportMarkdown } from '../utils/docx';
 import { MarkdownEditor } from '../components/writing/MarkdownEditor';
 
 type Filter = 'all' | WritingStatus;
@@ -196,20 +197,25 @@ export const WritingPage: React.FC = () => {
     closeEditor();
   };
 
+  /** 同一篇稿子的导出正文：Markdown 与 Word 共用一份，免得两边内容漂移 */
+  const exportSourceOf = (project: WritingProject): string =>
+    composeExportMarkdown({
+      title: project.title,
+      meta: `类型：${TYPE_LABEL[project.type]} · 状态：${STATUS_LABEL[project.status]} · 字数：${project.wordCount}`,
+      content: project.content,
+      notes: project.notes,
+    });
+
   const handleExport = (id: string): void => {
     const project = projects.find((item) => item.id === id);
     if (!project) return;
-    const lines = [
-      `# ${project.title}`,
-      '',
-      `> 类型：${TYPE_LABEL[project.type]} · 状态：${STATUS_LABEL[project.status]} · 字数：${project.wordCount}`,
-      '',
-      project.content.trim() || '（正文为空）',
-    ];
-    if (project.notes.trim()) {
-      lines.push('', '## 创作笔记', '', project.notes.trim());
-    }
-    downloadTextFile(`${project.title}.md`, lines.join('\n'));
+    downloadTextFile(`${project.title}.md`, exportSourceOf(project));
+  };
+
+  const handleExportDocx = (id: string): void => {
+    const project = projects.find((item) => item.id === id);
+    if (!project) return;
+    downloadBlob(`${project.title}.docx`, buildDocxBlob(exportSourceOf(project)));
   };
 
   const openNotes = (id: string, notes: string): void => {
@@ -465,6 +471,15 @@ export const WritingPage: React.FC = () => {
                           onClick={() => handleExport(project.id)}
                         >
                           导出
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          icon={<FileText size={13} aria-hidden />}
+                          aria-label={`导出《${project.title}》为 Word`}
+                          onClick={() => handleExportDocx(project.id)}
+                        >
+                          导出 Word
                         </Button>
                       </div>
                     </div>

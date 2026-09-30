@@ -9,6 +9,7 @@ import { WritingStatus } from '../types';
 import { requestPaletteFocus, resetPaletteFocus } from '../hooks/usePaletteFocus';
 import { MASTER_DETAIL_QUERY } from '../components/layout';
 import { mockMediaQueries } from '../test/matchMedia';
+import { DOCX_MIME } from '../utils/docx';
 
 beforeEach(() => {
   useWritingStore.setState({ projects: [] });
@@ -480,5 +481,54 @@ describe('WritingPage 专注模式', () => {
     await userEvent.click(within(dialog).getByRole('button', { name: '保存' }));
 
     expect(projectOf('新文章').content).toBe('专注写下的字');
+  });
+});
+
+describe('WritingPage 导出 Word', () => {
+  /** 最近一次下载交给 createObjectURL 的 Blob —— 下载被禁的无头环境里，这是离产物最近的一手证据 */
+  const lastBlob = (): Blob => {
+    const createObjectURL = URL.createObjectURL as unknown as ReturnType<typeof vi.fn>;
+    const calls = createObjectURL.mock.calls;
+    return calls[calls.length - 1]![0] as Blob;
+  };
+
+  it('导出 Word 产出一个 docx 的 Blob', async () => {
+    useWritingStore.getState().addProject('可导出的稿子', 'article');
+    useWritingStore.getState().updateContent(projectOf('可导出的稿子').id, '正文内容');
+    render(<WritingPage />);
+
+    await userEvent.click(screen.getByRole('button', { name: '导出《可导出的稿子》为 Word' }));
+
+    const createObjectURL = URL.createObjectURL as unknown as ReturnType<typeof vi.fn>;
+    expect(createObjectURL).toHaveBeenCalledTimes(1);
+    const blob = lastBlob();
+    expect(blob.type).toBe(DOCX_MIME);
+    expect(blob.size).toBeGreaterThan(0);
+  });
+
+  it('空正文也能导出，不是零字节文件', async () => {
+    useWritingStore.getState().addProject('空白稿', 'article');
+    render(<WritingPage />);
+
+    await userEvent.click(screen.getByRole('button', { name: '导出《空白稿》为 Word' }));
+
+    const blob = lastBlob();
+    expect(blob.type).toBe(DOCX_MIME);
+    expect(blob.size).toBeGreaterThan(0);
+  });
+
+  it('两个导出按钮各产出对应类型，互不串味', async () => {
+    const store = useWritingStore.getState();
+    store.addProject('同一篇', 'article');
+    store.updateContent(projectOf('同一篇').id, '共同正文');
+    render(<WritingPage />);
+
+    await userEvent.click(screen.getByRole('button', { name: '导出《同一篇》为 Markdown' }));
+    await userEvent.click(screen.getByRole('button', { name: '导出《同一篇》为 Word' }));
+
+    const createObjectURL = URL.createObjectURL as unknown as ReturnType<typeof vi.fn>;
+    const calls = createObjectURL.mock.calls;
+    expect((calls[0]![0] as Blob).type).toContain('text/plain');
+    expect(lastBlob().type).toBe(DOCX_MIME);
   });
 });
