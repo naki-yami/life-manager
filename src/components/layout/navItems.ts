@@ -1,5 +1,6 @@
 import {
   BarChart3,
+  BookHeart,
   BookOpen,
   CalendarCheck,
   Code2,
@@ -125,6 +126,14 @@ export const NAV_ITEMS: NavItem[] = [
     description: '给指标定个数字，达成率从记录里自动算',
     icon: Trophy,
     keywords: ['goals', 'goal', 'mubiao', '目标', '达成率', '打卡'],
+    group: 'main',
+  },
+  {
+    path: '/journal',
+    label: '日记与心情',
+    description: '一天一条：写几句，记一个心情档位',
+    icon: BookHeart,
+    keywords: ['journal', 'diary', 'riji', '日记', '心情', 'mood'],
     group: 'main',
   },
   {

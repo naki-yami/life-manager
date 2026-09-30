@@ -48,6 +48,14 @@ describe('navItems', () => {
     expect(review?.keywords).toContain('周报');
   });
 
+  it('日记页挂在主导航上，命令面板也能按「日记 / 心情」搜到', () => {
+    const journal = findNavItem('/journal');
+
+    expect(journal).toMatchObject({ label: '日记与心情', group: 'main' });
+    expect(journal?.keywords).toContain('日记');
+    expect(journal?.keywords).toContain('心情');
+  });
+
   it('根路径只在自己身上激活', () => {
     expect(isNavItemActive('/', '/')).toBe(true);
     expect(isNavItemActive('/tasks', '/')).toBe(false);
