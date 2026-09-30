@@ -8,6 +8,7 @@ import {
   CardBody,
   CardHeader,
   EmptyState,
+  Input,
   ProgressRing,
   SegmentedControl,
   StatCard,
@@ -39,6 +40,7 @@ import {
   weekBuckets,
 } from '../utils/stats';
 import {
+  addDays,
   dayKeyOf,
   daysBetween,
   formatMonthLabel,
@@ -51,15 +53,19 @@ import { goalProgress, sortGoals, summarizeGoals } from '../utils/goals';
 import type { DayPoint } from '../utils/stats';
 import type { MetricSnapshot } from '../utils/metrics';
 
-/** 图表的时间范围档位；「全部」从最早一条记录算起 */
-type StatsRange = '7' | '30' | '90' | 'all';
+/** 图表的时间范围档位；「全部」从最早一条记录算起，「自定义」看用户选的两端 */
+type StatsRange = '7' | '30' | '90' | 'custom' | 'all';
 
 const RANGE_OPTIONS: Array<{ value: StatsRange; label: string }> = [
   { value: '7', label: '7 天' },
   { value: '30', label: '30 天' },
   { value: '90', label: '90 天' },
+  { value: 'custom', label: '自定义' },
   { value: 'all', label: '全部' },
 ];
+
+/** 自定义区间的默认宽度：和「30 天」对齐，切过去画面不跳 */
+const CUSTOM_DEFAULT_DAYS = 30;
 
 /** 默认窗口：30 天，够看出趋势又不至于太密 */
 const DEFAULT_RANGE_DAYS = 30;
@@ -89,8 +95,11 @@ function bucketize(series: readonly DayPoint[], mode: BucketMode): DayPoint[] {
   return [...series];
 }
 
-const rangeLabelOf = (range: StatsRange, days: number): string =>
-  range === 'all' ? `全部 ${days} 天` : `最近 ${days} 天`;
+const rangeLabelOf = (range: StatsRange, days: number): string => {
+  if (range === 'all') return `全部 ${days} 天`;
+  if (range === 'custom') return `所选 ${days} 天`;
+  return `最近 ${days} 天`;
+};
 
 export const StatsPage: React.FC = () => {
   const navigate = useNavigate();
@@ -110,6 +119,26 @@ export const StatsPage: React.FC = () => {
 
   const today = todayKey();
   const [range, setRange] = useState<StatsRange>('30');
+  /** 自定义区间的两端，默认最近 30 天 */
+  const [customFrom, setCustomFrom] = useState(() =>
+    addDays(todayKey(), -(CUSTOM_DEFAULT_DAYS - 1)),
+  );
+  const [customTo, setCustomTo] = useState(() => todayKey());
+
+  /**
+   * 自定义区间的归一化结果。
+   *
+   * 两个日期框是分开改的，中间必然出现「起 > 止」的瞬间。这里不自动纠正输入
+   * （边打字边跳日期很烦），只在取数前统一成「谁早谁当起点」，图表永远拿不到负数天数；
+   * 上限仍按 365 天封顶，与「全部」一个口径。
+   */
+  const customWindow = useMemo(() => {
+    const from = isDayKey(customFrom) ? customFrom : today;
+    const to = isDayKey(customTo) ? customTo : today;
+    const [start, end] = from <= to ? [from, to] : [to, from];
+    const span = daysBetween(start, end) ?? 0;
+    return { start, end, days: Math.min(ALL_DAYS_CAP, Math.max(1, span + 1)) };
+  }, [customFrom, customTo, today]);
 
   /**
    * 当前窗口的天数。「全部」从最早一条流水算起，上限 365 天 ——
@@ -117,6 +146,7 @@ export const StatsPage: React.FC = () => {
    * 只认 `YYYY-MM-DD` 形态的日期键，脏数据不会把区间拉成天文数字。
    */
   const rangeDays = useMemo(() => {
+    if (range === 'custom') return customWindow.days;
     if (range !== 'all') return Number(range);
     const keys = [
       ...tasks.map((task) => dayKeyOf(task.completedAt)),
@@ -134,6 +164,7 @@ export const StatsPage: React.FC = () => {
     return Math.min(ALL_DAYS_CAP, Math.max(1, span + 1));
   }, [
     range,
+    customWindow,
     tasks,
     fitnessRecords,
     dietRecords,
@@ -144,6 +175,8 @@ export const StatsPage: React.FC = () => {
   ]);
 
   const rangeLabel = rangeLabelOf(range, rangeDays);
+  /** 逐日序列的右端点：固定档看到今天，自定义档看用户选的右端 */
+  const anchor = range === 'custom' ? customWindow.end : today;
   const bucketMode = bucketModeOf(rangeDays);
   const bucketUnit = BUCKET_UNIT[bucketMode];
   /** 按周 / 按月聚合时，底部刻度换成「9/28」之外的写法 */
@@ -179,29 +212,29 @@ export const StatsPage: React.FC = () => {
       seriesByDay(
         tasks.filter((task) => task.status === 'completed' && task.completedAt),
         rangeDays,
-        today,
+        anchor,
         (task) => dayKeyOf(task.completedAt),
       ),
-    [tasks, today, rangeDays],
+    [tasks, anchor, rangeDays],
   );
   const fitnessSeries = useMemo(
-    () => seriesByDay(fitnessRecords, rangeDays, today, (record) => record.date),
-    [fitnessRecords, today, rangeDays],
+    () => seriesByDay(fitnessRecords, rangeDays, anchor, (record) => record.date),
+    [fitnessRecords, anchor, rangeDays],
   );
   const dietCountSeries = useMemo(
-    () => seriesByDay(dietRecords, rangeDays, today, (record) => record.date),
-    [dietRecords, today, rangeDays],
+    () => seriesByDay(dietRecords, rangeDays, anchor, (record) => record.date),
+    [dietRecords, anchor, rangeDays],
   );
   const calorieSeries = useMemo(
     () =>
       seriesByDay(
         dietRecords,
         rangeDays,
-        today,
+        anchor,
         (record) => record.date,
         (record) => record.totalCalories,
       ),
-    [dietRecords, today, rangeDays],
+    [dietRecords, anchor, rangeDays],
   );
 
   const activitySeries = useMemo(
@@ -229,11 +262,26 @@ export const StatsPage: React.FC = () => {
   const completedInWindow = sumOf(taskSeries.map((point) => point.value));
   const workoutInWindow = sumOf(fitnessSeries.map((point) => point.value));
   const activityTotal = sumOf(activitySeries.map((point) => point.value));
-  const streak = currentStreak(activitySeries, today);
+  const streak = currentStreak(activitySeries, anchor);
   const trainedDays = activeDays(fitnessSeries).length;
 
-  const lastWeekCalories = calorieSeries.slice(-7).filter((point) => point.value > 0);
-  const averageCalories = averageOf(lastWeekCalories.map((point) => point.value));
+  /**
+   * 「近 7 天日均热量」永远按真实的最近 7 天算，不跟着时间范围跑 ——
+   * 卡片字面就是这个意思；自定义区间看历史某段时，这一格也不该跟着漂。
+   */
+  const recentCalories = useMemo(
+    () =>
+      seriesByDay(
+        dietRecords,
+        7,
+        today,
+        (record) => record.date,
+        (record) => record.totalCalories,
+      ),
+    [dietRecords, today],
+  );
+  const recentCalorieDays = recentCalories.filter((point) => point.value > 0);
+  const averageCalories = averageOf(recentCalorieDays.map((point) => point.value));
 
   const readingBooks = books.filter((book) => book.status === 'reading');
   const readingProgress = averageOf(readingBooks.map((book) => book.progress));
@@ -350,15 +398,43 @@ export const StatsPage: React.FC = () => {
     <div className="space-y-section">
       <PageHeader
         title="统计"
-        description={`${rangeLabel}的活动趋势与各模块进度`}
+        description={
+          range === 'custom'
+            ? `${formatShortDate(customWindow.start)} 至 ${formatShortDate(customWindow.end)} 的活动趋势与各模块进度`
+            : `${rangeLabel}的活动趋势与各模块进度`
+        }
         icon={BarChart3}
         actions={
-          <SegmentedControl
-            label="统计时间范围"
-            value={range}
-            onChange={setRange}
-            options={RANGE_OPTIONS}
-          />
+          <>
+            <SegmentedControl
+              label="统计时间范围"
+              value={range}
+              onChange={setRange}
+              options={RANGE_OPTIONS}
+            />
+            {range === 'custom' && (
+              <div className="flex items-center gap-2">
+                <Input
+                  type="date"
+                  aria-label="自定义起始日期"
+                  value={customFrom}
+                  max={customTo}
+                  onChange={(event) => setCustomFrom(event.target.value)}
+                  className="w-[9.5rem]"
+                />
+                <span className="text-xs text-content-tertiary">至</span>
+                <Input
+                  type="date"
+                  aria-label="自定义结束日期"
+                  value={customTo}
+                  min={customFrom}
+                  max={today}
+                  onChange={(event) => setCustomTo(event.target.value)}
+                  className="w-[9.5rem]"
+                />
+              </div>
+            )}
+          </>
         }
         meta={
           <>
@@ -403,8 +479,8 @@ export const StatsPage: React.FC = () => {
           tone="warning"
           icon={<Flame size={16} aria-hidden />}
           footer={
-            lastWeekCalories.length > 0
-              ? `按 ${lastWeekCalories.length} 天有记录的天数计算`
+            recentCalorieDays.length > 0
+              ? `按 ${recentCalorieDays.length} 天有记录的天数计算`
               : '最近 7 天还没有饮食记录'
           }
         />

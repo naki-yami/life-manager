@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it } from 'vitest';
@@ -289,5 +289,104 @@ describe('StatsPage', () => {
     expect(
       screen.getByRole('img', { name: '最近 30 天活动构成：合计 3 次，最高一天 3 次' }),
     ).toBeInTheDocument();
+  });
+
+  it('自定义区间：能挪到历史某一段，标签与统计都跟着区间走', async () => {
+    const tasks = useTaskStore.getState();
+    tasks.addTask('今天完成', '', 'medium', '');
+    tasks.addTask('四十天前完成', '', 'medium', '');
+    tasks.addTask('五十天前完成', '', 'medium', '');
+    const [fresh, forty, fifty] = useTaskStore.getState().tasks;
+    for (const task of [fresh, forty, fifty]) {
+      useTaskStore.getState().toggleTaskStatus(task!.id);
+    }
+    useTaskStore.setState({
+      tasks: useTaskStore
+        .getState()
+        .tasks.map((task) =>
+          task.id === forty!.id
+            ? { ...task, completedAt: `${addDays(todayKey(), -40)}T09:00:00.000Z` }
+            : task.id === fifty!.id
+              ? { ...task, completedAt: `${addDays(todayKey(), -50)}T09:00:00.000Z` }
+              : task,
+        ),
+    });
+
+    renderStats();
+    // 默认 30 天窗口只盖住今天那条
+    expect(cardFor('最近 30 天完成任务').getByText('1')).toBeInTheDocument();
+
+    // 切「自定义」：默认仍是最近 30 天，结论不变，两个日期框出现
+    await userEvent.click(screen.getByRole('button', { name: '自定义' }));
+    expect(screen.getByLabelText('自定义起始日期')).toBeInTheDocument();
+    expect(screen.getByLabelText('自定义结束日期')).toBeInTheDocument();
+    expect(cardFor('所选 30 天完成任务').getByText('1')).toBeInTheDocument();
+
+    // 把窗口挪到 60 天前 ~ 30 天前：盖住那两条 40 / 50 天前的任务，共 31 天
+    fireEvent.change(screen.getByLabelText('自定义起始日期'), {
+      target: { value: addDays(todayKey(), -60) },
+    });
+    fireEvent.change(screen.getByLabelText('自定义结束日期'), {
+      target: { value: addDays(todayKey(), -30) },
+    });
+
+    expect(cardFor('所选 31 天完成任务').getByText('2')).toBeInTheDocument();
+    expect(screen.getByText('所选 31 天活动 2 次')).toBeInTheDocument();
+    expect(
+      screen.getByRole('img', { name: /所选 31 天活动热力图：31 天里有 2 天有记录/ }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: /任务完成数（按天）/ }).children).toHaveLength(31);
+  });
+
+  it('自定义区间起止填反了，按更早的那端当起点，不出负数天数', async () => {
+    const tasks = useTaskStore.getState();
+    tasks.addTask('四十天前完成', '', 'medium', '');
+    useTaskStore.getState().toggleTaskStatus(useTaskStore.getState().tasks[0]!.id);
+    useTaskStore.setState({
+      tasks: useTaskStore.getState().tasks.map((task) => ({
+        ...task,
+        completedAt: `${addDays(todayKey(), -40)}T09:00:00.000Z`,
+      })),
+    });
+
+    renderStats();
+    await userEvent.click(screen.getByRole('button', { name: '自定义' }));
+
+    // 起点填 30 天前、终点填 60 天前（反了）
+    fireEvent.change(screen.getByLabelText('自定义起始日期'), {
+      target: { value: addDays(todayKey(), -30) },
+    });
+    fireEvent.change(screen.getByLabelText('自定义结束日期'), {
+      target: { value: addDays(todayKey(), -60) },
+    });
+
+    // 取数时统一成「谁早谁当起点」：还是 31 天，并盖住那条 40 天前的任务
+    expect(screen.getByText('所选 31 天活动 1 次')).toBeInTheDocument();
+    expect(cardFor('所选 31 天完成任务').getByText('1')).toBeInTheDocument();
+    expect(screen.queryByText(/NaN/)).not.toBeInTheDocument();
+  });
+
+  it('「近 7 天日均热量」始终按真实的最近 7 天算，不跟着自定义区间漂', async () => {
+    useDietStore.getState().addRecord(todayKey(), 'lunch', meal);
+    useDietStore
+      .getState()
+      .addRecord(addDays(todayKey(), -40), 'lunch', [
+        { name: '鸡胸肉', category: 'protein', calories: 300 },
+      ]);
+
+    renderStats();
+    expect(cardFor('近 7 天日均热量').getByText('600')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: '自定义' }));
+    fireEvent.change(screen.getByLabelText('自定义起始日期'), {
+      target: { value: addDays(todayKey(), -60) },
+    });
+    fireEvent.change(screen.getByLabelText('自定义结束日期'), {
+      target: { value: addDays(todayKey(), -30) },
+    });
+
+    // 区间挪到 40 天前那一带，这一格仍是「今天的最近 7 天」：600 而不是 300
+    expect(cardFor('近 7 天日均热量').getByText('600')).toBeInTheDocument();
+    expect(cardFor('近 7 天日均热量').getByText('按 1 天有记录的天数计算')).toBeInTheDocument();
   });
 });
