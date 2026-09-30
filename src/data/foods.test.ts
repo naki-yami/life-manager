@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { FOOD_SEEDS } from './foods';
 import { FOOD_CATEGORIES } from './foodCategories';
 
