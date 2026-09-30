@@ -33,6 +33,7 @@ import {
   habitSchema,
   readingSessionSchema,
   mealRecordSchema,
+  mealTemplateSchema,
   reviewSchema,
   journalSchema,
   memoSchema,
@@ -163,6 +164,7 @@ export function parseBackup(
   modules.fitnessRecords = pick(workoutRecordSchema, 'fitnessRecords');
   modules.bodyMetrics = pick(bodyMetricSchema, 'bodyMetrics');
   modules.dietRecords = pick(mealRecordSchema, 'dietRecords');
+  modules.mealTemplates = pick(mealTemplateSchema, 'mealTemplates');
   modules.games = pick(gameSchema, 'games');
   modules.gameSessions = pick(gameSessionSchema, 'gameSessions');
   modules.readingSessions = pick(readingSessionSchema, 'readingSessions');
@@ -275,6 +277,7 @@ export function planImport(
   const fitnessRecords = merge('fitnessRecords', current.fitnessRecords ?? []);
   const bodyMetrics = merge('bodyMetrics', current.bodyMetrics ?? []);
   const dietRecords = merge('dietRecords', current.dietRecords ?? []);
+  const mealTemplates = merge('mealTemplates', current.mealTemplates ?? []);
   const games = merge('games', current.games ?? []);
   const gameSessions = merge('gameSessions', current.gameSessions ?? []);
   const readingSessions = merge('readingSessions', current.readingSessions ?? []);
@@ -300,6 +303,7 @@ export function planImport(
       fitnessRecords: fitnessRecords.items,
       bodyMetrics: bodyMetrics.items,
       dietRecords: dietRecords.items,
+      mealTemplates: mealTemplates.items,
       games: games.items,
       gameSessions: gameSessions.items,
       readingSessions: readingSessions.items,
@@ -350,6 +354,11 @@ export function planImport(
         incoming: count(backup.dietRecords),
         added: dietRecords.added,
         skipped: dietRecords.skipped,
+      },
+      mealTemplates: {
+        incoming: count(backup.mealTemplates),
+        added: mealTemplates.added,
+        skipped: mealTemplates.skipped,
       },
       games: { incoming: count(backup.games), added: games.added, skipped: games.skipped },
       gameSessions: {

@@ -36,6 +36,7 @@ export function readAllData(): BackupData {
     fitnessRecords: useFitnessStore.getState().records,
     bodyMetrics: useBodyStore.getState().records,
     dietRecords: useDietStore.getState().records,
+    mealTemplates: useDietStore.getState().templates,
     games: useGameStore.getState().games,
     gameSessions: useGameStore.getState().sessions,
     readingSessions: useBookStore.getState().sessions,

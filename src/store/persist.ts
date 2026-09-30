@@ -13,19 +13,20 @@
  * - 9：饮食增加三大营养素合计、每日目标与饮水打卡
  * - 10：写作项目增加正文 / 目标字数 / 版本快照
  * - 11：开发项目增加里程碑 / 开发日志，工作项增加分类
+ * - 12：健身计划增加动作清单（训练日模板）；饮食增加餐次模板
  *
  * 注意：zustand persist 只在「存储里的 version 与当前 version 不一致」时
  * 才调用 migrate。所以**根级**结构变更必须靠 bump 版本号触发。
  *
- * 而「数组里单条记录新增字段」（例如给 Task 加 subtasks）不该依赖版本号：
- * 版本号一旦升到最新，手写在 migrate 里的补字段代码就再也不会执行了。
+ * 而「数组里单条记录新增字段」（例如给 Task 加 subtasks、给 FitnessPlan 加 exercises）
+ * 不该依赖版本号：版本号一旦升到最新，手写在 migrate 里的补字段代码就再也不会执行了。
  * 这类补齐统一交给 persistOptions() 的 normalize，它挂在 merge 上，
  * 每次 rehydrate 都会跑且幂等。
  */
 import type { PersistOptions, PersistStorage } from 'zustand/middleware';
 import { persistStorage } from './storage';
 
-export const STORE_VERSION = 11;
+export const STORE_VERSION = 12;
 
 /**
  * 统一的状态迁移入口。

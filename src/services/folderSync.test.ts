@@ -36,6 +36,7 @@ function emptyBackupData(): BackupData {
     fitnessRecords: [],
     bodyMetrics: [],
     dietRecords: [],
+    mealTemplates: [],
     games: [],
     gameSessions: [],
     readingSessions: [],

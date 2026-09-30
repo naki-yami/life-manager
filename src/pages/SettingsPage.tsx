@@ -108,6 +108,7 @@ function applyPlan(data: Partial<BackupData>): void {
   if (data.fitnessRecords) useFitnessStore.getState().replaceRecords(data.fitnessRecords);
   if (data.bodyMetrics) useBodyStore.getState().replaceRecords(data.bodyMetrics);
   if (data.dietRecords) useDietStore.getState().replaceRecords(data.dietRecords);
+  if (data.mealTemplates) useDietStore.getState().replaceTemplates(data.mealTemplates);
   if (data.games) useGameStore.getState().replaceGames(data.games);
   if (data.gameSessions) useGameStore.getState().replaceSessions(data.gameSessions);
   if (data.readingSessions) useBookStore.getState().replaceSessions(data.readingSessions);
@@ -140,6 +141,7 @@ function resetStores(): void {
   useFitnessStore.getState().replaceRecords([]);
   useBodyStore.getState().replaceRecords([]);
   useDietStore.getState().replaceRecords([]);
+  useDietStore.getState().replaceTemplates([]);
   useGameStore.getState().replaceGames([]);
   useGameStore.getState().replaceSessions([]);
   useHabitStore.getState().replaceHabits([]);
@@ -233,6 +235,7 @@ export const SettingsPage: React.FC = () => {
   const recordCount = useFitnessStore((state) => state.records.length);
   const bodyCount = useBodyStore((state) => state.records.length);
   const dietCount = useDietStore((state) => state.records.length);
+  const mealTemplateCount = useDietStore((state) => state.templates.length);
   const gameCount = useGameStore((state) => state.games.length);
   const sessionCount = useGameStore((state) => state.sessions.length);
   const readingSessionCount = useBookStore((state) => state.sessions.length);
@@ -253,6 +256,7 @@ export const SettingsPage: React.FC = () => {
     { module: 'fitnessRecords', label: MODULE_LABELS.fitnessRecords, count: recordCount },
     { module: 'bodyMetrics', label: MODULE_LABELS.bodyMetrics, count: bodyCount },
     { module: 'dietRecords', label: MODULE_LABELS.dietRecords, count: dietCount },
+    { module: 'mealTemplates', label: MODULE_LABELS.mealTemplates, count: mealTemplateCount },
     { module: 'games', label: MODULE_LABELS.games, count: gameCount },
     { module: 'gameSessions', label: MODULE_LABELS.gameSessions, count: sessionCount },
     { module: 'readingSessions', label: MODULE_LABELS.readingSessions, count: readingSessionCount },

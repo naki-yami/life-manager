@@ -11,7 +11,11 @@ import { normalizeTags } from '../utils/tags';
 interface FitnessState {
   plans: FitnessPlan[];
   records: WorkoutRecord[];
-  addPlan: (name: string, description: string) => void;
+  addPlan: (name: string, description: string, exercises?: Exercise[]) => void;
+  /** 局部更新一个计划（改名字 / 改描述 / 换动作清单） */
+  updatePlan: (id: string, patch: Partial<Omit<FitnessPlan, 'id' | 'createdAt'>>) => void;
+  /** 把一次训练存成训练日模板 —— F16「把这次存成模板」 */
+  addPlanFromRecord: (record: WorkoutRecord, name: string) => void;
   deletePlan: (id: string) => void;
   addRecord: (
     planName: string,
@@ -27,15 +31,49 @@ interface FitnessState {
 
 const defaultState = { plans: [] as FitnessPlan[], records: [] as WorkoutRecord[] };
 
+/**
+ * 存进模板的动作要剥掉 id 与当时的重量。
+ *
+ * 为什么不留重量：模板记的是「做哪些动作、各几组几次」，「推日卧推 60kg」里的
+ * 60kg 是那一天的状态，不是模板的一部分 —— 留着它，三个月后套用会把当时的重量
+ * 当成今天的建议，那是会误导人的。组数次数留下，重量清零让人自己填。
+ */
+function planExercisesFrom(record: WorkoutRecord): Exercise[] {
+  return record.exercises.map(({ name, sets, reps }) => ({ name, sets, reps, weight: 0 }));
+}
+
 export const useFitnessStore = create<FitnessState>()(
   persist(
     (set) => ({
       ...defaultState,
-      addPlan: (name, description) =>
+      addPlan: (name, description, exercises = []) =>
         set((state) => ({
           plans: [
             ...state.plans,
-            { id: createId(), name, description, createdAt: new Date().toISOString() },
+            {
+              id: createId(),
+              name,
+              description,
+              exercises: exercises.map((ex) => ({ ...ex, id: ex.id || createId() })),
+              createdAt: new Date().toISOString(),
+            },
+          ],
+        })),
+      updatePlan: (id, patch) =>
+        set((state) => ({
+          plans: state.plans.map((plan) => (plan.id === id ? { ...plan, ...patch } : plan)),
+        })),
+      addPlanFromRecord: (record, name) =>
+        set((state) => ({
+          plans: [
+            ...state.plans,
+            {
+              id: createId(),
+              name,
+              description: '',
+              exercises: planExercisesFrom(record).map((ex) => ({ ...ex, id: createId() })),
+              createdAt: new Date().toISOString(),
+            },
           ],
         })),
       deletePlan: (id) => set((state) => ({ plans: state.plans.filter((p) => p.id !== id) })),

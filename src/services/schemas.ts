@@ -250,6 +250,16 @@ export const fitnessPlanSchema = z.object({
   id: z.string().min(1),
   name: z.string(),
   description: z.string().default(''),
+  /**
+   * v12（F16）：训练日模板的动作清单。
+   *
+   * 在这之前 `FitnessPlan` 只是一个名字加一句描述 —— 「模板」有名无实，
+   * 每次开练都得从零填动作。加了这一项它才真的能一键铺开一整个训练日。
+   *
+   * 旧数据缺省补空数组（由归一化层做）：一个没有动作的模板仍然是一个合法的
+   * 模板（相当于只记了个名字），不该因此被丢掉。
+   */
+  exercises: z.array(exerciseSchema).default([]),
   createdAt: isoDateString.default(() => new Date().toISOString()),
 });
 
@@ -315,6 +325,24 @@ export const mealRecordSchema = z.object({
   totalProtein: z.number().min(0).catch(0).default(0),
   totalCarbs: z.number().min(0).catch(0).default(0),
   totalFat: z.number().min(0).catch(0).default(0),
+});
+
+/**
+ * v12（F16）：餐次模板。
+ *
+ * 与 `FitnessPlan` 不同，餐次模板**不是**用户可见的「计划」实体 ——
+ * 它只是一份「常吃的组合」的快捷方式：早上一杯燕麦加两个蛋，点一下就按今天的
+ * 日期铺成一条记录。所以它没有 description / createdAt 之外的元信息，
+ * 也不参与统计，只存名字、餐次和食物清单。
+ *
+ * `type` 记的是「通常用在哪个餐次」，铺开时作为默认值 —— 用户仍可在表单里改。
+ */
+export const mealTemplateSchema = z.object({
+  id: z.string().min(1),
+  name: z.string(),
+  type: z.enum(['breakfast', 'lunch', 'dinner', 'snack']).default('breakfast'),
+  items: z.array(foodItemSchema).default([]),
+  createdAt: isoDateString.default(() => new Date().toISOString()),
 });
 
 // ---------- 游戏 ----------
@@ -530,6 +558,8 @@ export const backupDataSchema = z.object({
   fitnessRecords: z.array(workoutRecordSchema).default([]),
   bodyMetrics: z.array(bodyMetricSchema).default([]),
   dietRecords: z.array(mealRecordSchema).default([]),
+  /** v12（F16）：餐次模板。不放进备份就是在丢数据 —— 模板是用户手工攒的，重建不了。 */
+  mealTemplates: z.array(mealTemplateSchema).default([]),
   games: z.array(gameSchema).default([]),
   gameSessions: z.array(gameSessionSchema).default([]),
   readingSessions: z.array(readingSessionSchema).default([]),
@@ -556,6 +586,7 @@ export const BACKUP_MODULES = [
   'fitnessRecords',
   'bodyMetrics',
   'dietRecords',
+  'mealTemplates',
   'games',
   'gameSessions',
   'readingSessions',
@@ -581,6 +612,7 @@ export const MODULE_LABELS: Record<BackupModule, string> = {
   fitnessRecords: '训练记录',
   bodyMetrics: '身体指标',
   dietRecords: '饮食记录',
+  mealTemplates: '餐次模板',
   games: '游戏',
   gameSessions: '游玩记录',
   readingSessions: '阅读记录',

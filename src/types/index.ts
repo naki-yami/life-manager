@@ -238,6 +238,12 @@ export interface FitnessPlan {
   id: string;
   name: string;
   description: string;
+  /**
+   * 训练日模板的动作清单（v12 / F16 新增）。
+   * 在这之前「计划」只是个名字，每次开练要从零填动作；有了它才能一键铺开一整个训练日。
+   * 旧数据由归一化层补空数组，所以这里不是可选的。
+   */
+  exercises: Exercise[];
   createdAt: string;
 }
 
@@ -253,6 +259,21 @@ export interface FoodItem {
   protein?: number;
   carbs?: number;
   fat?: number;
+}
+
+/**
+ * 餐次模板（v12 / F16 新增）：一份常吃组合的快捷方式。
+ *
+ * 不是「计划」实体 —— 不参与统计、没有进度，只负责一件事：
+ * 点一下，把这份食物清单按今天的日期铺成一条记录。
+ */
+export interface MealTemplate {
+  id: string;
+  name: string;
+  /** 通常用在哪个餐次；铺开时作为表单默认值，用户仍可改 */
+  type: MealType;
+  items: FoodItem[];
+  createdAt: string;
 }
 
 export interface MealRecord {

@@ -16,7 +16,7 @@ beforeEach(async () => {
   useTaskStore.setState({ tasks: [], memos: [] });
   useBookStore.setState({ books: [] });
   useGameStore.setState({ games: [], sessions: [] });
-  useDietStore.setState({ records: [] });
+  useDietStore.setState({ records: [], templates: [] });
   useFitnessStore.setState({ plans: [], records: [] });
   useDevStore.setState({ projects: [], sessions: [] });
   // writingStore 之前漏了重置：两条写作用例共用 projects[0]，其实是同一条记录被反复改
@@ -253,8 +253,97 @@ describe('版本迁移', () => {
     expect(result).toEqual({ tasks: [], futureField: 'keep' });
   });
 
-  it('当前版本号是 11', () => {
-    expect(STORE_VERSION).toBe(11);
+  it('当前版本号是 12', () => {
+    expect(STORE_VERSION).toBe(12);
+  });
+
+  /*
+   * v11 -> v12 的迁移（F16：健身计划加动作清单、饮食加餐次模板）。
+   *
+   * 这两项都是「数组里单条记录新增字段 / 新增一个顶层数组」，靠 normalize 补，
+   * 不靠 migrate 手写补字段。所以这条用例要验的是：**旧数据读出来之后，
+   * 老字段一个不少，新字段以当前结构就位**，而不是「migrate 里写了什么」。
+   */
+  it('v11 的健身计划升到 v12 后补出空的动作清单，名字与描述不丢', async () => {
+    localStorage.setItem(
+      STORAGE_KEYS.fitness,
+      JSON.stringify({
+        state: {
+          plans: [
+            { id: 'old-plan', name: '推日', description: '胸肩三头', createdAt: '2026-01-01T00:00:00.000Z' },
+          ],
+          records: [],
+        },
+        version: 11,
+      }),
+    );
+
+    await useFitnessStore.persist.rehydrate();
+
+    const plans = useFitnessStore.getState().plans;
+    expect(plans).toHaveLength(1);
+    expect(plans[0].name).toBe('推日');
+    expect(plans[0].description).toBe('胸肩三头');
+    expect(plans[0].exercises).toEqual([]);
+  });
+
+  it('v11 的饮食数据升到 v12 后补出空的餐次模板，记录与目标不丢', async () => {
+    localStorage.setItem(
+      STORAGE_KEYS.diet,
+      JSON.stringify({
+        state: {
+          records: [
+            {
+              id: 'old-meal',
+              date: '2026-09-01',
+              type: 'lunch',
+              items: [{ id: 'f1', name: '鸡胸肉', category: '蛋白质', calories: 220 }],
+              totalCalories: 220,
+              tags: [],
+            },
+          ],
+          goals: { calories: 2100, protein: 90 },
+          water: { '2026-09-01': 6 },
+        },
+        version: 11,
+      }),
+    );
+
+    await useDietStore.persist.rehydrate();
+
+    const state = useDietStore.getState();
+    expect(state.records).toHaveLength(1);
+    expect(state.records[0].totalProtein).toBe(0);
+    expect(state.goals).toEqual({ calories: 2100, protein: 90 });
+    expect(state.water).toEqual({ '2026-09-01': 6 });
+    expect(state.templates).toEqual([]);
+  });
+
+  it('模板存进去之后，rehydrate 还在（餐次模板能落盘）', async () => {
+    const record = useDietStore.getState().records;
+    expect(record).toHaveLength(0);
+
+    useDietStore.getState().addTemplateFromRecord(
+      {
+        id: 'm1',
+        date: '2026-09-30',
+        type: 'breakfast',
+        items: [{ name: '燕麦', category: '主食', calories: 150 }],
+        totalCalories: 150,
+        tags: [],
+        totalProtein: 5,
+        totalCarbs: 27,
+        totalFat: 3,
+      },
+      '早饭',
+    );
+
+    await useDietStore.persist.rehydrate();
+    const templates = useDietStore.getState().templates;
+    expect(templates).toHaveLength(1);
+    expect(templates[0].name).toBe('早饭');
+    expect(templates[0].type).toBe('breakfast');
+    expect(templates[0].items[0].name).toBe('燕麦');
   });
 
   it('旧项目数据没有 hoursSpent，重新水合时补 0', async () => {
