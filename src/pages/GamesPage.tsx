@@ -139,6 +139,23 @@ export const GamesPage: React.FC = () => {
     statusOf: gameStatusOf,
   });
 
+  /**
+   * 「只看收藏」：状态筛选归那个六页共用的 hook 管，收藏只有书和游戏才有，
+   * 所以叠在 visible 之上再筛一道，不动 useEntityList 的接口。
+   */
+  const [onlyFavorite, setOnlyFavorite] = useState(false);
+  const favoriteCount = useMemo(() => games.filter((game) => game.favorite).length, [games]);
+  const shownGames = useMemo(
+    () => (onlyFavorite ? visibleGames.filter((game) => game.favorite) : visibleGames),
+    [onlyFavorite, visibleGames],
+  );
+  /** 列表被筛空的两种来源：关键词 / 状态，或「只看收藏」；空态文案据此区分「库是空的」 */
+  const listFilteredOut = filteredOut || (onlyFavorite && games.length > 0);
+  const clearListFilters = (): void => {
+    clearFilters();
+    setOnlyFavorite(false);
+  };
+
   const [showAddModal, setShowAddModal] = useState(false);
   useNewEntryShortcut(() => setShowAddModal(true));
 
@@ -686,22 +703,35 @@ export const GamesPage: React.FC = () => {
             placeholder: '搜索游戏、平台、标签或成就…',
           }}
           actions={
-            <SegmentedControl
-              label="按游玩状态筛选"
-              value={filter}
-              onChange={setFilter}
-              options={FILTER_OPTIONS.map((option) => ({
-                ...option,
-                count: countOf(option.value),
-              }))}
-            />
+            <>
+              <Button
+                variant="secondary"
+                icon={<Star size={15} aria-hidden />}
+                aria-pressed={onlyFavorite}
+                onClick={() => setOnlyFavorite((previous) => !previous)}
+              >
+                只看收藏
+                {favoriteCount > 0 && (
+                  <span className="tabular text-content-tertiary">{favoriteCount}</span>
+                )}
+              </Button>
+              <SegmentedControl
+                label="按游玩状态筛选"
+                value={filter}
+                onChange={setFilter}
+                options={FILTER_OPTIONS.map((option) => ({
+                  ...option,
+                  count: countOf(option.value),
+                }))}
+              />
+            </>
           }
         />
 
-        {visibleGames.length === 0 ? (
+        {shownGames.length === 0 ? (
           <ListEmptyState
             icon={<Gamepad2 size={22} aria-hidden />}
-            filtered={filteredOut}
+            filtered={listFilteredOut}
             emptyTitle="游戏库还是空的"
             emptyDescription="把在玩的、想玩的都加进来，时长和成就可以慢慢补。"
             emptyAction={
@@ -710,12 +740,12 @@ export const GamesPage: React.FC = () => {
               </Button>
             }
             filteredTitle="没有符合条件的游戏"
-            filteredDescription="换个关键词，或者切换上面的状态筛选。"
-            onClearFilters={clearFilters}
+            filteredDescription="换个关键词、切换状态筛选，或者关掉上面的「只看收藏」。"
+            onClearFilters={clearListFilters}
           />
         ) : (
           <ul className="grid gap-4 sm:grid-cols-2">
-            {visibleGames.map((game) => {
+            {shownGames.map((game) => {
               const unlocked = game.achievements.filter(
                 (achievement) => achievement.unlocked,
               ).length;

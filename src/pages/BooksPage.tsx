@@ -153,6 +153,23 @@ export const BooksPage: React.FC = () => {
     statusOf: bookStatusOf,
   });
 
+  /**
+   * 「只看收藏」：状态筛选归那个六页共用的 hook 管，收藏只有书和游戏才有，
+   * 所以叠在 visible 之上再筛一道，不动 useEntityList 的接口。
+   */
+  const [onlyFavorite, setOnlyFavorite] = useState(false);
+  const favoriteCount = useMemo(() => books.filter((book) => book.favorite).length, [books]);
+  const shownBooks = useMemo(
+    () => (onlyFavorite ? visibleBooks.filter((book) => book.favorite) : visibleBooks),
+    [onlyFavorite, visibleBooks],
+  );
+  /** 列表被筛空的两种来源：关键词 / 状态，或「只看收藏」；空态文案据此区分「库是空的」 */
+  const listFilteredOut = filteredOut || (onlyFavorite && books.length > 0);
+  const clearListFilters = (): void => {
+    clearFilters();
+    setOnlyFavorite(false);
+  };
+
   const today = todayKey();
   const totalMinutes = sessions.reduce((sum, session) => sum + session.minutes, 0);
 
@@ -572,22 +589,35 @@ export const BooksPage: React.FC = () => {
             placeholder: '搜索书名、作者、分类或标签…',
           }}
           actions={
-            <SegmentedControl
-              label="按阅读状态筛选"
-              value={filter}
-              onChange={setFilter}
-              options={FILTER_OPTIONS.map((option) => ({
-                ...option,
-                count: countOf(option.value),
-              }))}
-            />
+            <>
+              <Button
+                variant="secondary"
+                icon={<Star size={15} aria-hidden />}
+                aria-pressed={onlyFavorite}
+                onClick={() => setOnlyFavorite((previous) => !previous)}
+              >
+                只看收藏
+                {favoriteCount > 0 && (
+                  <span className="tabular text-content-tertiary">{favoriteCount}</span>
+                )}
+              </Button>
+              <SegmentedControl
+                label="按阅读状态筛选"
+                value={filter}
+                onChange={setFilter}
+                options={FILTER_OPTIONS.map((option) => ({
+                  ...option,
+                  count: countOf(option.value),
+                }))}
+              />
+            </>
           }
         />
 
-        {visibleBooks.length === 0 ? (
+        {shownBooks.length === 0 ? (
           <ListEmptyState
             icon={<BookOpen size={22} aria-hidden />}
-            filtered={filteredOut}
+            filtered={listFilteredOut}
             emptyTitle="书单还是空的"
             emptyDescription="把想读的书加进来，之后可以记录进度和笔记。"
             emptyAction={
@@ -596,12 +626,12 @@ export const BooksPage: React.FC = () => {
               </Button>
             }
             filteredTitle="没有符合条件的书"
-            filteredDescription="换个关键词，或者切换上面的状态筛选。"
-            onClearFilters={clearFilters}
+            filteredDescription="换个关键词、切换状态筛选，或者关掉上面的「只看收藏」。"
+            onClearFilters={clearListFilters}
           />
         ) : (
           <ul className="grid gap-4">
-            {visibleBooks.map((book) => (
+            {shownBooks.map((book) => (
               <li key={book.id}>
                 <Card className="p-4">
                   <div className="flex items-start justify-between gap-4">

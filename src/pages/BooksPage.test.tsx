@@ -473,4 +473,50 @@ describe('BooksPage F11 条目化媒体库', () => {
     expect(bookOf('人类简史').notes).toHaveLength(1);
     expect(bookOf('人类简史').rating).toBe(0);
   });
+
+  it('「只看收藏」筛选：只留星标条目，角标跟着收藏数走', async () => {
+    useBookStore.getState().addBook('人类简史', 'Harari', '历史');
+    useBookStore.getState().addBook('1984', 'Orwell', '小说');
+    expectWideLayout();
+
+    render(<BooksPage />);
+    expect(screen.getByText('人类简史')).toBeInTheDocument();
+    expect(screen.getByText('1984')).toBeInTheDocument();
+
+    // 收藏一本：按钮上的角标跟着变
+    await userEvent.click(screen.getByRole('button', { name: '收藏《人类简史》' }));
+    expect(screen.getByRole('button', { name: /只看收藏/ })).toHaveTextContent('1');
+
+    // 打开筛选：只剩收藏过的那本
+    await userEvent.click(screen.getByRole('button', { name: /只看收藏/ }));
+    expect(screen.getByRole('button', { name: /只看收藏/ })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(screen.getByText('人类简史')).toBeInTheDocument();
+    expect(screen.queryByText('1984')).not.toBeInTheDocument();
+
+    // 再点一次：两本都回来
+    await userEvent.click(screen.getByRole('button', { name: /只看收藏/ }));
+    expect(screen.queryByText('1984')).toBeInTheDocument();
+  });
+
+  it('一条收藏都没有时，收藏筛选筛空要能一键清除', async () => {
+    useBookStore.getState().addBook('人类简史', 'Harari', '历史');
+    expectWideLayout();
+
+    render(<BooksPage />);
+    await userEvent.click(screen.getByRole('button', { name: /只看收藏/ }));
+
+    // 有数据、被筛空 → 走「没有符合条件」，而不是「书单还是空的」
+    expect(screen.getByText('没有符合条件的书')).toBeInTheDocument();
+    expect(screen.queryByText('书单还是空的')).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: '清除筛选' }));
+    expect(screen.getByRole('button', { name: /只看收藏/ })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
+    expect(screen.getByText('人类简史')).toBeInTheDocument();
+  });
 });

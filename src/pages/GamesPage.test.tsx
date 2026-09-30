@@ -530,4 +530,54 @@ describe('GamesPage 宽屏双栏', () => {
     await userEvent.selectOptions(sort, 'backlog');
     expect(within(card).getByText('星露谷物语')).toBeInTheDocument();
   });
+
+  it('「只看收藏」筛选：只留星标条目，角标跟着收藏数走', async () => {
+    addGame('哈迪斯');
+    addGame('空洞骑士');
+    // 都标成已通关：默认的「在玩 + 0 小时」会进「下一步玩什么」候选，
+    // 推荐卡也会印一遍游戏名，getByText 就撞了
+    setStatus('哈迪斯', 'completed');
+    setStatus('空洞骑士', 'completed');
+    expectWideLayout();
+
+    render(<GamesPage />);
+    expect(screen.getByText('哈迪斯')).toBeInTheDocument();
+    expect(screen.getByText('空洞骑士')).toBeInTheDocument();
+
+    // 收藏一款：按钮上的角标跟着变
+    await userEvent.click(screen.getByRole('button', { name: '收藏「哈迪斯」' }));
+    expect(screen.getByRole('button', { name: /只看收藏/ })).toHaveTextContent('1');
+
+    // 打开筛选：只剩收藏过的那款
+    await userEvent.click(screen.getByRole('button', { name: /只看收藏/ }));
+    expect(screen.getByRole('button', { name: /只看收藏/ })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(screen.getByText('哈迪斯')).toBeInTheDocument();
+    expect(screen.queryByText('空洞骑士')).not.toBeInTheDocument();
+
+    // 再点一次：两款都回来
+    await userEvent.click(screen.getByRole('button', { name: /只看收藏/ }));
+    expect(screen.queryByText('空洞骑士')).toBeInTheDocument();
+  });
+
+  it('一条收藏都没有时，收藏筛选筛空要能一键清除', async () => {
+    addGame('哈迪斯');
+    expectWideLayout();
+
+    render(<GamesPage />);
+    await userEvent.click(screen.getByRole('button', { name: /只看收藏/ }));
+
+    // 有数据、被筛空 → 走「没有符合条件」，而不是「游戏库还是空的」
+    expect(screen.getByText('没有符合条件的游戏')).toBeInTheDocument();
+    expect(screen.queryByText('游戏库还是空的')).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: '清除筛选' }));
+    expect(screen.getByRole('button', { name: /只看收藏/ })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
+    expect(screen.getByText('哈迪斯')).toBeInTheDocument();
+  });
 });
