@@ -130,20 +130,26 @@ export interface TextareaProps extends Omit<
   rows?: number;
 }
 
-export const Textarea: React.FC<TextareaProps> = ({
-  value,
-  onChange,
-  placeholder = '',
-  className = '',
-  label,
-  hint,
-  error,
-  rows = 4,
-  required,
-  disabled,
-  id,
-  ...rest
-}) => {
+/**
+ * 多行输入。用 forwardRef 暴露原生 textarea，写作正文的快捷插入要读 selectionStart。
+ */
+export const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(function Textarea(
+  {
+    value,
+    onChange,
+    placeholder = '',
+    className = '',
+    label,
+    hint,
+    error,
+    rows = 4,
+    required,
+    disabled,
+    id,
+    ...rest
+  },
+  ref,
+) {
   const autoId = useId();
   const fieldId = id ?? autoId;
   const invalid = Boolean(error);
@@ -151,6 +157,7 @@ export const Textarea: React.FC<TextareaProps> = ({
   return (
     <FieldShell id={fieldId} label={label} hint={hint} error={error} required={required}>
       <textarea
+        ref={ref}
         id={fieldId}
         value={value}
         onChange={onChange}
@@ -165,7 +172,7 @@ export const Textarea: React.FC<TextareaProps> = ({
       />
     </FieldShell>
   );
-};
+});
 
 export interface NumberInputProps {
   value: number | '';

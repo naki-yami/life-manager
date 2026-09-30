@@ -414,3 +414,34 @@ describe('WritingPage 宽屏双栏', () => {
     expect(screen.getByRole('dialog', { name: '《长文》编辑正文' })).toBeInTheDocument();
   });
 });
+
+describe('WritingPage 正文 Markdown', () => {
+  it('正文编辑器可以切到预览看排版', async () => {
+    useWritingStore.getState().addProject('新文章', 'article');
+    render(<WritingPage />);
+
+    await userEvent.click(screen.getByRole('button', { name: '编辑正文' }));
+    const dialog = screen.getByRole('dialog', { name: /编辑正文/ });
+    await userEvent.type(within(dialog).getByLabelText('正文'), '## 小节标题');
+    await userEvent.click(within(dialog).getByRole('button', { name: '预览' }));
+
+    expect(within(dialog).getByRole('heading', { level: 2, name: '小节标题' })).toBeInTheDocument();
+  });
+
+  it('工具栏插入的标记会随「保存」一起写回正文', async () => {
+    useWritingStore.getState().addProject('新文章', 'article');
+    render(<WritingPage />);
+
+    await userEvent.click(screen.getByRole('button', { name: '编辑正文' }));
+    const dialog = screen.getByRole('dialog', { name: /编辑正文/ });
+    const textarea = within(dialog).getByLabelText('正文') as HTMLTextAreaElement;
+    await userEvent.type(textarea, '列表项');
+    await userEvent.click(within(dialog).getByRole('button', { name: '无序列表' }));
+    expect(textarea).toHaveValue('- 列表项');
+
+    await userEvent.click(within(dialog).getByRole('button', { name: '保存' }));
+
+    expect(projectOf('新文章').content).toBe('- 列表项');
+    expect(projectOf('新文章').wordCount).toBe(5);
+  });
+});

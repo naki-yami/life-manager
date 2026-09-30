@@ -39,6 +39,7 @@ import { useNewEntryShortcut } from '../hooks/useShortcuts';
 import { usePaletteFocus } from '../hooks/usePaletteFocus';
 import { ToastContext } from '../components/ui/toastContext';
 import { downloadTextFile } from '../utils/download';
+import { MarkdownEditor } from '../components/writing/MarkdownEditor';
 
 type Filter = 'all' | WritingStatus;
 
@@ -530,10 +531,10 @@ export const WritingPage: React.FC = () => {
         }
       >
         <div className="space-y-4">
-          <Textarea
+          <MarkdownEditor
             label="正文"
             value={contentDraft}
-            onChange={(event) => setContentDraft(event.target.value)}
+            onChange={setContentDraft}
             rows={14}
             placeholder="从这里开始写……"
           />
