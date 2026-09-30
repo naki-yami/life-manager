@@ -18,6 +18,8 @@ export const TASK_TITLE = 'E2E 冒烟任务';
 export const LEGACY_TASK_TITLE = 'E2E 迁移任务';
 /** 餐次模板用例的专用食物名，避免与别的用例撞上 */
 export const TEMPLATE_FOOD = 'E2E 模板燕麦';
+/** 分模块导出用例的任务标题 */
+export const MODULE_EXPORT_TASK = 'E2E 导出任务';
 /** 与 src/store/persist.ts 的 STORE_VERSION 对应；写回时版本对不上 zustand 会走 migrate */
 export const STORE_VERSION = 12;
 
@@ -473,6 +475,140 @@ export function registerDataCases() {
     const restored = await readState(session, 'lm:tasks');
     const mineAfter = (restored?.tasks ?? []).filter((t) => t.title.startsWith('E2E 批量 '));
     assert.equal(mineAfter.length, 3, '撤销应当把三条都放回库里');
+
+    assert.empty(session.pageErrors, '这条链路里不该有未捕获异常');
+  });
+
+  test('module-export', '分模块导出：格式按钮真的产出对应内容，树形模块只给 JSON', async (ctx) => {
+    const { session, baseUrl } = ctx;
+
+    // 先造一条任务，导出的文件里得有它
+    await session.goto(`${baseUrl}/tasks`, { waitMs: 1200 });
+    session.clearErrors();
+    assert.clicked(await session.clickByText('添加任务'), '添加任务按钮');
+    await delay(600);
+    const filled = await session.evaluate(
+      `(() => {
+        const d = document.querySelector('[role="dialog"]');
+        if (!d) return 'MISS';
+        const label = [...d.querySelectorAll('label')].find(n => n.textContent.trim().startsWith('标题'));
+        if (!label) return 'NO_LABEL';
+        const input = d.querySelector('#' + CSS.escape(label.getAttribute('for')));
+        if (!input) return 'NO_INPUT';
+        const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+        setter.call(input, ${JSON.stringify(MODULE_EXPORT_TASK)});
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        return 'OK';
+      })()`,
+    );
+    assert.equal(filled, 'OK', '填任务标题');
+    await delay(300);
+    const submitted = await session.evaluate(
+      `(() => {
+        const d = document.querySelector('[role="dialog"]');
+        const b = [...d.querySelectorAll('button')].find(n => n.textContent.trim() === '添加' || n.textContent.trim() === '保存');
+        if (!b) return 'MISS';
+        b.click();
+        return 'OK';
+      })()`,
+    );
+    assert.clicked(submitted, '提交任务');
+    await delay(800);
+
+    // 进设置页，装好下载探针：把 Blob 的文本留下来，别真的写盘
+    await session.goto(`${baseUrl}/settings`, { waitMs: 1200 });
+    session.clearErrors();
+    await session.evaluate(
+      `(() => {
+        window.__exports = [];
+        const real = URL.createObjectURL.bind(URL);
+        URL.createObjectURL = (blob) => { window.__exports.push(blob); return real(blob); };
+        return 'OK';
+      })()`,
+    );
+
+    const selectModule = async (value) => {
+      const res = await session.evaluate(
+        `(() => {
+          const sel = document.querySelector('select[aria-label="选择要导出的模块"]');
+          if (!sel) return 'MISS';
+          const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set;
+          setter.call(sel, ${JSON.stringify(value)});
+          sel.dispatchEvent(new Event('change', { bubbles: true }));
+          return 'OK';
+        })()`,
+      );
+      assert.equal(res, 'OK', `选模块 ${value}`);
+      await delay(300);
+    };
+
+    /** 点导出区里的格式按钮（按按钮文字前缀匹配，绕开顶上的「导出 JSON」） */
+    const clickFormat = async (token) => {
+      const res = await session.evaluate(
+        `(() => {
+          const sel = document.querySelector('select[aria-label="选择要导出的模块"]');
+          const row = sel && sel.closest('.flex');
+          if (!row) return 'NO_ROW';
+          const b = [...row.querySelectorAll('button')].find(n => n.textContent.trim().startsWith(${JSON.stringify(token)}));
+          if (!b) return 'MISS';
+          if (b.disabled) return 'DISABLED';
+          b.click();
+          return 'OK';
+        })()`,
+      );
+      assert.clicked(res, `${token} 按钮`);
+      await delay(500);
+    };
+
+    const lastExport = () =>
+      session.evaluate(
+        `(async () => {
+          const list = window.__exports || [];
+          if (list.length === 0) return null;
+          return await list[list.length - 1].text();
+        })()`,
+      );
+
+    // 1) 任务 → CSV：表头 + 数据都在，且不带 id
+    await selectModule('tasks');
+    await clickFormat('CSV');
+    const csv = await lastExport();
+    assert.ok(typeof csv === 'string' && csv.length > 0, 'CSV 内容不该为空');
+    assert.ok(csv.includes('标题,状态,优先级'), `CSV 表头不对：${String(csv).slice(0, 40)}`);
+    assert.ok(csv.includes(MODULE_EXPORT_TASK), 'CSV 里应当有刚造的那条任务');
+    assert.ok(!csv.includes('lm:'), 'CSV 里不该出现内部存储键');
+
+    // 2) 任务 → Markdown：表格 + 抬头
+    await clickFormat('Markdown');
+    const md = await lastExport();
+    assert.ok(String(md).includes('# 任务'), 'Markdown 应当以模块名作标题');
+    assert.ok(String(md).includes('| 标题 |'), 'Markdown 应当有表格');
+
+    // 3) 树形模块：CSV / Markdown 按钮禁用
+    await selectModule('devProjects');
+    const disabled = await session.evaluate(
+      `(() => {
+        const sel = document.querySelector('select[aria-label="选择要导出的模块"]');
+        const row = sel.closest('.flex');
+        const btns = [...row.querySelectorAll('button')];
+        return btns.map(n => ({ text: n.textContent.trim().slice(0, 4), disabled: n.disabled }));
+      })()`,
+    );
+    assert.equal(
+      disabled.filter((b) => b.disabled).length,
+      2,
+      `树形模块应当只留下 JSON 可用，实际：${JSON.stringify(disabled)}`,
+    );
+
+    // 4) JSON 能被 parseBackup 读回，且只带这一个模块
+    await selectModule('books');
+    await clickFormat('JSON');
+    const json = await lastExport();
+    const raw = JSON.parse(json);
+    assert.equal(raw.module, 'books', 'JSON 应当带 module 字段');
+    const keys = Object.keys(raw.data);
+    assert.equal(keys.length, 1, `JSON 里只该有被导出的那个模块，实际：${keys.join(',')}`);
+    assert.equal(keys[0], 'books', 'JSON 里的模块名应当是 books');
 
     assert.empty(session.pageErrors, '这条链路里不该有未捕获异常');
   });

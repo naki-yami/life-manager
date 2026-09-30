@@ -5,7 +5,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SettingsPage } from './SettingsPage';
 import { ToastProvider } from '../components/ui';
-import { serializeBackup } from '../services/backup';
+import { parseBackup, serializeBackup } from '../services/backup';
 import { FOLDER_BACKUP_FILE, resetFolderBackupStore } from '../services/folderSync';
 import { installIndexedDbStub } from '../test/indexedDbStub';
 import { fakeFolder, stubDirectoryPicker } from '../test/fakeFolder';
@@ -89,6 +89,54 @@ const uploadFile = (text: string, name = 'backup.json'): void => {
   fireEvent.change(input, { target: { files: [file] } });
 };
 
+/**
+ * 数据概览里某个模块的标签。
+ *
+ * 模块中文名现在同时出现在「数据概览」九宫格和「单模块导出」的下拉里，
+ * 直接 `getByText('书籍')` 会撞上两个。九宫格里的标签是 `<p>`，
+ * 下拉里的是 `<option>` —— 按标签名取 `<p>` 就能唯一命中。
+ */
+const overviewLabel = (label: string): HTMLElement => {
+  const matches = screen.getAllByText(label).filter((node) => node.tagName === 'P');
+  expect(matches).toHaveLength(1);
+  return matches[0]!;
+};
+
+/** 单模块导出区：从模块下拉往上找到带三个格式按钮的那一层 */
+const exportSection = (): HTMLElement => {
+  const select = screen.getByLabelText('选择要导出的模块');
+  const row = select.closest('.flex') as HTMLElement | null;
+  expect(row).not.toBeNull();
+  expect(within(row!).getByRole('button', { name: /JSON/ })).toBeInTheDocument();
+  return row!;
+};
+
+/** 单模块导出区里的格式按钮 */
+const formatButton = (name: RegExp): HTMLElement =>
+  within(exportSection()).getByRole('button', { name });
+
+/**
+ * 拦下浏览器下载，把每次导出的内容收进数组。
+ *
+ * 导出的验收点是「文件里到底是什么」，不是「有没有调用 createObjectURL」——
+ * 所以这里把 Blob 留下来给用例读文本。
+ */
+const stubDownload = (): { blobs: Blob[]; anchorClick: ReturnType<typeof vi.fn> } => {
+  const blobs: Blob[] = [];
+  vi.stubGlobal('URL', {
+    ...URL,
+    createObjectURL: vi.fn((blob: Blob) => {
+      blobs.push(blob);
+      return 'blob:mock';
+    }),
+    revokeObjectURL: vi.fn(),
+  });
+  const anchorClick = vi
+    .spyOn(HTMLAnchorElement.prototype, 'click')
+    .mockImplementation(() => undefined);
+  return { blobs, anchorClick };
+};
+
 describe('SettingsPage', () => {
   it('快捷键说明表列出全局按键', () => {
     render(
@@ -133,7 +181,7 @@ describe('SettingsPage', () => {
 
     renderSettings();
 
-    expect(screen.getByText('习惯')).toBeInTheDocument();
+    expect(overviewLabel('习惯')).toBeInTheDocument();
     expect(screen.getByText(/共 2 条数据/)).toBeInTheDocument();
   });
 
@@ -155,7 +203,7 @@ describe('SettingsPage', () => {
 
     renderSettings();
 
-    expect(screen.getByText('复盘')).toBeInTheDocument();
+    expect(overviewLabel('复盘')).toBeInTheDocument();
     expect(screen.getByText(/共 1 条数据/)).toBeInTheDocument();
   });
 
@@ -165,7 +213,7 @@ describe('SettingsPage', () => {
 
     renderSettings();
 
-    expect(screen.getByText('目标')).toBeInTheDocument();
+    expect(overviewLabel('目标')).toBeInTheDocument();
     expect(screen.getByText(/共 2 条数据/)).toBeInTheDocument();
   });
 
@@ -176,9 +224,9 @@ describe('SettingsPage', () => {
     renderSettings();
 
     expect(screen.getByText(/共 2 条数据/)).toBeInTheDocument();
-    expect(screen.getByText('书籍')).toBeInTheDocument();
-    expect(screen.getByText('游戏')).toBeInTheDocument();
-    expect(screen.getByText('训练计划')).toBeInTheDocument();
+    expect(overviewLabel('书籍')).toBeInTheDocument();
+    expect(overviewLabel('游戏')).toBeInTheDocument();
+    expect(overviewLabel('训练计划')).toBeInTheDocument();
   });
 
   it('导出会生成带信封结构的 JSON 备份并给出提示', async () => {
@@ -205,6 +253,76 @@ describe('SettingsPage', () => {
 
     expect(await screen.findByText('已导出备份')).toBeInTheDocument();
     expect(screen.getByText(/life-manager-backup-\d{4}-\d{2}-\d{2}\.json/)).toBeInTheDocument();
+  });
+
+  it('分模块导出：选中的模块与格式决定文件名和内容，只带这一个模块', async () => {
+    useBookStore.getState().addBook('人类简史', 'Harari', '历史');
+    useTaskStore.getState().addTask('写周报', '', 'medium', '');
+    const { blobs, anchorClick } = stubDownload();
+
+    renderSettings();
+    await userEvent.selectOptions(
+      screen.getByLabelText('选择要导出的模块'),
+      'books',
+    );
+    await userEvent.click(formatButton(/CSV/));
+
+    expect(anchorClick).toHaveBeenCalledTimes(1);
+    expect(blobs).toHaveLength(1);
+    const text = await blobs[0]!.text();
+    expect(text.split('\r\n')[0]).toBe('书名,作者,分类,状态,进度,评分,标签,短评,读完于');
+    expect(text).toContain('人类简史');
+    // 任务模块没被带进来
+    expect(text).not.toContain('写周报');
+
+    expect(await screen.findByText('已导出书籍')).toBeInTheDocument();
+    expect(screen.getByText(/life-manager-书籍-\d{4}-\d{2}-\d{2}\.csv/)).toBeInTheDocument();
+  });
+
+  it('分模块导出的 JSON 能被「导入数据」读回来', async () => {
+    useBookStore.getState().addBook('人类简史', 'Harari', '历史');
+    const { blobs } = stubDownload();
+
+    renderSettings();
+    await userEvent.selectOptions(screen.getByLabelText('选择要导出的模块'), 'books');
+    await userEvent.click(formatButton(/JSON/));
+
+    const text = await blobs[0]!.text();
+    const raw = JSON.parse(text) as { module: string; data: Record<string, unknown> };
+    expect(raw.module).toBe('books');
+    expect(Object.keys(raw.data)).toEqual(['books']);
+
+    const parsed = parseBackup(text);
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    expect(parsed.backup.modules.books?.[0]?.title).toBe('人类简史');
+    expect(parsed.backup.modules.tasks).toBeUndefined();
+  });
+
+  it('树形模块禁用 CSV / Markdown，并说明原因', async () => {
+    renderSettings();
+    await userEvent.selectOptions(screen.getByLabelText('选择要导出的模块'), 'devProjects');
+
+    expect(formatButton(/CSV/)).toBeDisabled();
+    expect(formatButton(/Markdown/)).toBeDisabled();
+    expect(formatButton(/JSON/)).toBeEnabled();
+    expect(screen.getByText(/开发项目挂着子任务、里程碑与日志/)).toBeInTheDocument();
+
+    // 换回普通模块，按钮恢复可用
+    await userEvent.selectOptions(screen.getByLabelText('选择要导出的模块'), 'tasks');
+    expect(formatButton(/CSV/)).toBeEnabled();
+  });
+
+  it('没有数据的模块导出空表也给出提示，而不是静默下载', async () => {
+    const { blobs } = stubDownload();
+    renderSettings();
+
+    await userEvent.selectOptions(screen.getByLabelText('选择要导出的模块'), 'goals');
+    await userEvent.click(formatButton(/JSON/));
+
+    expect(blobs).toHaveLength(1);
+    expect(await screen.findByText('已导出目标')).toBeInTheDocument();
+    expect(screen.getByText(/这个模块目前还没有数据/)).toBeInTheDocument();
   });
 
   it('导入会先预览再写入，并且模式可切换', async () => {

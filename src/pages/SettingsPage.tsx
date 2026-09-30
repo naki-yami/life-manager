@@ -34,6 +34,7 @@ import {
   useToast,
   Select,
 } from '../components/ui';
+import type { SelectOption } from '../components/ui';
 import { PageHeader } from '../components/layout';
 import { useTheme } from '../hooks/useTheme';
 import { useTaskStore } from '../store/taskStore';
@@ -72,6 +73,18 @@ import {
 } from '../services/backup';
 import type { AutoSnapshot, ImportMode, ImportPlan, ParseIssue } from '../services/backup';
 import { readAllData } from '../services/appData';
+import {
+  EXPORT_EXTENSIONS,
+  exportModuleCsv,
+  exportModuleJson,
+  exportModuleMarkdown,
+  jsonOnlyReason,
+  moduleFileName,
+  moduleRecords,
+  supportsFormat,
+} from '../services/moduleExport';
+import type { ExportFormat } from '../services/moduleExport';
+import { downloadTextFile } from '../utils/download';
 import {
   FOLDER_BACKUP_FILE,
   chooseFolderBackupFolder,
@@ -180,6 +193,26 @@ const MODE_OPTIONS: { value: ImportMode; label: string; hint: string }[] = [
   { value: 'overwrite', label: '覆盖', hint: '用备份完全替换对应模块，现有数据会被清掉' },
 ];
 
+/** 分模块导出的模块下拉：按导航顺序排列，跟「数据概览」的九宫格同一套标签 */
+const MODULE_OPTIONS: SelectOption[] = BACKUP_MODULES.map((module) => ({
+  value: module,
+  label: MODULE_LABELS[module],
+}));
+
+/** 分模块导出的三种格式；扩展名从登记表来，免得这里和导出器两边各写一遍 */
+const FORMAT_OPTIONS: { value: ExportFormat; label: string }[] = [
+  { value: 'json', label: `JSON（.${EXPORT_EXTENSIONS.json}）` },
+  { value: 'csv', label: `CSV（.${EXPORT_EXTENSIONS.csv}）` },
+  { value: 'markdown', label: `Markdown（.${EXPORT_EXTENSIONS.markdown}）` },
+];
+
+/** 可选格式的一句话说明，用在模块下拉下面 */
+const FORMAT_HINTS: Record<ExportFormat, string> = {
+  json: 'JSON 保留全部字段，包括嵌套的子任务、正文与版本快照，也能被「导入数据」读回来。',
+  csv: 'CSV 用 Excel / WPS / 表格软件打开，一行一条记录，适合做透视表或交给别人。',
+  markdown: 'Markdown 是一份可以直接粘进笔记软件的表格，日记与正文按篇展开。',
+};
+
 export const SettingsPage: React.FC = () => {
   const { themeMode, setThemeMode } = useTheme();
   const density = useUiStore((state) => state.density);
@@ -200,6 +233,9 @@ export const SettingsPage: React.FC = () => {
   const [usage, setUsage] = useState<AppStorageUsage | null>(null);
   const [folderStatus, setFolderStatus] = useState<FolderBackupStatus | null>(null);
   const [folderBusy, setFolderBusy] = useState(false);
+  /** 分模块导出（F15）：当前选中的模块与格式 */
+  const [exportModule, setExportModule] = useState<BackupModule>('tasks');
+  const [exportFormat, setExportFormat] = useState<ExportFormat>('csv');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const folderSupported = isFolderBackupSupported();
 
@@ -327,6 +363,41 @@ export const SettingsPage: React.FC = () => {
       tone: 'success',
     });
   }, [toast, totalEntries]);
+
+  /**
+   * 分模块导出（F15）。
+   *
+   * 每次现取一遍全量数据再抽模块，而不是在渲染期把 21 个模块都订阅一遍：
+   * 导出是「按下按钮才发生」的动作，订阅只会让设置页跟着每次改动重渲染。
+   * 条数从 `counts` 里补 —— 它已经订阅了，顺带用来做「导出 0 条」的提示。
+   */
+  const handleModuleExport = useCallback(
+    (format: ExportFormat): void => {
+      const data = readAllData();
+      const records = moduleRecords(data, exportModule);
+      const fileName = moduleFileName(exportModule, format);
+      const moduleLabel = MODULE_LABELS[exportModule];
+      setExportFormat(format);
+
+      if (format === 'json') {
+        downloadTextFile(fileName, exportModuleJson(exportModule, records));
+      } else if (format === 'csv') {
+        downloadTextFile(fileName, exportModuleCsv(exportModule, records));
+      } else {
+        downloadTextFile(fileName, exportModuleMarkdown(exportModule, records));
+      }
+
+      toast({
+        title: `已导出${moduleLabel}`,
+        description:
+          records.length === 0
+            ? `${fileName} · 这个模块目前还没有数据`
+            : `${fileName} · 共 ${records.length} 条`,
+        tone: 'success',
+      });
+    },
+    [exportModule, toast],
+  );
 
   /** 选（或换）一个备份文件夹：会弹系统授权框，所以必须由点击触发 */
   const handleChooseFolder = useCallback(async (): Promise<void> => {
@@ -589,11 +660,47 @@ export const SettingsPage: React.FC = () => {
       </Card>
 
       <Card>
-        <CardHeader title="导出数据" subtitle="导出为 JSON 文件，包含全部模块与外观设置" />
-        <CardBody>
+        <CardHeader
+          title="导出数据"
+          subtitle="全量 JSON 用来备份与迁移；也可以只导某一个模块，做成 CSV 或 Markdown"
+        />
+        <CardBody className="space-y-4">
           <Button icon={<Download size={16} aria-hidden />} onClick={handleExport}>
             导出 JSON
           </Button>
+
+          <div className="border-t border-line-subtle pt-4">
+            <p className="mb-2 text-sm font-medium text-content-secondary">单模块导出</p>
+            <div className="flex flex-wrap items-end gap-2">
+              <Select
+                className="w-40"
+                aria-label="选择要导出的模块"
+                value={exportModule}
+                onChange={(value) => setExportModule(value as BackupModule)}
+                options={MODULE_OPTIONS}
+              />
+              {FORMAT_OPTIONS.map((format) => {
+                const supported = supportsFormat(exportModule, format.value);
+                return (
+                  <Button
+                    key={format.value}
+                    variant="secondary"
+                    disabled={!supported}
+                    icon={<Download size={16} aria-hidden />}
+                    onClick={() => handleModuleExport(format.value)}
+                  >
+                    {format.label}
+                  </Button>
+                );
+              })}
+            </div>
+            <p className="mt-2 text-xs text-content-tertiary">
+              {jsonOnlyReason(exportModule) ?? FORMAT_HINTS[exportFormat]}
+            </p>
+            <p className="mt-1 text-xs text-content-tertiary">
+              这份 JSON 能被「导入数据」直接读回来（只会写进它自己那一个模块）。
+            </p>
+          </div>
         </CardBody>
       </Card>
 
