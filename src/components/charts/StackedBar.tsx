@@ -43,7 +43,10 @@ export const StackedBar: React.FC<StackedBarProps> = ({
   const totals = dates.map((_, index) =>
     series.reduce((sum, item) => sum + Math.max(0, item.values[index] ?? 0), 0),
   );
-  const max = Math.max(1, ...totals);
+  /** 缩放用的下界（理由同 BarChart）：全 0 时给个非零除数，别拿它当峰值报出去 */
+  const scale = Math.max(1, ...totals);
+  /** 描述里报的真实峰值：totals 已按非负累加，取最大值即可 */
+  const peak = totals.reduce((top, value) => Math.max(top, value), 0);
   const grandTotal = totals.reduce((sum, value) => sum + value, 0);
   const activeIndex = cursor.index;
   const activeDate = activeIndex === null ? undefined : dates[activeIndex];
@@ -64,7 +67,7 @@ export const StackedBar: React.FC<StackedBarProps> = ({
       <div
         {...cursor.containerProps}
         role="img"
-        aria-label={`${label}：合计 ${formatValue(grandTotal)}，最高一天 ${formatValue(max)}`}
+        aria-label={`${label}：合计 ${formatValue(grandTotal)}，最高一天 ${formatValue(peak)}`}
         className={`flex items-end gap-1 ${CHART_FOCUS_RING}`}
         style={{ height }}
       >
@@ -87,7 +90,7 @@ export const StackedBar: React.FC<StackedBarProps> = ({
                 <span
                   key={item.name}
                   className={`w-full ${CHART_SERIES_BAR[color]}`}
-                  style={{ height: `${(value / max) * 100}%` }}
+                  style={{ height: `${(value / scale) * 100}%` }}
                 />
               );
             })}

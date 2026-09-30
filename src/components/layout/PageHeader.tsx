@@ -20,7 +20,8 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
   meta,
 }) => (
   <header className="flex flex-wrap items-start justify-between gap-4">
-    <div className="min-w-0 flex-1">
+    {/* basis-56 是「标题至少占这么宽」的换行阈值：窄窗口下操作区自动换到下一行，而不是把标题挤成一条窄缝 */}
+    <div className="min-w-0 flex-1 basis-56">
       <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight text-content">
         {Icon && <Icon size={22} className="shrink-0 text-accent" aria-hidden />}
         <span className="truncate">{title}</span>
@@ -28,6 +29,9 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
       {description && <p className="mt-1 text-sm text-content-tertiary">{description}</p>}
       {meta && <div className="mt-2 flex flex-wrap items-center gap-2">{meta}</div>}
     </div>
-    {actions && <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>}
+    {/* 操作区允许收缩并在内部换行：宽控件（比如统计页的日期框）不该把标题挤成一列窄条 */}
+    {actions && (
+      <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">{actions}</div>
+    )}
   </header>
 );

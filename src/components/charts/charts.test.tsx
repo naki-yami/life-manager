@@ -55,6 +55,21 @@ describe('BarChart', () => {
     expect(items).toHaveLength(3);
     expect(items[2]).toHaveTextContent('2026-01-08：4 个');
   });
+
+  it('序列全为 0 时，描述里的最高值也是 0，不许拿缩放下限凑数', () => {
+    // 回归：早先 BarChart 把 Math.max(1, ...values) 既当缩放下限又当峰值，
+    // 空活动的一周会被读成「合计 0 个，单日最高 1 个」，自相矛盾。
+    const data = [
+      { date: '2026-01-06', value: 0 },
+      { date: '2026-01-07', value: 0 },
+      { date: '2026-01-08', value: 0 },
+    ];
+    render(<BarChart data={data} label="每日完成任务数" formatValue={(value) => `${value} 个`} />);
+
+    expect(
+      screen.getByRole('img', { name: '每日完成任务数：合计 0 个，单日最高 0 个' }),
+    ).toBeInTheDocument();
+  });
 });
 
 describe('LineChart', () => {
@@ -298,5 +313,20 @@ describe('StackedBar', () => {
     expect(dotOf('C')).toHaveClass('bg-chart-3');
     expect(seriesAt(8)).toBe(1);
     expect(seriesAt(9)).toBe(2);
+  });
+
+  it('每一天都是 0 时，「最高一天」报 0，而不是缩放用的 1', () => {
+    render(
+      <StackedBar
+        dates={['2026-01-06', '2026-01-07']}
+        series={[
+          { name: '任务', values: [0, 0] },
+          { name: '训练', values: [0, 0] },
+        ]}
+        label="活动构成"
+      />,
+    );
+
+    expect(screen.getByRole('img', { name: '活动构成：合计 0，最高一天 0' })).toBeInTheDocument();
   });
 });

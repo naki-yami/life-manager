@@ -32,7 +32,13 @@ export const BarChart: React.FC<BarChartProps> = ({
   className = '',
 }) => {
   const cursor = useChartCursor(data.length);
-  const max = Math.max(1, ...data.map((point) => point.value));
+  /**
+   * 缩放用的下界：全是 0 时也得有个非零除数，否则柱高会算成 NaN。
+   * 但它**只服务于画图**，不能拿去做描述里的峰值（见 peak）。
+   */
+  const scale = Math.max(1, ...data.map((point) => point.value));
+  /** 描述里报的真实峰值：若用上面的 floor，「合计 0」会配上自相矛盾的「最高 1」 */
+  const peak = data.reduce((top, point) => Math.max(top, point.value), 0);
   const total = sumOf(data.map((point) => point.value));
   const active = cursor.index === null ? undefined : data[cursor.index];
 
@@ -52,7 +58,7 @@ export const BarChart: React.FC<BarChartProps> = ({
       <div
         {...cursor.containerProps}
         role="img"
-        aria-label={`${label}：合计 ${formatValue(total)}，单日最高 ${formatValue(max)}`}
+        aria-label={`${label}：合计 ${formatValue(total)}，单日最高 ${formatValue(peak)}`}
         className={`flex items-end gap-1 ${CHART_FOCUS_RING}`}
         style={{ height }}
       >
@@ -64,7 +70,7 @@ export const BarChart: React.FC<BarChartProps> = ({
               point.value > 0 ? CHART_BAR[tone] : 'bg-inset'
             } ${index === cursor.index ? 'ring-2 ring-line-focus' : ''}`}
             style={{
-              height: point.value > 0 ? `${Math.max(4, (point.value / max) * 100)}%` : '2px',
+              height: point.value > 0 ? `${Math.max(4, (point.value / scale) * 100)}%` : '2px',
             }}
           />
         ))}

@@ -502,6 +502,36 @@ describe('PageHeader', () => {
     expect(screen.getByRole('button', { name: '新建' })).toBeInTheDocument();
     expect(screen.getByText('高优先级 1')).toBeInTheDocument();
   });
+
+  it('宽操作区不挤标题：标题留换行阈值，操作区可收缩并在内部换行', () => {
+    // 回归：统计页把两个日期框塞进 actions 后，标题被挤成一列窄条、描述折成四行。
+    // 根因是 actions 用了 shrink-0 —— 宽度不够时它一步不让，只能由标题让路。
+    // jsdom 没有排版引擎，这里断言不了「真的换行了」，所以锁让它换行的那组类：
+    // 标题块带 basis 阈值（窄容器下把操作区顶到下一行），操作区允许收缩。
+    const { container } = render(
+      <PageHeader
+        title="统计"
+        description="所选 21 天的活动趋势与各模块进度"
+        actions={
+          <>
+            <button type="button">7 天</button>
+            <input type="date" aria-label="自定义起始日期" />
+          </>
+        }
+      />,
+    );
+
+    expect(container.querySelector('header')).toHaveClass('flex-wrap');
+
+    const titleBlock = screen.getByRole('heading', { name: '统计' }).parentElement as HTMLElement;
+    expect(titleBlock.className).toContain('min-w-0');
+    expect(titleBlock.className).toMatch(/\bbasis-\S+/);
+
+    const actionsBlock = screen.getByRole('button', { name: '7 天' }).parentElement as HTMLElement;
+    expect(actionsBlock.className).toContain('min-w-0');
+    expect(actionsBlock.className).toContain('flex-wrap');
+    expect(actionsBlock.className).not.toContain('shrink-0');
+  });
 });
 
 describe('Toolbar', () => {
