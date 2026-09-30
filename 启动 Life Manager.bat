@@ -39,7 +39,7 @@ echo    Close this window to stop the server.
 echo   --------------------------------------------
 echo.
 
-call npx vite preview --port 4173 --strictPort --open
+call npx vite preview --port 4173 --strictPort --host 127.0.0.1 --open
 
 echo.
 echo   Server stopped.
