@@ -468,3 +468,169 @@ describe('TasksPage 宽屏双栏', () => {
     expect(within(panel()).getByLabelText(/^标题/)).toHaveValue('紧急任务');
   });
 });
+
+describe('TasksPage 批量操作', () => {
+  it('点「批量」进入批量模式：操作条出现，单条操作图标藏起来', async () => {
+    seed();
+    render(<TasksPage />);
+
+    expect(screen.queryByRole('toolbar', { name: '批量操作' })).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: '批量' }));
+
+    expect(screen.getByRole('toolbar', { name: '批量操作' })).toBeInTheDocument();
+    // 进入时就替用户勾上一条，操作条不该写着「已选 0 项」
+    expect(
+      within(screen.getByRole('toolbar', { name: '批量操作' })).getByText('1'),
+    ).toBeInTheDocument();
+    // 单条的编辑/删除图标藏起来，免得误点
+    expect(screen.queryByRole('button', { name: '编辑「中等任务」' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '删除「中等任务」' })).not.toBeInTheDocument();
+  });
+
+  it('勾选框换成「选中」，完成勾选框让位', async () => {
+    seed();
+    render(<TasksPage />);
+
+    expect(screen.getByLabelText('完成「中等任务」')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: '批量' }));
+
+    expect(screen.queryByLabelText('完成「中等任务」')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('选中「中等任务」')).toBeInTheDocument();
+  });
+
+  it('点卡片上的勾选框能加减选中，计数跟着变', async () => {
+    seed();
+    render(<TasksPage />);
+    await userEvent.click(screen.getByRole('button', { name: '批量' }));
+
+    const bar = () => within(screen.getByRole('toolbar', { name: '批量操作' }));
+    expect(bar().getByText('1')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByLabelText('选中「低优先级」'));
+    expect(bar().getByText('2')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByLabelText('选中「低优先级」'));
+    expect(bar().getByText('1')).toBeInTheDocument();
+  });
+
+  it('全选选的是当前筛出来的那批，不是全部', async () => {
+    seed();
+    render(<TasksPage />);
+
+    // 先筛出「待办」：三条都是待办，再按优先级筛成一条
+    await userEvent.click(screen.getByRole('button', { name: /已完成/ }));
+    await userEvent.click(screen.getByRole('button', { name: /全部/ }));
+
+    await userEvent.click(screen.getByRole('button', { name: '批量' }));
+    await userEvent.click(screen.getByRole('button', { name: '全选' }));
+
+    // 「3」在统计卡里也有，从操作条里读才不歧义
+    expect(within(screen.getByRole('toolbar', { name: '批量操作' })).getByText('3')).toBeInTheDocument();
+  });
+
+  it('批量改优先级对选中的每一条都生效', async () => {
+    seed();
+    render(<TasksPage />);
+    await userEvent.click(screen.getByRole('button', { name: '批量' }));
+    await userEvent.click(screen.getByRole('button', { name: '全选' }));
+
+    await userEvent.selectOptions(screen.getByLabelText('批量修改优先级'), 'high');
+
+    const priorities = useTaskStore.getState().tasks.map((task) => task.priority);
+    expect(priorities.every((priority) => priority === 'high')).toBe(true);
+  });
+
+  it('批量打标签是并集，不改动别的标签', async () => {
+    seed();
+    const store = useTaskStore.getState();
+    store.updateTask(store.tasks[0]!.id, { tags: ['已有'] });
+
+    render(<TasksPage />);
+    await userEvent.click(screen.getByRole('button', { name: '批量' }));
+    await userEvent.click(screen.getByRole('button', { name: '全选' }));
+    await userEvent.click(screen.getByRole('button', { name: '打标签' }));
+
+    const dialog = screen.getByRole('dialog', { name: '批量打标签' });
+    expect(within(dialog).getByText(/将对选中的 3 条任务生效/)).toBeInTheDocument();
+    await userEvent.type(within(dialog).getByRole('textbox', { name: '标签' }), '批量加的{enter}');
+    await userEvent.click(within(dialog).getByRole('button', { name: '应用' }));
+
+    const tasks = useTaskStore.getState().tasks;
+    expect(tasks.every((task) => task.tags.includes('批量加的'))).toBe(true);
+    expect(tasks.find((task) => task.tags.includes('已有'))).toBeTruthy();
+  });
+
+  it('批量移除标签只摘掉指定的那个', async () => {
+    seed();
+    const store = useTaskStore.getState();
+    for (const task of store.tasks) store.updateTask(task.id, { tags: ['保留', '要去掉'] });
+
+    render(<TasksPage />);
+    await userEvent.click(screen.getByRole('button', { name: '批量' }));
+    await userEvent.click(screen.getByRole('button', { name: '全选' }));
+    await userEvent.click(screen.getByRole('button', { name: '打标签' }));
+
+    const dialog = screen.getByRole('dialog', { name: '批量打标签' });
+    await userEvent.click(within(dialog).getByRole('button', { name: '移除' }));
+    await userEvent.type(within(dialog).getByRole('textbox', { name: '标签' }), '要去掉{enter}');
+    await userEvent.click(within(dialog).getByRole('button', { name: '应用' }));
+
+    const tasks = useTaskStore.getState().tasks;
+    expect(tasks.every((task) => task.tags.includes('保留'))).toBe(true);
+    expect(tasks.some((task) => task.tags.includes('要去掉'))).toBe(false);
+  });
+
+  it('批量删除要二次确认，删完能整体撤销', async () => {
+    seed();
+    render(
+      <ToastProvider>
+        <TasksPage />
+      </ToastProvider>,
+    );
+    await userEvent.click(screen.getByRole('button', { name: '批量' }));
+    await userEvent.click(screen.getByRole('button', { name: '全选' }));
+    await userEvent.click(screen.getByRole('button', { name: '删除' }));
+
+    const dialog = screen.getByRole('dialog', { name: '批量删除任务' });
+    expect(within(dialog).getByText(/选中的 3 条任务/)).toBeInTheDocument();
+    await userEvent.click(within(dialog).getByRole('button', { name: '删除' }));
+
+    expect(useTaskStore.getState().tasks).toHaveLength(0);
+    // 删完退出批量模式，免得操作条还挂着「已选 3 项」
+    expect(screen.queryByRole('toolbar', { name: '批量操作' })).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: '撤销' }));
+    expect(useTaskStore.getState().tasks).toHaveLength(3);
+  });
+
+  it('批量改截止日能设为今天，也能清空', async () => {
+    seed();
+    render(<TasksPage />);
+    await userEvent.click(screen.getByRole('button', { name: '批量' }));
+    await userEvent.click(screen.getByRole('button', { name: '全选' }));
+
+    await userEvent.selectOptions(screen.getByLabelText('批量修改截止日'), 'today');
+    expect(useTaskStore.getState().tasks.every((task) => task.dueDate === todayKey())).toBe(true);
+
+    await userEvent.selectOptions(screen.getByLabelText('批量修改截止日'), 'clear');
+    expect(useTaskStore.getState().tasks.every((task) => task.dueDate === '')).toBe(true);
+  });
+
+  it('筛掉已选中的条目后，它自动退出选中集', async () => {
+    seed();
+    render(<TasksPage />);
+    await userEvent.click(screen.getByRole('button', { name: '批量' }));
+    await userEvent.click(screen.getByRole('button', { name: '全选' }));
+    expect(
+      within(screen.getByRole('toolbar', { name: '批量操作' })).getByText('3'),
+    ).toBeInTheDocument();
+
+    // 切到「已完成」筛选：三条都是待办，列表被筛空
+    await userEvent.click(screen.getByRole('button', { name: /已完成/ }));
+
+    // 选中的条目已经不在列表里了，不该还留在选中集里
+    expect(screen.queryByRole('toolbar', { name: '批量操作' })).not.toBeInTheDocument();
+  });
+});

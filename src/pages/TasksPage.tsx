@@ -4,6 +4,7 @@ import {
   ChevronDown,
   ChevronRight,
   Edit3,
+  ListChecks,
   ListTodo,
   Plus,
   Repeat,
@@ -24,6 +25,7 @@ import {
   ProgressRing,
   SegmentedControl,
   Select,
+  SelectionBar,
   TagEditor,
   TagInput,
   type KanbanColumnData,
@@ -33,9 +35,11 @@ import { ListEmptyState, MasterDetail, PageHeader, Toolbar } from '../components
 import { BarChart } from '../components/charts';
 import { useTaskStore } from '../store/taskStore';
 import { useUndoableRemove } from '../hooks/useUndoableRemove';
+import { useMultiSelect } from '../hooks/useMultiSelect';
 import { dayKeyOf, daysBetween, formatShortDate, todayKey } from '../utils/date';
 import { seriesByWeek } from '../utils/stats';
 import { useEntityList } from '../hooks/useEntityList';
+import { normalizeTags } from '../utils/tags';
 import { Priority, RepeatKind, RepeatRule, Task, TaskStatus } from '../types';
 import { useNewEntryShortcut } from '../hooks/useShortcuts';
 import { usePaletteFocus } from '../hooks/usePaletteFocus';
@@ -481,6 +485,61 @@ export const TasksPage: React.FC = () => {
     }
   };
 
+  /*
+   * 批量操作（F16）。
+   *
+   * 全部挂在「当前列表视图下看得见的条目」上 —— 传给 useMultiSelect 的是 visibleTasks 的 id，
+   * 所以筛完之后全选，删的就是筛出来的那批。看板与四象限不出复选框：那两个视图是按位置读的，
+   * 每格里塞一个勾选框会打乱它们的阅读节奏，收益不抵复杂度。
+   */
+  const selection = useMultiSelect({ ids: visibleTasks.map((task) => task.id) });
+  const [bulkTagModal, setBulkTagModal] = useState(false);
+  const [bulkTagDraft, setBulkTagDraft] = useState<string[]>([]);
+  const [bulkTagsRemove, setBulkTagsRemove] = useState(false);
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+
+  /** 批量改属性：不进撤销。一次改二十条塞一条「撤销」提示，反而盖住了用户下一步要点的按钮 */
+  const applyToSelected = (patch: Partial<Task>): void => {
+    for (const id of selection.selectedIds) updateTask(id, patch);
+  };
+
+  const applyBulkTags = (): void => {
+    const wanted = normalizeTags(bulkTagDraft);
+    if (wanted.length === 0) return;
+
+    for (const id of selection.selectedIds) {
+      const task = tasks.find((item) => item.id === id);
+      if (!task) continue;
+      const merged = bulkTagsRemove
+        ? task.tags.filter((tag) => !wanted.includes(tag))
+        : normalizeTags([...task.tags, ...wanted]);
+      updateTask(id, { tags: merged });
+    }
+
+    setBulkTagDraft([]);
+    setBulkTagsRemove(false);
+    setBulkTagModal(false);
+  };
+
+  const confirmBulkDelete = (): void => {
+    const snapshot = tasks;
+    const doomed = new Set(selection.selectedIds);
+    const removed = tasks.filter((task) => doomed.has(task.id));
+    for (const id of doomed) deleteTask(id);
+
+    setBulkDeleteOpen(false);
+    selection.clear();
+
+    if (removed.length > 0) {
+      undoableRemove({
+        message: `已删除 ${removed.length} 条任务`,
+        description: '点「撤销」可以全部放回原来的位置。',
+        snapshot,
+        restore: replaceTasks,
+      });
+    }
+  };
+
   return (
     <div className="space-y-section">
       <PageHeader
@@ -594,6 +653,24 @@ export const TasksPage: React.FC = () => {
                   { value: 'completed', label: '已完成', count: countOf('completed') },
                 ]}
               />
+              {/*
+                批量入口只在列表视图给。看板与四象限按位置读，塞勾选框会打乱阅读节奏；
+                而且那两个视图里「选一批然后改」的需求本来就少。
+
+                点它先替用户勾上第一条：一个空着的批量模式（操作条上写「已选 0 项」）
+                看起来像坏了。勾上一条之后，用户立刻知道「啊，这是在选东西」。
+              */}
+              {view === 'list' && visibleTasks.length > 0 && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  icon={<ListChecks size={15} aria-hidden />}
+                  onClick={() => selection.toggle(visibleTasks[0]!.id)}
+                  disabled={selection.isActive}
+                >
+                  批量
+                </Button>
+              )}
             </div>
           }
         />
@@ -668,14 +745,29 @@ export const TasksPage: React.FC = () => {
                 <li key={task.id}>
                   <Card className="p-3.5">
                     <div className="flex items-start gap-3">
-                      <input
-                        type="checkbox"
-                        checked={done}
-                        aria-label={done ? `标记「${task.title}」为待办` : `完成「${task.title}」`}
-                        onChange={() => toggleWithUndo(task)}
-                        style={{ accentColor: 'var(--lm-accent)' }}
-                        className="mt-1 h-4 w-4 shrink-0 cursor-pointer rounded-sm border-line transition-transform duration-fast active:scale-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-line-focus"
-                      />
+                      {/*
+                        批量模式下把「完成」勾选框换成「选中」勾选框。
+                        不并排放两个框 —— 那需要用户在两个几乎一样的方框里分辨哪个是哪个。
+                      */}
+                      {selection.isActive ? (
+                        <input
+                          type="checkbox"
+                          checked={selection.has(task.id)}
+                          aria-label={`选中「${task.title}」`}
+                          onChange={() => selection.toggle(task.id)}
+                          style={{ accentColor: 'var(--lm-accent)' }}
+                          className="mt-1 h-4 w-4 shrink-0 cursor-pointer rounded-sm border-line transition-transform duration-fast active:scale-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-line-focus"
+                        />
+                      ) : (
+                        <input
+                          type="checkbox"
+                          checked={done}
+                          aria-label={done ? `标记「${task.title}」为待办` : `完成「${task.title}」`}
+                          onChange={() => toggleWithUndo(task)}
+                          style={{ accentColor: 'var(--lm-accent)' }}
+                          className="mt-1 h-4 w-4 shrink-0 cursor-pointer rounded-sm border-line transition-transform duration-fast active:scale-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-line-focus"
+                        />
+                      )}
 
                       <div className="min-w-0 flex-1">
                         <p
@@ -803,19 +895,24 @@ export const TasksPage: React.FC = () => {
                       </div>
 
                       <div className="flex shrink-0 gap-0.5">
-                        <IconButton
-                          label={`编辑「${task.title}」`}
-                          size="sm"
-                          icon={<Edit3 size={15} />}
-                          onClick={() => openEdit(task)}
-                        />
-                        <IconButton
-                          label={`删除「${task.title}」`}
-                          size="sm"
-                          icon={<Trash2 size={15} />}
-                          onClick={() => setPendingDeleteId(task.id)}
-                          className="hover:text-danger"
-                        />
+                        {/* 批量模式下藏掉单条操作：那时候用户是按批办事，误点一个图标会跳出个弹窗 */}
+                        {!selection.isActive && (
+                          <>
+                            <IconButton
+                              label={`编辑「${task.title}」`}
+                              size="sm"
+                              icon={<Edit3 size={15} />}
+                              onClick={() => openEdit(task)}
+                            />
+                            <IconButton
+                              label={`删除「${task.title}」`}
+                              size="sm"
+                              icon={<Trash2 size={15} />}
+                              onClick={() => setPendingDeleteId(task.id)}
+                              className="hover:text-danger"
+                            />
+                          </>
+                        )}
                       </div>
                     </div>
                   </Card>
@@ -823,6 +920,55 @@ export const TasksPage: React.FC = () => {
               );
             })}
           </ul>
+        )}
+
+        {selection.isActive && (
+          <SelectionBar
+            count={selection.count}
+            onClear={selection.clear}
+            onSelectAll={selection.selectAll}
+          >
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => {
+                setBulkTagDraft([]);
+                setBulkTagsRemove(false);
+                setBulkTagModal(true);
+              }}
+            >
+              打标签
+            </Button>
+            <Select
+              aria-label="批量修改优先级"
+              className="w-28"
+              value=""
+              onChange={(value) => applyToSelected({ priority: value as Priority })}
+              options={[
+                { value: '', label: '优先级…' },
+                ...PRIORITY_OPTIONS.map((option) => ({
+                  value: option.value,
+                  label: option.label,
+                })),
+              ]}
+            />
+            <Select
+              aria-label="批量修改截止日"
+              className="w-32"
+              value=""
+              onChange={(value) =>
+                applyToSelected({ dueDate: value === 'today' ? todayKey() : value === 'clear' ? '' : value })
+              }
+              options={[
+                { value: '', label: '截止日…' },
+                { value: 'today', label: '设为今天' },
+                { value: 'clear', label: '清空截止日' },
+              ]}
+            />
+            <Button size="sm" variant="danger" onClick={() => setBulkDeleteOpen(true)}>
+              删除
+            </Button>
+          </SelectionBar>
         )}
       </MasterDetail>
 
@@ -851,6 +997,56 @@ export const TasksPage: React.FC = () => {
         onConfirm={confirmDelete}
         title="删除任务"
         description={deletingTask ? `确定要删除「${deletingTask.title}」吗？` : ''}
+        confirmText="删除"
+        tone="danger"
+      />
+
+      {/*
+        批量打标签用弹窗而不是行内输入：一次要改的可能是十几条，
+        行内的话用户没法确认「加」还是「去」，也看不到将要应用的那组标签。
+      */}
+      <Modal
+        isOpen={bulkTagModal}
+        onClose={() => setBulkTagModal(false)}
+        title="批量打标签"
+        description={`将对选中的 ${selection.count} 条任务生效`}
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setBulkTagModal(false)}>
+              取消
+            </Button>
+            <Button onClick={applyBulkTags} disabled={bulkTagDraft.length === 0}>
+              应用
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <SegmentedControl
+            label="标签处理方式"
+            value={bulkTagsRemove ? 'remove' : 'add'}
+            onChange={(value) => setBulkTagsRemove(value === 'remove')}
+            options={[
+              { value: 'add', label: '添加' },
+              { value: 'remove', label: '移除' },
+            ]}
+          />
+          <TagInput
+            label="标签"
+            hint="回车或逗号分隔；添加是并集，移除只影响已选中的这批"
+            value={bulkTagDraft}
+            suggestions={tagSuggestions}
+            onChange={setBulkTagDraft}
+          />
+        </div>
+      </Modal>
+
+      <ConfirmDialog
+        isOpen={bulkDeleteOpen}
+        onClose={() => setBulkDeleteOpen(false)}
+        onConfirm={confirmBulkDelete}
+        title="批量删除任务"
+        description={`确定要删除选中的 ${selection.count} 条任务吗？删完可以点「撤销」全部放回去。`}
         confirmText="删除"
         tone="danger"
       />

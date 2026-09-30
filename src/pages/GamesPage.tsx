@@ -1,5 +1,14 @@
 import React, { useMemo, useState } from 'react';
-import { Clock, Gamepad2, Plus, Star, StickyNote, Trash2, Trophy } from 'lucide-react';
+import {
+  Clock,
+  Gamepad2,
+  ListChecks,
+  Plus,
+  Star,
+  StickyNote,
+  Trash2,
+  Trophy,
+} from 'lucide-react';
 import {
   Badge,
   Button,
@@ -15,6 +24,7 @@ import {
   ProgressBar,
   SegmentedControl,
   Select,
+  SelectionBar,
   Slider,
   StatCard,
   TagEditor,
@@ -25,7 +35,9 @@ import { ListEmptyState, MasterDetail, PageHeader, Toolbar } from '../components
 import { BarChart } from '../components/charts';
 import { useGameStore } from '../store/gameStore';
 import { useEntityList } from '../hooks/useEntityList';
+import { useMultiSelect } from '../hooks/useMultiSelect';
 import { useUndoableRemove } from '../hooks/useUndoableRemove';
+import { normalizeTags } from '../utils/tags';
 import {
   formatDuration,
   formatMonthLabel,
@@ -154,6 +166,52 @@ export const GamesPage: React.FC = () => {
   const clearListFilters = (): void => {
     clearFilters();
     setOnlyFavorite(false);
+  };
+
+  /*
+   * 批量操作（F16）。范围是「当前列表里看得见的游戏」—— 筛过之后全选，动的是筛出来的那批。
+   */
+  const selection = useMultiSelect({ ids: shownGames.map((game) => game.id) });
+  const [bulkTagModal, setBulkTagModal] = useState(false);
+  const [bulkTagDraft, setBulkTagDraft] = useState<string[]>([]);
+  const [bulkTagsRemove, setBulkTagsRemove] = useState(false);
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+
+  const applyBulkTags = (): void => {
+    const wanted = normalizeTags(bulkTagDraft);
+    if (wanted.length === 0) return;
+
+    for (const id of selection.selectedIds) {
+      const game = games.find((item) => item.id === id);
+      if (!game) continue;
+      const merged = bulkTagsRemove
+        ? game.tags.filter((tag) => !wanted.includes(tag))
+        : normalizeTags([...game.tags, ...wanted]);
+      updateGame(id, { tags: merged });
+    }
+
+    setBulkTagDraft([]);
+    setBulkTagsRemove(false);
+    setBulkTagModal(false);
+  };
+
+  const confirmBulkDelete = (): void => {
+    const snapshot = games;
+    const doomed = new Set(selection.selectedIds);
+    const removed = games.filter((game) => doomed.has(game.id));
+    for (const id of doomed) deleteGame(id);
+
+    setBulkDeleteOpen(false);
+    selection.clear();
+
+    if (removed.length > 0) {
+      undoableRemove({
+        message: `已删除 ${removed.length} 款游戏`,
+        description: '点「撤销」可以全部放回原来的位置。',
+        snapshot,
+        restore: replaceGames,
+      });
+    }
   };
 
   const [showAddModal, setShowAddModal] = useState(false);
@@ -724,6 +782,16 @@ export const GamesPage: React.FC = () => {
                   count: countOf(option.value),
                 }))}
               />
+              {shownGames.length > 0 && (
+                <Button
+                  variant="secondary"
+                  icon={<ListChecks size={15} aria-hidden />}
+                  onClick={() => selection.toggle(shownGames[0]!.id)}
+                  disabled={selection.isActive}
+                >
+                  批量
+                </Button>
+              )}
             </>
           }
         />
@@ -753,6 +821,16 @@ export const GamesPage: React.FC = () => {
                 <li key={game.id}>
                   <Card className="p-4">
                     <div className="flex items-start gap-4">
+                      {selection.isActive && (
+                        <input
+                          type="checkbox"
+                          checked={selection.has(game.id)}
+                          aria-label={`选中「${game.name}」`}
+                          onChange={() => selection.toggle(game.id)}
+                          style={{ accentColor: 'var(--lm-accent)' }}
+                          className="mt-1 h-4 w-4 shrink-0 cursor-pointer rounded-sm border-line focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-line-focus"
+                        />
+                      )}
                       <div
                         aria-hidden
                         className="flex h-28 w-20 shrink-0 flex-col items-center justify-center gap-1 rounded-lg shadow-xs"
@@ -894,19 +972,62 @@ export const GamesPage: React.FC = () => {
                         </div>
                       </div>
 
-                      <IconButton
-                        label={`删除《${game.name}》`}
-                        size="sm"
-                        className="ml-auto shrink-0 self-start hover:text-danger"
-                        icon={<Trash2 size={15} />}
-                        onClick={() => setPendingDeleteId(game.id)}
-                      />
+                      {!selection.isActive && (
+                        <IconButton
+                          label={`删除《${game.name}》`}
+                          size="sm"
+                          className="ml-auto shrink-0 self-start hover:text-danger"
+                          icon={<Trash2 size={15} />}
+                          onClick={() => setPendingDeleteId(game.id)}
+                        />
+                      )}
                     </div>
                   </Card>
                 </li>
               );
             })}
           </ul>
+        )}
+
+        {selection.isActive && (
+          <SelectionBar
+            count={selection.count}
+            onClear={selection.clear}
+            onSelectAll={selection.selectAll}
+          >
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => {
+                setBulkTagDraft([]);
+                setBulkTagsRemove(false);
+                setBulkTagModal(true);
+              }}
+            >
+              打标签
+            </Button>
+            <Select
+              aria-label="批量修改平台"
+              className="w-28"
+              value=""
+              onChange={(value) => {
+                for (const id of selection.selectedIds) updateGame(id, { platform: value as GamePlatform });
+              }}
+              options={[{ value: '', label: '平台…' }, ...PLATFORM_OPTIONS]}
+            />
+            <Select
+              aria-label="批量修改游玩状态"
+              className="w-32"
+              value=""
+              onChange={(value) => {
+                for (const id of selection.selectedIds) updateGameStatus(id, value as GameStatus);
+              }}
+              options={[{ value: '', label: '状态…' }, ...STATUS_OPTIONS]}
+            />
+            <Button size="sm" variant="danger" onClick={() => setBulkDeleteOpen(true)}>
+              删除
+            </Button>
+          </SelectionBar>
         )}
       </MasterDetail>
 
@@ -1049,6 +1170,52 @@ export const GamesPage: React.FC = () => {
             ? `确定要删除 ${formatShortDate(pendingSession.date)} 的「${gameNameOf(pendingSession.gameId)}」记录吗？删掉后这款游戏的总时长会相应减少。`
             : ''
         }
+        confirmText="删除"
+        tone="danger"
+      />
+
+      <Modal
+        isOpen={bulkTagModal}
+        onClose={() => setBulkTagModal(false)}
+        title="批量打标签"
+        description={`将对选中的 ${selection.count} 款游戏生效`}
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setBulkTagModal(false)}>
+              取消
+            </Button>
+            <Button onClick={applyBulkTags} disabled={bulkTagDraft.length === 0}>
+              应用
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <SegmentedControl
+            label="标签处理方式"
+            value={bulkTagsRemove ? 'remove' : 'add'}
+            onChange={(value) => setBulkTagsRemove(value === 'remove')}
+            options={[
+              { value: 'add', label: '添加' },
+              { value: 'remove', label: '移除' },
+            ]}
+          />
+          <TagInput
+            label="标签"
+            hint="回车或逗号分隔；添加是并集，移除只影响已选中的这批"
+            value={bulkTagDraft}
+            suggestions={tagSuggestions}
+            onChange={setBulkTagDraft}
+          />
+        </div>
+      </Modal>
+
+      <ConfirmDialog
+        isOpen={bulkDeleteOpen}
+        onClose={() => setBulkDeleteOpen(false)}
+        onConfirm={confirmBulkDelete}
+        title="批量删除游戏"
+        description={`确定要删除选中的 ${selection.count} 款游戏吗？成就记录与时长会一起删除，删完可以点「撤销」全部放回去。`}
         confirmText="删除"
         tone="danger"
       />

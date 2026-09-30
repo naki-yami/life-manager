@@ -581,3 +581,73 @@ describe('GamesPage 宽屏双栏', () => {
     expect(screen.getByText('哈迪斯')).toBeInTheDocument();
   });
 });
+
+describe('GamesPage 批量操作', () => {
+  const seed = (): void => {
+    addGame('星露谷物语');
+    addGame('哈迪斯', 'Switch');
+    addGame('空洞骑士');
+  };
+
+  const bar = () => within(screen.getByRole('toolbar', { name: '批量操作' }));
+
+  it('点「批量」进入批量模式，单条删除图标藏起来', async () => {
+    seed();
+    render(<GamesPage />);
+
+    expect(screen.queryByRole('toolbar', { name: '批量操作' })).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: '批量' }));
+
+    expect(screen.getByRole('toolbar', { name: '批量操作' })).toBeInTheDocument();
+    expect(bar().getByText('1')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '删除《哈迪斯》' })).not.toBeInTheDocument();
+  });
+
+  it('全选后批量改游玩状态', async () => {
+    seed();
+    render(<GamesPage />);
+    await userEvent.click(screen.getByRole('button', { name: '批量' }));
+    await userEvent.click(screen.getByRole('button', { name: '全选' }));
+
+    expect(bar().getByText('3')).toBeInTheDocument();
+    await userEvent.selectOptions(screen.getByLabelText('批量修改游玩状态'), 'completed');
+
+    expect(useGameStore.getState().games.every((game) => game.status === 'completed')).toBe(true);
+  });
+
+  it('批量改平台只动选中的那几款', async () => {
+    seed();
+    render(<GamesPage />);
+    await userEvent.click(screen.getByRole('button', { name: '批量' }));
+    await userEvent.click(screen.getByLabelText('选中「哈迪斯」'));
+
+    await userEvent.selectOptions(screen.getByLabelText('批量修改平台'), 'PS5');
+
+    const store = useGameStore.getState();
+    expect(store.games.filter((game) => game.platform === 'PS5')).toHaveLength(2);
+    expect(store.games.find((game) => game.name === '空洞骑士')!.platform).toBe('PC');
+  });
+
+  it('批量删除要二次确认，删完能整体撤销', async () => {
+    seed();
+    render(
+      <ToastProvider>
+        <GamesPage />
+      </ToastProvider>,
+    );
+    await userEvent.click(screen.getByRole('button', { name: '批量' }));
+    await userEvent.click(screen.getByRole('button', { name: '全选' }));
+    await userEvent.click(screen.getByRole('button', { name: '删除' }));
+
+    const dialog = screen.getByRole('dialog', { name: '批量删除游戏' });
+    expect(within(dialog).getByText(/选中的 3 款游戏/)).toBeInTheDocument();
+    await userEvent.click(within(dialog).getByRole('button', { name: '删除' }));
+
+    expect(useGameStore.getState().games).toHaveLength(0);
+    expect(screen.queryByRole('toolbar', { name: '批量操作' })).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: '撤销' }));
+    expect(useGameStore.getState().games).toHaveLength(3);
+  });
+});

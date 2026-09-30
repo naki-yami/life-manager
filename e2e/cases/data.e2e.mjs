@@ -373,6 +373,110 @@ export function registerDataCases() {
     assert.empty(session.pageErrors, '这条链路里不该有未捕获异常');
   });
 
+  test('bulk-delete-undo', '任务批量删除落库，点「撤销」能整体放回', async (ctx) => {
+    const { session, baseUrl } = ctx;
+    await session.goto(`${baseUrl}/tasks`, { waitMs: 1500 });
+    session.clearErrors();
+
+    /*
+     * 批量删除的撤销走的是「整表快照 + replaceTasks」，
+     * 这条链路单测里测不到真实落库 —— 单测的 store 是内存态替身，
+     * 写进去就一定读得出来。只有跑到 IndexedDB 上才照得出「快照还原有没有被持久化」。
+     */
+
+    // 先造三条任务，走 UI 添加（按 <label for> 找输入框：Input 的 label 是可见的，不是 aria-label）
+    for (let i = 1; i <= 3; i += 1) {
+      const opened = await session.evaluate(
+        `(() => {
+          const b = [...document.querySelectorAll('button')].find(n => n.textContent.trim() === '添加任务');
+          if (!b) return 'MISS';
+          b.click();
+          return 'OK';
+        })()`,
+      );
+      assert.clicked(opened, '添加任务按钮');
+      await delay(500);
+
+      const typed = await session.evaluate(
+        `(() => {
+          const d = document.querySelector('[role="dialog"]');
+          if (!d) return 'NO_DIALOG';
+          const label = [...d.querySelectorAll('label')].find(n => n.textContent.trim().replace(/\\*$/, '') === '标题');
+          if (!label) return 'NO_LABEL';
+          const input = document.getElementById(label.getAttribute('for'));
+          if (!input) return 'NO_INPUT';
+          const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+          setter.call(input, ${JSON.stringify(`E2E 批量 ${i}`)});
+          input.dispatchEvent(new Event('input', { bubbles: true }));
+          return 'OK';
+        })()`,
+      );
+      assert.ok(typed === 'OK', `第 ${i} 条任务的标题应当能填进去（实际 ${typed}）`);
+
+      await delay(300);
+      const saved = await session.evaluate(
+        `(() => {
+          const d = document.querySelector('[role="dialog"]');
+          if (!d) return 'NO_DIALOG';
+          const b = [...d.querySelectorAll('button')].find(n => n.textContent.trim() === '添加');
+          if (!b) return 'NO_BUTTON';
+          b.click();
+          return 'OK';
+        })()`,
+      );
+      assert.clicked(saved, `提交第 ${i} 条任务`);
+      await delay(600);
+    }
+
+    const seeded = await readState(session, 'lm:tasks');
+    const mineBefore = (seeded?.tasks ?? []).filter((t) => t.title.startsWith('E2E 批量 '));
+    assert.equal(mineBefore.length, 3, '三条任务应当先落库');
+
+    // 进批量模式
+    const entered = await session.clickByText('批量');
+    assert.clicked(entered, '批量模式入口');
+    await delay(500);
+
+    const selectAll = await session.clickByText('全选');
+    assert.clicked(selectAll, '全选');
+    await delay(500);
+
+    const removeClicked = await session.clickByText('删除');
+    assert.clicked(removeClicked, '批量删除');
+    await delay(600);
+
+    // 二次确认
+    const confirmed = await session.evaluate(
+      `(() => {
+        const d = document.querySelector('[role="dialog"]');
+        if (!d) return 'MISS';
+        const b = [...d.querySelectorAll('button')].find(n => n.textContent.trim() === '删除');
+        if (!b) return 'NO_BUTTON';
+        b.click();
+        return 'OK';
+      })()`,
+    );
+    assert.clicked(confirmed, '确认删除');
+    await delay(900);
+
+    const after = await readState(session, 'lm:tasks');
+    assert.empty(
+      (after?.tasks ?? []).filter((t) => t.title.startsWith('E2E 批量 ')),
+      '批量删除后这三条不该还在库里',
+    );
+
+    // 撤销：整表还原，三条要一条不少地回库
+    const undo = await session.clickByText('撤销');
+    assert.clicked(undo, '撤销');
+    await delay(900);
+
+    const restored = await readState(session, 'lm:tasks');
+    const mineAfter = (restored?.tasks ?? []).filter((t) => t.title.startsWith('E2E 批量 '));
+    assert.equal(mineAfter.length, 3, '撤销应当把三条都放回库里');
+
+    assert.empty(session.pageErrors, '这条链路里不该有未捕获异常');
+  });
+
   test('theme-persists', '主题存在 lm:theme 上，且刷新后保持', async (ctx) => {
     const { session, baseUrl } = ctx;
     await session.goto(`${baseUrl}/`, { waitMs: 1200 });

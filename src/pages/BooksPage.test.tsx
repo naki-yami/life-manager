@@ -520,3 +520,92 @@ describe('BooksPage F11 条目化媒体库', () => {
     expect(screen.getByText('人类简史')).toBeInTheDocument();
   });
 });
+
+describe('BooksPage 批量操作', () => {
+  const seed = (): void => {
+    const store = useBookStore.getState();
+    store.addBook('置身事内', '兰小欢', '经济');
+    store.addBook('1984', 'Orwell', '小说');
+    store.addBook('人类简史', 'Harari', '历史');
+  };
+
+  const bar = () => within(screen.getByRole('toolbar', { name: '批量操作' }));
+
+  it('点「批量」进入批量模式，单条删除图标藏起来', async () => {
+    seed();
+    render(<BooksPage />);
+
+    expect(screen.queryByRole('toolbar', { name: '批量操作' })).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: '批量' }));
+
+    expect(screen.getByRole('toolbar', { name: '批量操作' })).toBeInTheDocument();
+    expect(bar().getByText('1')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '删除《1984》' })).not.toBeInTheDocument();
+  });
+
+  it('全选后批量改阅读状态', async () => {
+    seed();
+    render(<BooksPage />);
+    await userEvent.click(screen.getByRole('button', { name: '批量' }));
+    await userEvent.click(screen.getByRole('button', { name: '全选' }));
+
+    expect(bar().getByText('3')).toBeInTheDocument();
+    await userEvent.selectOptions(screen.getByLabelText('批量修改阅读状态'), 'finished');
+
+    expect(useBookStore.getState().books.every((book) => book.status === 'finished')).toBe(true);
+  });
+
+  it('批量打标签只影响选中的那几本', async () => {
+    seed();
+    render(<BooksPage />);
+    await userEvent.click(screen.getByRole('button', { name: '批量' }));
+
+    // 只勾一本，验证「批量」不会顺手改到没选的
+    await userEvent.click(screen.getByLabelText('选中《1984》'));
+    await userEvent.click(screen.getByRole('button', { name: '打标签' }));
+
+    const dialog = screen.getByRole('dialog', { name: '批量打标签' });
+    expect(within(dialog).getByText(/将对选中的 2 本书生效/)).toBeInTheDocument();
+    await userEvent.type(within(dialog).getByRole('textbox', { name: '标签' }), '反乌托邦{enter}');
+    await userEvent.click(within(dialog).getByRole('button', { name: '应用' }));
+
+    const store = useBookStore.getState();
+    expect(store.books.find((book) => book.title === '1984')!.tags).toEqual(['反乌托邦']);
+    expect(store.books.find((book) => book.title === '人类简史')!.tags).toEqual([]);
+  });
+
+  it('批量删除要二次确认，删完能整体撤销', async () => {
+    seed();
+    render(
+      <ToastProvider>
+        <BooksPage />
+      </ToastProvider>,
+    );
+    await userEvent.click(screen.getByRole('button', { name: '批量' }));
+    await userEvent.click(screen.getByRole('button', { name: '全选' }));
+    await userEvent.click(screen.getByRole('button', { name: '删除' }));
+
+    const dialog = screen.getByRole('dialog', { name: '批量删除书籍' });
+    expect(within(dialog).getByText(/选中的 3 本书/)).toBeInTheDocument();
+    await userEvent.click(within(dialog).getByRole('button', { name: '删除' }));
+
+    expect(useBookStore.getState().books).toHaveLength(0);
+    expect(screen.queryByRole('toolbar', { name: '批量操作' })).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: '撤销' }));
+    expect(useBookStore.getState().books).toHaveLength(3);
+  });
+
+  it('「只看收藏」把已选中的书筛掉后，它自动退出选中集', async () => {
+    seed();
+    render(<BooksPage />);
+    await userEvent.click(screen.getByRole('button', { name: '批量' }));
+    await userEvent.click(screen.getByRole('button', { name: '全选' }));
+    expect(bar().getByText('3')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: /只看收藏/ }));
+
+    expect(screen.queryByRole('toolbar', { name: '批量操作' })).not.toBeInTheDocument();
+  });
+});

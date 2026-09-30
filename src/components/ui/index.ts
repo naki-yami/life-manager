@@ -53,6 +53,8 @@ export type {
 } from './KanbanBoard';
 export { Tooltip } from './Tooltip';
 export type { TooltipProps } from './Tooltip';
+export { SelectionBar } from './SelectionBar';
+export type { SelectionBarProps } from './SelectionBar';
 export { ToastProvider } from './Toast';
 export { useToast, useOptionalToast } from './toastContext';
 export type { ToastOptions, ToastTone, ToastAction, ToastContextValue } from './toastContext';

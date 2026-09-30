@@ -4,6 +4,7 @@ import {
   CheckCircle2,
   Clock,
   Hourglass,
+  ListChecks,
   NotebookPen,
   Play,
   Plus,
@@ -27,6 +28,7 @@ import {
   ProgressRing,
   SegmentedControl,
   Select,
+  SelectionBar,
   Slider,
   TagEditor,
   TagInput,
@@ -34,9 +36,11 @@ import {
 import { ListEmptyState, MasterDetail, PageHeader, Toolbar } from '../components/layout';
 import { useBookStore } from '../store/bookStore';
 import { useEntityList } from '../hooks/useEntityList';
+import { useMultiSelect } from '../hooks/useMultiSelect';
 import { useUndoableRemove } from '../hooks/useUndoableRemove';
 import { BarChart } from '../components/charts';
 import { percentOf, seriesByWeek } from '../utils/stats';
+import { normalizeTags } from '../utils/tags';
 import {
   dayKeyOf,
   daysBetween,
@@ -168,6 +172,56 @@ export const BooksPage: React.FC = () => {
   const clearListFilters = (): void => {
     clearFilters();
     setOnlyFavorite(false);
+  };
+
+  /*
+   * 批量操作（F16）。范围是「当前列表里看得见的书」—— 筛过之后全选，动的是筛出来的那批。
+   */
+  const selection = useMultiSelect({ ids: shownBooks.map((book) => book.id) });
+  const [bulkTagModal, setBulkTagModal] = useState(false);
+  const [bulkTagDraft, setBulkTagDraft] = useState<string[]>([]);
+  const [bulkTagsRemove, setBulkTagsRemove] = useState(false);
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+
+  const applyBulkTags = (): void => {
+    const wanted = normalizeTags(bulkTagDraft);
+    if (wanted.length === 0) return;
+
+    for (const id of selection.selectedIds) {
+      const book = books.find((item) => item.id === id);
+      if (!book) continue;
+      const merged = bulkTagsRemove
+        ? book.tags.filter((tag) => !wanted.includes(tag))
+        : normalizeTags([...book.tags, ...wanted]);
+      updateBook(id, { tags: merged });
+    }
+
+    setBulkTagDraft([]);
+    setBulkTagsRemove(false);
+    setBulkTagModal(false);
+  };
+
+  const applyBulkStatus = (status: BookStatus): void => {
+    for (const id of selection.selectedIds) updateBookStatus(id, status);
+  };
+
+  const confirmBulkDelete = (): void => {
+    const snapshot = books;
+    const doomed = new Set(selection.selectedIds);
+    const removed = books.filter((book) => doomed.has(book.id));
+    for (const id of doomed) deleteBook(id);
+
+    setBulkDeleteOpen(false);
+    selection.clear();
+
+    if (removed.length > 0) {
+      undoableRemove({
+        message: `已删除 ${removed.length} 本书`,
+        description: '点「撤销」可以全部放回原来的位置。',
+        snapshot,
+        restore: replaceBooks,
+      });
+    }
   };
 
   const today = todayKey();
@@ -610,6 +664,16 @@ export const BooksPage: React.FC = () => {
                   count: countOf(option.value),
                 }))}
               />
+              {shownBooks.length > 0 && (
+                <Button
+                  variant="secondary"
+                  icon={<ListChecks size={15} aria-hidden />}
+                  onClick={() => selection.toggle(shownBooks[0]!.id)}
+                  disabled={selection.isActive}
+                >
+                  批量
+                </Button>
+              )}
             </>
           }
         />
@@ -635,6 +699,16 @@ export const BooksPage: React.FC = () => {
               <li key={book.id}>
                 <Card className="p-4">
                   <div className="flex items-start justify-between gap-4">
+                    {selection.isActive && (
+                      <input
+                        type="checkbox"
+                        checked={selection.has(book.id)}
+                        aria-label={`选中《${book.title}》`}
+                        onChange={() => selection.toggle(book.id)}
+                        style={{ accentColor: 'var(--lm-accent)' }}
+                        className="mt-1 h-4 w-4 shrink-0 cursor-pointer rounded-sm border-line focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-line-focus"
+                      />
+                    )}
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
                         <h3 className="font-semibold text-content">{book.title}</h3>
@@ -801,18 +875,56 @@ export const BooksPage: React.FC = () => {
                       </div>
                     </div>
 
-                    <IconButton
-                      label={`删除《${book.title}》`}
-                      size="sm"
-                      icon={<Trash2 size={15} />}
-                      onClick={() => setPendingDeleteId(book.id)}
-                      className="hover:text-danger"
-                    />
+                    {!selection.isActive && (
+                      <IconButton
+                        label={`删除《${book.title}》`}
+                        size="sm"
+                        icon={<Trash2 size={15} />}
+                        onClick={() => setPendingDeleteId(book.id)}
+                        className="hover:text-danger"
+                      />
+                    )}
                   </div>
                 </Card>
               </li>
             ))}
           </ul>
+        )}
+
+        {selection.isActive && (
+          <SelectionBar
+            count={selection.count}
+            onClear={selection.clear}
+            onSelectAll={selection.selectAll}
+          >
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => {
+                setBulkTagDraft([]);
+                setBulkTagsRemove(false);
+                setBulkTagModal(true);
+              }}
+            >
+              打标签
+            </Button>
+            <Select
+              aria-label="批量修改阅读状态"
+              className="w-28"
+              value=""
+              onChange={(value) => applyBulkStatus(value as BookStatus)}
+              options={[
+                { value: '', label: '状态…' },
+                ...FILTER_OPTIONS.filter((option) => option.value !== 'all').map((option) => ({
+                  value: option.value,
+                  label: option.label,
+                })),
+              ]}
+            />
+            <Button size="sm" variant="danger" onClick={() => setBulkDeleteOpen(true)}>
+              删除
+            </Button>
+          </SelectionBar>
         )}
       </MasterDetail>
 
@@ -960,6 +1072,52 @@ export const BooksPage: React.FC = () => {
             ? `确定要删除《${deletingBook.title}》吗？这本书的 ${deletingBook.notes.length} 条笔记也会一起删除。`
             : ''
         }
+        confirmText="删除"
+        tone="danger"
+      />
+
+      <Modal
+        isOpen={bulkTagModal}
+        onClose={() => setBulkTagModal(false)}
+        title="批量打标签"
+        description={`将对选中的 ${selection.count} 本书生效`}
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setBulkTagModal(false)}>
+              取消
+            </Button>
+            <Button onClick={applyBulkTags} disabled={bulkTagDraft.length === 0}>
+              应用
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <SegmentedControl
+            label="标签处理方式"
+            value={bulkTagsRemove ? 'remove' : 'add'}
+            onChange={(value) => setBulkTagsRemove(value === 'remove')}
+            options={[
+              { value: 'add', label: '添加' },
+              { value: 'remove', label: '移除' },
+            ]}
+          />
+          <TagInput
+            label="标签"
+            hint="回车或逗号分隔；添加是并集，移除只影响已选中的这批"
+            value={bulkTagDraft}
+            suggestions={tagSuggestions}
+            onChange={setBulkTagDraft}
+          />
+        </div>
+      </Modal>
+
+      <ConfirmDialog
+        isOpen={bulkDeleteOpen}
+        onClose={() => setBulkDeleteOpen(false)}
+        onConfirm={confirmBulkDelete}
+        title="批量删除书籍"
+        description={`确定要删除选中的 ${selection.count} 本书吗？连同它们的笔记一起删除，删完可以点「撤销」全部放回去。`}
         confirmText="删除"
         tone="danger"
       />
