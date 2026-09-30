@@ -9,34 +9,45 @@ export interface CardProps {
   interactive?: boolean;
 }
 
-export const Card: React.FC<CardProps> = ({ children, className = '', onClick, interactive }) => {
-  const clickable = interactive ?? Boolean(onClick);
+/**
+ * 卡片外壳。ref 转发到最外层节点：导出 PNG 时拍的就是这一层，
+ * 只要卡片本身，不带外层列表的留白。
+ */
+export const Card = React.forwardRef<HTMLDivElement, CardProps>(
+  ({ children, className = '', onClick, interactive }, ref) => {
+    const clickable = interactive ?? Boolean(onClick);
 
-  if (clickable && onClick) {
+    if (clickable && onClick) {
+      return (
+        <div
+          ref={ref}
+          role="button"
+          tabIndex={0}
+          onClick={onClick}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              onClick();
+            }
+          }}
+          className={`rounded-lg border border-line-subtle bg-surface shadow-xs transition-colors duration-fast ease-standard hover:border-line hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-line-focus focus-visible:ring-offset-2 focus-visible:ring-offset-canvas cursor-pointer ${className}`}
+        >
+          {children}
+        </div>
+      );
+    }
+
     return (
       <div
-        role="button"
-        tabIndex={0}
-        onClick={onClick}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            onClick();
-          }
-        }}
-        className={`rounded-lg border border-line-subtle bg-surface shadow-xs transition-colors duration-fast ease-standard hover:border-line hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-line-focus focus-visible:ring-offset-2 focus-visible:ring-offset-canvas cursor-pointer ${className}`}
+        className={`rounded-lg border border-line-subtle bg-surface shadow-xs ${className}`}
+        ref={ref}
       >
         {children}
       </div>
     );
-  }
-
-  return (
-    <div className={`rounded-lg border border-line-subtle bg-surface shadow-xs ${className}`}>
-      {children}
-    </div>
-  );
-};
+  },
+);
+Card.displayName = 'Card';
 
 export interface CardHeaderProps {
   title: string;

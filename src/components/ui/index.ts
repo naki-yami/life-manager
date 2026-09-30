@@ -8,6 +8,8 @@ export { FormField } from './FormField';
 export type { FormFieldProps } from './FormField';
 export { Card, CardHeader, CardBody, CardFooter, StatCard } from './Card';
 export type { CardProps, CardHeaderProps, StatCardProps, StatTone } from './Card';
+export { ExportableCard } from './ExportableCard';
+export type { ExportableCardProps } from './ExportableCard';
 export { Modal, ConfirmDialog } from './Modal';
 export type { ModalProps, ModalSize, ConfirmDialogProps } from './Modal';
 export { Drawer } from './Drawer';

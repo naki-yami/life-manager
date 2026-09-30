@@ -8,6 +8,7 @@ import {
   CardBody,
   CardHeader,
   EmptyState,
+  ExportableCard,
   Input,
   ProgressRing,
   SegmentedControl,
@@ -574,15 +575,12 @@ export const StatsPage: React.FC = () => {
         </Card>
       ) : (
         <>
-          <Card>
-            <CardHeader
-              title="活动热力图"
-              subtitle={`${rangeLabel}，每天的任务完成、训练与饮食记录合起来算一次活动`}
-            />
-            <CardBody>
-              <Heatmap data={activitySeries} label={`${rangeLabel}活动热力图`} />
-            </CardBody>
-          </Card>
+          <ExportableCard
+            title="活动热力图"
+            subtitle={`${rangeLabel}，每天的任务完成、训练与饮食记录合起来算一次活动`}
+          >
+            <Heatmap data={activitySeries} label={`${rangeLabel}活动热力图`} />
+          </ExportableCard>
 
           {goalProgressList.length > 0 && (
             <Card>
@@ -599,61 +597,52 @@ export const StatsPage: React.FC = () => {
             </Card>
           )}
 
-          <Card>
-            <CardHeader
-              title="活动构成"
-              subtitle={`${rangeLabel}的任务完成、训练与饮食记录叠加，看活动量由哪几部分组成`}
+          <ExportableCard
+            title="活动构成"
+            subtitle={`${rangeLabel}的任务完成、训练与饮食记录叠加，看活动量由哪几部分组成`}
+          >
+            <StackedBar
+              dates={activityDates}
+              bucket={bucketMode}
+              series={[
+                { name: '任务', values: taskChart.map((point) => point.value) },
+                { name: '训练', values: fitnessChart.map((point) => point.value) },
+                { name: '饮食', values: dietCountChart.map((point) => point.value) },
+              ]}
+              label={`${rangeLabel}活动构成`}
+              formatValue={(value) => `${value} 次`}
+              formatDate={formatBucketDate}
             />
-            <CardBody>
-              <StackedBar
-                dates={activityDates}
-                bucket={bucketMode}
-                series={[
-                  { name: '任务', values: taskChart.map((point) => point.value) },
-                  { name: '训练', values: fitnessChart.map((point) => point.value) },
-                  { name: '饮食', values: dietCountChart.map((point) => point.value) },
-                ]}
-                label={`${rangeLabel}活动构成`}
-                formatValue={(value) => `${value} 次`}
-                formatDate={formatBucketDate}
-              />
-            </CardBody>
-          </Card>
+          </ExportableCard>
 
           <div className="grid gap-4 lg:grid-cols-2">
-            <Card>
-              <CardHeader
-                title="任务完成趋势"
-                subtitle={`${rangeLabel}，按${bucketUnit}汇总完成的任务数`}
+            <ExportableCard
+              title="任务完成趋势"
+              subtitle={`${rangeLabel}，按${bucketUnit}汇总完成的任务数`}
+            >
+              <BarChart
+                data={taskChart}
+                bucket={bucketMode}
+                label={`${rangeLabel}任务完成数（按${bucketUnit}）`}
+                tone="success"
+                formatValue={(value) => `${value} 个`}
+                formatDate={formatBucketDate}
               />
-              <CardBody>
-                <BarChart
-                  data={taskChart}
-                  bucket={bucketMode}
-                  label={`${rangeLabel}任务完成数（按${bucketUnit}）`}
-                  tone="success"
-                  formatValue={(value) => `${value} 个`}
-                  formatDate={formatBucketDate}
-                />
-              </CardBody>
-            </Card>
+            </ExportableCard>
 
-            <Card>
-              <CardHeader
-                title="热量趋势"
-                subtitle={`${rangeLabel}，按${bucketUnit}汇总的摄入热量`}
+            <ExportableCard
+              title="热量趋势"
+              subtitle={`${rangeLabel}，按${bucketUnit}汇总的摄入热量`}
+            >
+              <BarChart
+                data={calorieChart}
+                bucket={bucketMode}
+                label={`${rangeLabel}摄入热量（按${bucketUnit}）`}
+                tone="warning"
+                formatValue={(value) => `${formatNumber(value)} kcal`}
+                formatDate={formatBucketDate}
               />
-              <CardBody>
-                <BarChart
-                  data={calorieChart}
-                  bucket={bucketMode}
-                  label={`${rangeLabel}摄入热量（按${bucketUnit}）`}
-                  tone="warning"
-                  formatValue={(value) => `${formatNumber(value)} kcal`}
-                  formatDate={formatBucketDate}
-                />
-              </CardBody>
-            </Card>
+            </ExportableCard>
           </div>
 
           {moduleDistribution.some((item) => item.count > 0) && (
@@ -684,31 +673,29 @@ export const StatsPage: React.FC = () => {
           {moduleInsights.length > 0 && (
             <div className="grid gap-4 lg:grid-cols-2">
               {moduleInsights.map((item) => (
-                <Card key={item.key}>
-                  <CardHeader
-                    title={item.label}
-                    subtitle={`${rangeLabel}，按${bucketUnit}汇总${item.note ? ` · ${item.note}` : ''}`}
+                <ExportableCard
+                  key={item.key}
+                  title={item.label}
+                  subtitle={`${rangeLabel}，按${bucketUnit}汇总${item.note ? ` · ${item.note}` : ''}`}
+                >
+                  <div className="mb-3 flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                    <span className="text-xl font-semibold tabular text-content">
+                      {formatNumber(item.summary.total)}
+                    </span>
+                    <span className="text-xs text-content-tertiary">{item.unit}</span>
+                    <span className="ml-auto text-2xs text-content-tertiary">
+                      有记录 {item.summary.days} 天 · 单日最高 {formatNumber(item.summary.best)}
+                    </span>
+                  </div>
+                  <BarChart
+                    data={item.chart}
+                    bucket={bucketMode}
+                    label={`${rangeLabel}${item.label}`}
+                    tone={item.tone}
+                    formatValue={(value) => `${formatNumber(value)} ${item.unit}`}
+                    formatDate={formatBucketDate}
                   />
-                  <CardBody>
-                    <div className="mb-3 flex flex-wrap items-baseline gap-x-2 gap-y-1">
-                      <span className="text-xl font-semibold tabular text-content">
-                        {formatNumber(item.summary.total)}
-                      </span>
-                      <span className="text-xs text-content-tertiary">{item.unit}</span>
-                      <span className="ml-auto text-2xs text-content-tertiary">
-                        有记录 {item.summary.days} 天 · 单日最高 {formatNumber(item.summary.best)}
-                      </span>
-                    </div>
-                    <BarChart
-                      data={item.chart}
-                      bucket={bucketMode}
-                      label={`${rangeLabel}${item.label}`}
-                      tone={item.tone}
-                      formatValue={(value) => `${formatNumber(value)} ${item.unit}`}
-                      formatDate={formatBucketDate}
-                    />
-                  </CardBody>
-                </Card>
+                </ExportableCard>
               ))}
             </div>
           )}

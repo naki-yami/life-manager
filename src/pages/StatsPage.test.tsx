@@ -457,4 +457,29 @@ describe('StatsPage', () => {
     expect(screen.queryByText('健身 · 训练容量')).not.toBeInTheDocument();
     expect(screen.queryByRole('img', { name: /写下字数/ })).not.toBeInTheDocument();
   });
+
+  it('每张图表卡都有导出 PNG 的按钮，按钮自己会被排除在图外', () => {
+    useBookStore.getState().addBook('置身事内', '兰小欢', '经济');
+    useBookStore
+      .getState()
+      .addReadingSession(useBookStore.getState().books[0]!.id, todayKey(), 45, '');
+    useFitnessStore.getState().addRecord('推日', todayKey(), workout, '');
+    useDietStore
+      .getState()
+      .addRecord(todayKey(), 'lunch', [
+        { name: '鸡胸肉', category: 'protein', calories: 600, protein: 30 },
+      ]);
+    useTaskStore.getState().addTask('写周报', '', 'high', '');
+
+    renderStats();
+
+    // 四张整页图卡 + 每模块分析各一张，至少六个别漏
+    const buttons = screen.getAllByRole('button', { name: /^导出「.+」为 PNG$/ });
+    expect(buttons.length).toBeGreaterThanOrEqual(6);
+    expect(buttons.every((button) => button.hasAttribute('data-export-skip'))).toBe(true);
+    expect(screen.getByRole('button', { name: '导出「活动热力图」为 PNG' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: '导出「读书 · 阅读时长」为 PNG' }),
+    ).toBeInTheDocument();
+  });
 });
