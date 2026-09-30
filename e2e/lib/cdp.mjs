@@ -106,13 +106,23 @@ export async function openSession(endpoint, target) {
       await send('Log.enable');
     },
 
-    /** 设成桌面视口。无头 Edge 默认视口偏窄，不设的话响应式布局会走移动分支。 */
+    /**
+     * 设设备视口。
+     *
+     * `mobile: true` 时顺带开触屏模拟 —— 少了 `setTouchEmulationEnabled`，
+     * `Input.dispatchTouchEvent` 派发的事件坐标会被当成鼠标坐标处理，
+     * 命中测试的结果和真机对不上。只改视口宽度不算「模拟手机」。
+     */
     async setViewport({ width = 1440, height = 1100, scale = 1, mobile = false } = {}) {
       await send('Emulation.setDeviceMetricsOverride', {
         width,
         height,
         deviceScaleFactor: scale,
         mobile,
+      });
+      await send('Emulation.setTouchEmulationEnabled', {
+        enabled: mobile,
+        maxTouchPoints: 1,
       });
     },
 
@@ -199,6 +209,143 @@ export async function openSession(endpoint, target) {
       const base = { key, code: code ?? key, modifiers, windowsVirtualKeyCode };
       await send('Input.dispatchKeyEvent', { type: 'keyDown', ...base });
       await send('Input.dispatchKeyEvent', { type: 'keyUp', ...base });
+    },
+
+    /**
+     * 把元素滚进视口，返回它在视口里的中心坐标。
+     *
+     * **这是鼠标/触屏用例的前置，不是可选的。**
+     *
+     * CDP 的 `Input.dispatchMouseEvent` 收的是**视口坐标**，落在视口外的坐标
+     * 命不中任何元素 —— 事件会静静派发出去、页面毫无反应，用例却看不出哪里错了。
+     * 首页 12 个仪表盘卡片的总高度远超 1100 的视口，排在后面的手柄 y 值能到 2400+，
+     * 不先滚进来，拖拽必然失败且失败得毫无线索。
+     *
+     * `block: 'center'` 而不是默认的 `'start'`：贴边时元素可能被固定定位的顶栏
+     * 或底部 Tab 盖住，命中测试会打到覆盖层上。
+     */
+    async scrollIntoView(selector, { nth = 0 } = {}) {
+      await evaluate(
+        `(() => {
+          const n = document.querySelectorAll(${JSON.stringify(selector)})[${nth}];
+          if (!n) return 'MISS';
+          n.scrollIntoView({ block: 'center', inline: 'center' });
+          return 'OK';
+        })()`,
+      );
+      // 滚动是异步的（平滑滚动 / 布局重排），等一帧再取坐标
+      await delay(250);
+      return evaluate(
+        `(() => {
+          const n = document.querySelectorAll(${JSON.stringify(selector)})[${nth}];
+          if (!n) return null;
+          const r = n.getBoundingClientRect();
+          return {
+            x: Math.round(r.x + r.width / 2),
+            y: Math.round(r.y + r.height / 2),
+            inView: r.top >= 0 && r.bottom <= window.innerHeight,
+          };
+        })()`,
+      );
+    },
+
+    /** 派发一次真实的鼠标左键点击（真事件流，不是 DOM 的 .click()） */
+    async mouseClick(x, y) {
+      await send('Input.dispatchMouseEvent', {
+        type: 'mouseMoved', x, y, button: 'none', buttons: 0,
+      });
+      await send('Input.dispatchMouseEvent', {
+        type: 'mousePressed', x, y, button: 'left', clickCount: 1, buttons: 1,
+      });
+      await send('Input.dispatchMouseEvent', {
+        type: 'mouseReleased', x, y, button: 'left', clickCount: 1, buttons: 0,
+      });
+    },
+
+    /**
+     * 把某个 aria-label 的元素拖到相对偏移处（相对位移，不是绝对落点）。
+     *
+     * 三个必须这么做的理由：
+     *
+     * 1. **必须先滚进视口**，理由见 `scrollIntoView`；
+     * 2. **必须分步移动**。@dnd-kit 的 PointerSensor 配了
+     *    `activationConstraint: { distance: 4 }` —— 按下之后位移要超过 4px
+     *    才被认成拖拽，否则算点击。一步跳到终点时，第一个 move 事件就跑完了
+     *    整段距离，dnd-kit 有时会把它当成「点了但没动」；分步还能让 dnd-kit 的
+     *    碰撞检测每步都算一次，落点才对得上。
+     * 3. **运动轨迹是相对位移**。用「往下拖过一个卡片的高度」而不是「拖到第 3 格」，
+     *    卡片高度一变用例不会跟着碎。断言也应该只看相对顺序变了没有。
+     *
+     * 返回 `{ from, to, handle }`，方便用例在做断言时把实际落点写进失败信息。
+     */
+    async dragByLabel(label, { dx = 0, dy = 300, steps = 10, beforeMs = 150 } = {}) {
+      const sel = `[aria-label=${JSON.stringify(label)}]`;
+      const rect = await session.scrollIntoView(sel);
+      if (!rect) return { ok: false, reason: 'MISS' };
+      if (!rect.inView) return { ok: false, reason: 'OUT_OF_VIEW', rect };
+
+      const { x, y } = rect;
+      const stepX = dx / steps;
+      const stepY = dy / steps;
+
+      // 先 hover 一下：让 dnd-kit / 浏览器的 pointer 状态与真鼠标一致
+      await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y, button: 'none', buttons: 0 });
+      await delay(60);
+
+      await send('Input.dispatchMouseEvent', {
+        type: 'mousePressed', x, y, button: 'left', clickCount: 1, buttons: 1,
+      });
+      await delay(beforeMs);
+
+      // 头两步小步走，稳稳跨过 4px 的激活阈值
+      await send('Input.dispatchMouseEvent', {
+        type: 'mouseMoved', x: x + Math.sign(dx) * 2, y: y + Math.sign(dy) * 6, button: 'left', buttons: 1,
+      });
+      await delay(70);
+
+      for (let i = 1; i <= steps; i += 1) {
+        await send('Input.dispatchMouseEvent', {
+          type: 'mouseMoved',
+          x: Math.round(x + stepX * i),
+          y: Math.round(y + stepY * i),
+          button: 'left',
+          buttons: 1,
+        });
+        await delay(55);
+      }
+
+      const to = { x: Math.round(x + dx), y: Math.round(y + dy) };
+      await send('Input.dispatchMouseEvent', {
+        type: 'mouseReleased', x: to.x, y: to.y, button: 'left', clickCount: 1, buttons: 0,
+      });
+      await delay(700);
+
+      return { ok: true, from: { x, y }, to, handle: label };
+    },
+
+    /**
+     * 触屏点一下某个 aria-label 的元素。
+     *
+     * 走 `Input.dispatchTouchEvent` 而不是 DOM 的 `.click()`：前者会经过浏览器的
+     * 命中测试与合成，能被 pointerdown/pointerup 与 click 两条链路同时收到；
+     * 后者只发一个 click，验不出「触屏能不能点」。
+     */
+    async tapByLabel(label, { nth = 0 } = {}) {
+      const sel = `[aria-label=${JSON.stringify(label)}]`;
+      const rect = await session.scrollIntoView(sel, { nth });
+      if (!rect) return { ok: false, reason: 'MISS' };
+      if (!rect.inView) return { ok: false, reason: 'OUT_OF_VIEW', rect };
+
+      const { x, y } = rect;
+      await send('Input.dispatchTouchEvent', {
+        type: 'touchStart',
+        touchPoints: [{ x, y, radiusX: 8, radiusY: 8, force: 1 }],
+      });
+      await delay(60);
+      await send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+      await delay(400);
+
+      return { ok: true, at: { x, y } };
     },
 
     /** 按文本或标签点，命中后回报实际匹配到的那个 */

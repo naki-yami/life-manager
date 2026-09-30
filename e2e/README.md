@@ -1,7 +1,8 @@
 # e2e 冒烟测试
 
-「应用整体还能不能用」这一层。单测（`npm test`，1261 条）覆盖的是 store 逻辑与组件行为，
-e2e 只关心那件单测照不到的事：**在真浏览器里跑起来、路由真的能开、数据真的落到 IndexedDB**。
+「应用整体还能不能用」这一层。单测（`npm test`，1326 条）覆盖的是 store 逻辑与组件行为，
+e2e 只关心那件单测照不到的事：**在真浏览器里跑起来、路由真的能开、数据真的落到 IndexedDB、
+拖拽真能换位、窄屏真能点**。
 
 ## 怎么跑
 
@@ -15,6 +16,12 @@ npm run e2e -- --no-shots        # 不截图
 ```
 
 跑完的截图落在 `.runtime/e2e-shots/`（已在 .gitignore 里）。
+
+单跑一条调试：
+
+```bash
+npm run e2e -- --only=drag-dashboard-order
+```
 
 ## 为什么不用 Playwright
 
@@ -47,13 +54,16 @@ e2e/
   run.mjs              入口：编排 dev server → Edge → 清场 → 跑 → 收摊
   lib/
     launch.mjs         dev server 复用/启动、无头 Edge 启动、进程树清理
-    cdp.mjs            CDP 会话封装（evaluate / click / fill / key / 截图 / 错误收集）
+    cdp.mjs            CDP 会话封装（evaluate / click / fill / key / 截图 / 错误收集
+                       / scrollIntoView / dragByLabel / tapByLabel / setViewport）
     assert.mjs         断言、用例注册、runner、彩色汇总
   cases/
     shell.e2e.mjs      外壳：能渲染、无异常、存储后端在位、顶栏开关可用
     routes.e2e.mjs     17 条路由逐条打开
     keyboard.e2e.mjs   命令面板、单键快捷键、g 序列、404
-    data.e2e.mjs       写入链路、刷新持久化、旧 key 迁移、主题落盘
+    data.e2e.mjs       写入链路、刷新持久化、旧 key 迁移、主题落盘、模板、批量操作、
+                       分模块导出、首页拖拽换位
+    mobile.e2e.mjs     窄屏布局、底部 Tab 导航、触屏点击
 ```
 
 ## 加一条用例
@@ -102,16 +112,57 @@ await session.fill('[role="dialog"] input', '值'); // 写受控输入框（自�
 await session.key('k', { modifiers: 2 });    // Ctrl+K；modifiers 2 = Ctrl, 8 = Meta(⌘)
 await session.count('[role="dialog"] button');
 await session.exists(PANEL);
+
+// 视口：切成窄屏并开启触屏模拟（mobile: true 才叫"真模拟手机"）
+await session.setViewport({ width: 375, height: 812, mobile: true });
+await session.setViewport({ width: 1440, height: 1100, mobile: false });
+
+// 滚动到元素并拿视口坐标；返回 { x, y, inView }
+await session.scrollIntoView('[data-testid="x"]');
+
+// 拖拽（@dnd-kit）：按 aria-label 抓手柄，相对位移 dx/dy
+await session.dragByLabel('拖动「概览统计」', { dx: 0, dy: 420, steps: 10 });
+
+// 触屏点按：走 touchStart/touchEnd，不是鼠标
+await session.tapByLabel('添加习惯');
 ```
 
 读 IndexedDB 里真实字节的写法见 `data.e2e.mjs` 的 `readRaw` / `readState` ——
 **验证「数据落库了」必须绕到库后面读原始字符串，不能只看 DOM。** DOM 上勾选框变绿
 只说明内存态变了，`persist` 的写入链路断掉时页面照样是对的。
 
+### 三个踩过的坑（省你两小时）
+
+**一、CDP 的鼠标/触屏事件按视口坐标派发 —— 元素在视口外就命不中。**
+`Input.dispatchMouseEvent` 收到的是 `(x, y)`，浏览器拿它去命中测试；元素滚出视口时
+坐标算出来是对的，但点在空白上。表现是「抓手柄拿到了、拖拽也 ok、顺序却纹丝不动」。
+**先 `scrollIntoView()`，再拿它返回的坐标点/拖。** `dragByLabel` 与 `tapByLabel`
+内部已经这么做了，自己写裸坐标时记得手动调。
+
+**二、`lm:` 前缀的键不都在 IndexedDB 里。**
+同步键（`lm:theme`、`lm:ui`）走 localStorage，数据键才走 IndexedDB。
+拿 `readRaw(session, 'lm:ui')` 会读到 `null`，让你误以为「数据没落盘」。
+**判据：`src/utils/storageKeys.ts` 里不在 `DATA_STORAGE_KEYS` 的，就是同步键。**
+同步键用 `session.evaluate("localStorage.getItem('lm:ui')")` 读。
+
+**三、别看元素在不在 DOM，要看它可不可见。**
+响应式隐藏常走 `lg:hidden` / `hidden`，元素**一直在 DOM 里**，`exists()` 恒为 true。
+窄屏用例要判「底部 Tab 出现了没有」，得查计算样式 + 高度：
+
+```js
+const visible = async (session, selector) =>
+  session.evaluate(`(() => {
+    const el = document.querySelector(${JSON.stringify(selector)});
+    if (!el) return false;
+    const s = getComputedStyle(el);
+    return s.display !== 'none' && s.visibility !== 'hidden' && el.getBoundingClientRect().height > 0;
+  })()`);
+```
+
 ## 已知的边界
 
-- **只有桌面视口（1440×1100）**。窄屏 375 的复核在 `.runtime/verify-f13.mjs` 里做过，
-  还没收编进 e2e。要做的话在 `lib/cdp.mjs` 的 `setViewport` 上加一组就够。
-- **触屏手势、拖拽（@dnd-kit）没测**。CDP 能派发 touch 事件，但拖拽的落点计算容易写脆，
-  暂不纳入冒烟。
+- **两个视口都测了**：桌面 1440×1100、窄屏 375×812（含触屏模拟）。
+- **拖拽只测了首页布局换位这一条**。看板与时间轴的拖拽没纳入 —— 断言只看「相对顺序
+  变了没有」，不看具体落到第几位（卡片高度一变位次就脆）。这条是刻意的窄，不是漏。
 - **不测性能与视觉回归**。首屏体积由 `npm run size` 把关，视觉没有基线图。
+- **触屏只测了单点 tap**，没测捏合、长按、滑动。

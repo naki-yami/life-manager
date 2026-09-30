@@ -613,6 +613,92 @@ export function registerDataCases() {
     assert.empty(session.pageErrors, '这条链路里不该有未捕获异常');
   });
 
+  test('drag-dashboard-order', '拖动首页卡片换位，顺序落库且在刷新后保持', async (ctx) => {
+    const { session, baseUrl } = ctx;
+    // lm:ui 是**同步键**（走 localStorage，不进 IndexedDB），所以这里不能走 readRaw
+    const readOrder = async () => {
+      const raw = await session.evaluate(`localStorage.getItem('lm:ui')`);
+      if (raw === null) return null;
+      try {
+        const list = JSON.parse(raw).state?.dashboard;
+        return Array.isArray(list) ? list.map((w) => w.id) : null;
+      } catch {
+        return null;
+      }
+    };
+
+    // 拖之前 lm:ui 可能还没写过（zustand persist 只在该 store 首次变更时落盘），
+    // 这时不算失败 —— 拿默认布局当 before。defaults 与 uiStore 的 DEFAULT_DASHBOARD 对齐。
+    const DEFAULT_ORDER = [
+      'stats', 'timeline', 'capture', 'focus', 'todos', 'memos',
+      'habits', 'body', 'journal', 'goals', 'activity', 'modules',
+    ];
+
+    await session.goto(`${baseUrl}/`, { waitMs: 2000 });
+    session.clearErrors();
+
+    // 拖拽手柄只在编辑布局时才渲染
+    assert.clicked(await session.clickByText('编辑布局'), '进入编辑布局');
+    await delay(700);
+
+    const stored = await readOrder();
+    const before = stored ?? DEFAULT_ORDER;
+    assert.ok(
+      before.length > 1,
+      `拖之前应当能确定布局顺序，实际 ${JSON.stringify(before)}`,
+    );
+    // 默认顺序的首项是 stats（见 uiStore 的 DEFAULT_DASHBOARD）；断言它存在才好说"被拖动了"
+    const movingId = before[0];
+    const neighbourId = before[1];
+
+    // 拖第一个手柄往下跨过一整张卡片。
+    // 用**相对位移**而不是"拖到第几格"：卡片高度随内容变，写死像素数的用例会碎。
+    const handleLabel = await session.evaluate(
+      `(() => {
+        const h = [...document.querySelectorAll('[aria-roledescription="sortable"]')]
+          .find((n) => (n.getAttribute('aria-label') ?? '').startsWith('拖动「'));
+        return h ? h.getAttribute('aria-label') : null;
+      })()`,
+    );
+    assert.nonEmpty(handleLabel, '第一个拖拽手柄的 aria-label');
+
+    const drag = await session.dragByLabel(handleLabel, { dx: 0, dy: 420, steps: 10 });
+    assert.ok(drag.ok, `拖「${handleLabel}」：${drag.reason ?? 'ok'}`);
+
+    await delay(900);
+    const after = await readOrder();
+    assert.ok(Array.isArray(after), '拖之后应当能读到布局顺序');
+
+    // 断言只看**相对顺序变了**，不看具体落到第几位 —— 落点受卡片高度影响，
+    // 钉死位次的用例迟早会碎，而"换位了没有"才是这条用例真正要守的东西。
+    assert.notEqual(
+      after.join(','),
+      before.join(','),
+      `拖过之后布局顺序应当变了（前：${before.join(',')}）`,
+    );
+    assert.equal(after.length, before.length, '换位不该增删卡片');
+    assert.equal(
+      after.slice().sort().join(','),
+      before.slice().sort().join(','),
+      '换位前后应当是同一批卡片',
+    );
+    // 更强的断言：被拖的那张确实离开了原来的位置
+    assert.notEqual(after[0], movingId, `「${movingId}」应当离开了首位`);
+    assert.ok(after.includes(movingId), `「${movingId}」应当还在布局里`);
+    assert.ok(after.includes(neighbourId), `「${neighbourId}」应当还在布局里`);
+
+    // 刷新后顺序得保持 —— 不然只是内存态变了一下
+    await session.goto(`${baseUrl}/`, { waitMs: 2000 });
+    const reloaded = await readOrder();
+    assert.equal(
+      (reloaded ?? []).join(','),
+      after.join(','),
+      '刷新后布局顺序应当保持',
+    );
+
+    assert.empty(session.pageErrors, '这条链路里不该有未捕获异常');
+  });
+
   test('theme-persists', '主题存在 lm:theme 上，且刷新后保持', async (ctx) => {
     const { session, baseUrl } = ctx;
     await session.goto(`${baseUrl}/`, { waitMs: 1200 });
