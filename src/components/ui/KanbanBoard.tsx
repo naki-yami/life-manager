@@ -74,7 +74,12 @@ export function KanbanBoard({ label, columns, onMove }: KanbanBoardProps): React
     const overItemId = overIsItem && over.id !== active.id ? String(over.id) : null;
 
     if (toColumnId === activeData.columnId && overItemId === null) return;
-    onMove({ itemId: String(active.id), fromColumnId: activeData.columnId, toColumnId, overItemId });
+    onMove({
+      itemId: String(active.id),
+      fromColumnId: activeData.columnId,
+      toColumnId,
+      overItemId,
+    });
   };
 
   return (
@@ -129,12 +134,16 @@ const KanbanColumnView: React.FC<{ column: KanbanColumnData; draggingId: string 
   );
 };
 
-const SortableCard: React.FC<{ item: KanbanItemData; columnId: string }> = ({
-  item,
-  columnId,
-}) => {
-  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } =
-    useSortable({ id: item.id, data: { columnId } });
+const SortableCard: React.FC<{ item: KanbanItemData; columnId: string }> = ({ item, columnId }) => {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    setActivatorNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: item.id, data: { columnId } });
 
   return (
     <li

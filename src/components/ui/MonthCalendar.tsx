@@ -75,7 +75,9 @@ export function MonthCalendar({
   const today = new Date();
   const pad = (value: number): string => String(value).padStart(2, '0');
   const todayKey = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`;
-  const [monthKey, setMonthKey] = useState(initialMonth ?? `${today.getFullYear()}-${pad(today.getMonth() + 1)}`);
+  const [monthKey, setMonthKey] = useState(
+    initialMonth ?? `${today.getFullYear()}-${pad(today.getMonth() + 1)}`,
+  );
   const { year, month } = monthOf(monthKey);
 
   const days = useMemo(() => buildMonthDays(year, month), [year, month]);

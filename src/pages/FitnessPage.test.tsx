@@ -429,10 +429,11 @@ describe('FitnessPage', () => {
     await userEvent.click(within(dialog).getByRole('button', { name: '从动作库选择' }));
 
     const picker = screen.getByRole('dialog', { name: '从动作库选择' });
-    await userEvent.selectOptions(within(picker).getAllByRole('combobox', { name: '肌群' })[0]!, '背');
-    await userEvent.click(
-      within(picker).getByRole('button', { name: '把「引体向上」填入表单' }),
+    await userEvent.selectOptions(
+      within(picker).getAllByRole('combobox', { name: '肌群' })[0]!,
+      '背',
     );
+    await userEvent.click(within(picker).getByRole('button', { name: '把「引体向上」填入表单' }));
 
     expect(within(dialog).getByLabelText('第 1 个动作名称')).toHaveValue('引体向上');
     expect(useLibraryStore.getState().customExercises).toHaveLength(0);

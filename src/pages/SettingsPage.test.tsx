@@ -92,7 +92,14 @@ describe('SettingsPage', () => {
     render(
       <MemoryRouter initialEntries={['/settings']}>
         <Routes>
-          <Route path="/settings" element={<ToastProvider><SettingsPage /></ToastProvider>} />
+          <Route
+            path="/settings"
+            element={
+              <ToastProvider>
+                <SettingsPage />
+              </ToastProvider>
+            }
+          />
         </Routes>
       </MemoryRouter>,
     );
@@ -393,7 +400,14 @@ describe('SettingsPage', () => {
     render(
       <MemoryRouter initialEntries={['/settings']}>
         <Routes>
-          <Route path="/settings" element={<ToastProvider><SettingsPage /></ToastProvider>} />
+          <Route
+            path="/settings"
+            element={
+              <ToastProvider>
+                <SettingsPage />
+              </ToastProvider>
+            }
+          />
         </Routes>
       </MemoryRouter>,
     );
@@ -401,7 +415,11 @@ describe('SettingsPage', () => {
     expect(screen.getByText('从外部导入')).toBeInTheDocument();
 
     const fileInput = screen.getByLabelText('选择 CSV 文件');
-    const csv = ['Title,Author,Date Read,Bookshelves', '新的一本书,某作者,2024/5/1,read', '1984,Orwell,,to-read'].join('\n');
+    const csv = [
+      'Title,Author,Date Read,Bookshelves',
+      '新的一本书,某作者,2024/5/1,read',
+      '1984,Orwell,,to-read',
+    ].join('\n');
     const file = new File([csv], 'goodreads.csv', { type: 'text/csv' });
     // 1984 已在库里（beforeEach 铺的种子没有，这里直接种一本）
     useBookStore.getState().addBook('1984', 'Orwell', '');

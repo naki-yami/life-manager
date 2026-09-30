@@ -137,7 +137,6 @@ export const WritingPage: React.FC = () => {
 
   const totalWords = projects.reduce((sum, project) => sum + project.wordCount, 0);
 
-
   const noteProject = projects.find((project) => project.id === noteId) ?? null;
   const deletingProject = projects.find((project) => project.id === pendingDeleteId) ?? null;
 
@@ -557,10 +556,7 @@ export const WritingPage: React.FC = () => {
               </p>
               <ul className="max-h-40 space-y-1 overflow-y-auto rounded border border-line-subtle">
                 {editorProject.snapshots.map((snapshot) => (
-                  <li
-                    key={snapshot.id}
-                    className="flex items-center gap-3 px-3 py-1.5 text-xs"
-                  >
+                  <li key={snapshot.id} className="flex items-center gap-3 px-3 py-1.5 text-xs">
                     <span className="text-content-tertiary tabular">
                       {new Date(snapshot.createdAt).toLocaleString('zh-CN')}
                     </span>

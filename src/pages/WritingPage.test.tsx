@@ -12,7 +12,10 @@ import { mockMediaQueries } from '../test/matchMedia';
 
 beforeEach(() => {
   useWritingStore.setState({ projects: [] });
-  vi.stubGlobal('URL', Object.assign(URL, { createObjectURL: vi.fn(() => 'blob:mock'), revokeObjectURL: vi.fn() }));
+  vi.stubGlobal(
+    'URL',
+    Object.assign(URL, { createObjectURL: vi.fn(() => 'blob:mock'), revokeObjectURL: vi.fn() }),
+  );
 });
 
 const projectOf = (title: string) =>

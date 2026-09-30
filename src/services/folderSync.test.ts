@@ -43,8 +43,8 @@ function emptyBackupData(): BackupData {
     focusSessions: [],
     reviews: [],
     goals: [],
-  customFoods: [],
-  customExercises: [],
+    customFoods: [],
+    customExercises: [],
   };
 }
 

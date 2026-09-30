@@ -26,7 +26,10 @@ describe('食物库种子数据', () => {
   it('规模够用：至少 100 条，覆盖全部分类', () => {
     expect(FOOD_SEEDS.length).toBeGreaterThanOrEqual(100);
     for (const category of FOOD_CATEGORIES) {
-      expect(FOOD_SEEDS.some((food) => food.category === category), category).toBe(true);
+      expect(
+        FOOD_SEEDS.some((food) => food.category === category),
+        category,
+      ).toBe(true);
     }
   });
 });

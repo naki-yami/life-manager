@@ -242,12 +242,14 @@ describe('TasksPage', () => {
 
     const board = screen.getByRole('group', { name: '任务看板' });
     expect(board).toBeInTheDocument();
-    const todoColumn = within(board).getByRole('heading', { name: '待办' }).closest('div')!
-      .parentElement!;
+    const todoColumn = within(board)
+      .getByRole('heading', { name: '待办' })
+      .closest('div')!.parentElement!;
     expect(within(todoColumn).getByText('紧急任务')).toBeInTheDocument();
 
-    const doneColumn = within(board).getByRole('heading', { name: '已完成' }).closest('div')!
-      .parentElement!;
+    const doneColumn = within(board)
+      .getByRole('heading', { name: '已完成' })
+      .closest('div')!.parentElement!;
     expect(within(doneColumn).getByText('低优先级')).toBeInTheDocument();
   });
 

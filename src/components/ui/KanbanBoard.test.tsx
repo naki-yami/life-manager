@@ -29,8 +29,9 @@ describe('KanbanBoard', () => {
     expect(screen.getByText('任务二')).toBeInTheDocument();
     expect(screen.getByText('这一列还没有任务')).toBeInTheDocument();
 
-    const doingColumn = screen.getByRole('heading', { name: '进行中' }).closest('div')!
-      .parentElement!;
+    const doingColumn = screen
+      .getByRole('heading', { name: '进行中' })
+      .closest('div')!.parentElement!;
     expect(within(doingColumn).getByText('2')).toBeInTheDocument();
   });
 

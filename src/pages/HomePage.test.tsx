@@ -111,11 +111,9 @@ describe('HomePage', () => {
     expect(within(focusCard).getByText('逾期的高优')).toBeInTheDocument();
 
     await userEvent.click(within(focusCard).getByRole('button', { name: '一键完成' }));
-    expect(
-      useTaskStore
-        .getState()
-        .tasks.find((task) => task.title === '逾期的高优')!.status,
-    ).toBe('completed');
+    expect(useTaskStore.getState().tasks.find((task) => task.title === '逾期的高优')!.status).toBe(
+      'completed',
+    );
   });
 
   it('快速添加任务支持 !优先级 与 @日期 语法', async () => {

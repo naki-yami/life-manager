@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { nextDueDate } from './repeat';
 
-
 describe('nextDueDate', () => {
   it('daily：每天 +1', () => {
     expect(nextDueDate({ kind: 'daily' }, '2026-09-28')).toBe('2026-09-29');

@@ -242,9 +242,7 @@ describe('BooksPage', () => {
       </ToastProvider>,
     );
 
-    await userEvent.click(
-      screen.getByRole('button', { name: /删除 .* 的《人类简史》阅读记录/ }),
-    );
+    await userEvent.click(screen.getByRole('button', { name: /删除 .* 的《人类简史》阅读记录/ }));
     await userEvent.click(
       within(screen.getByRole('dialog', { name: '删除阅读记录' })).getByRole('button', {
         name: '删除',

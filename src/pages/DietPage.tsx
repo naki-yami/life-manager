@@ -40,11 +40,7 @@ import { ListEmptyState, PageHeader, Toolbar } from '../components/layout';
 import { BarChart, Sparkline } from '../components/charts';
 import { MonthCalendar, type CalendarMark } from '../components/ui';
 import { useDietStore } from '../store/dietStore';
-import {
-  allFoods,
-  useLibraryStore,
-  type LibraryFood,
-} from '../store/libraryStore';
+import { allFoods, useLibraryStore, type LibraryFood } from '../store/libraryStore';
 import { FOOD_CATEGORIES, type FoodCategory } from '../data/foodCategories';
 import { FOOD_SEEDS } from '../data/foods';
 import { useUndoableRemove } from '../hooks/useUndoableRemove';
@@ -95,8 +91,6 @@ const MEAL_ICON: Record<MealType, LucideIcon> = {
   dinner: Moon,
   snack: Coffee,
 };
-
-
 
 const CATEGORY_OPTIONS = FOOD_CATEGORIES.map((category) => ({
   value: category,
@@ -164,7 +158,6 @@ export const DietPage: React.FC = () => {
     searchFields: recordSearchFields,
   });
 
-
   const dayRecords = useMemo(() => {
     const forDay = records.filter((record) => record.date === selectedDate);
     if (keyword.trim() === '') return forDay;
@@ -195,7 +188,7 @@ export const DietPage: React.FC = () => {
   const waterGlasses = water[selectedDate] ?? 0;
   const WATER_GOAL = 8;
 
-/** 日历标记：每天记录的条数 */
+  /** 日历标记：每天记录的条数 */
   const calendarMarks = useMemo(() => {
     const map: Record<string, CalendarMark> = {};
     for (const record of records) {
@@ -259,7 +252,7 @@ export const DietPage: React.FC = () => {
     setShowAddModal(true);
   };
 
-/** 食物库的搜索结果：分类过滤 + 关键词匹配（名称） */
+  /** 食物库的搜索结果：分类过滤 + 关键词匹配（名称） */
   const libraryFoods: LibraryFood[] = useMemo(() => {
     const all = allFoods(customFoods);
     const kw = foodKeyword.trim().toLowerCase();
@@ -285,8 +278,7 @@ export const DietPage: React.FC = () => {
         fat: food.fat,
       };
       // 第一行还空着就原地填，否则追加一行，方便连续加好几样
-      const firstEmpty =
-        current.items.length === 1 && current.items[0].name.trim() === '';
+      const firstEmpty = current.items.length === 1 && current.items[0].name.trim() === '';
       return {
         ...current,
         items: firstEmpty ? [filled] : [...current.items, filled],
@@ -687,18 +679,15 @@ export const DietPage: React.FC = () => {
         <ListEmptyState
           icon={<CalendarDays size={22} aria-hidden />}
           filtered={filteredOut}
-            emptyTitle="还没有任何饮食记录"
-            emptyDescription="记录第一条饮食后，这里会按日期汇总。"
-            emptyAction={
-              <Button
-                icon={<Plus size={16} aria-hidden />}
-                onClick={() => openAddModal('breakfast')}
-              >
-                记录饮食
-              </Button>
-            }
-            filteredTitle="没有符合条件的记录"
-            filteredDescription="换个关键词试试，比如食物名或分类。"
+          emptyTitle="还没有任何饮食记录"
+          emptyDescription="记录第一条饮食后，这里会按日期汇总。"
+          emptyAction={
+            <Button icon={<Plus size={16} aria-hidden />} onClick={() => openAddModal('breakfast')}>
+              记录饮食
+            </Button>
+          }
+          filteredTitle="没有符合条件的记录"
+          filteredDescription="换个关键词试试，比如食物名或分类。"
           onClearFilters={clearFilters}
         />
       ) : (
@@ -942,7 +931,9 @@ export const DietPage: React.FC = () => {
           )}
 
           <div className="rounded bg-inset p-3">
-            <p className="mb-2 text-sm font-medium text-content-secondary">库里没有？存一条自建的</p>
+            <p className="mb-2 text-sm font-medium text-content-secondary">
+              库里没有？存一条自建的
+            </p>
             <div className="flex flex-wrap items-end gap-2">
               <div className="min-w-32 flex-1">
                 <Input

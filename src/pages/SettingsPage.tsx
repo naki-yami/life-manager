@@ -95,8 +95,6 @@ const SHORTCUT_ROWS: Array<{ keys: string; action: string }> = [
   { keys: 'g 后接 1-9', action: '跳转到对应的主页面（1 首页、2 今日计划、3 读书…）' },
 ];
 
-
-
 /** 把导入结果写回各 store。整对象写入，保留 id / 状态 / 时间戳 / 嵌套数组 */
 function applyPlan(data: Partial<BackupData>): void {
   if (data.tasks) useTaskStore.getState().replaceTasks(data.tasks);
@@ -269,7 +267,9 @@ export const SettingsPage: React.FC = () => {
 
   // ---------- 外部导入（F10）：CSV 预览与写入 ----------
   const [csvSource, setCsvSource] = useState<CsvImportSource>('goodreads');
-  const [csvPlan, setCsvPlan] = useState<((CsvImportPlan<Book, 'books'> | CsvImportPlan<Game, 'games'>) & { fileName: string }) | null>(null);
+  const [csvPlan, setCsvPlan] = useState<
+    ((CsvImportPlan<Book, 'books'> | CsvImportPlan<Game, 'games'>) & { fileName: string }) | null
+  >(null);
   const [csvBusy, setCsvBusy] = useState(false);
 
   const currentSource = CSV_SOURCES.find((source) => source.id === csvSource)!;
@@ -524,14 +524,20 @@ export const SettingsPage: React.FC = () => {
             <table className="w-full text-left text-sm">
               <thead>
                 <tr className="border-b border-line-subtle text-xs text-content-tertiary">
-                  <th scope="col" className="py-2 pr-4 font-medium">按键</th>
-                  <th scope="col" className="py-2 font-medium">作用</th>
+                  <th scope="col" className="py-2 pr-4 font-medium">
+                    按键
+                  </th>
+                  <th scope="col" className="py-2 font-medium">
+                    作用
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-line-subtle">
                 {SHORTCUT_ROWS.map((row) => (
                   <tr key={row.keys}>
-                    <td className="py-2 pr-4 align-top"><Kbd>{row.keys}</Kbd></td>
+                    <td className="py-2 pr-4 align-top">
+                      <Kbd>{row.keys}</Kbd>
+                    </td>
                     <td className="py-2 text-content-secondary">{row.action}</td>
                   </tr>
                 ))}
@@ -590,8 +596,8 @@ export const SettingsPage: React.FC = () => {
         <CardBody className="space-y-3">
           {!folderSupported && (
             <Alert tone="info" title="这个浏览器不支持">
-              需要支持「文件系统访问」的浏览器（Chrome / Edge 桌面版）。可以改用上面的「导出 JSON」，
-              每周手动存一份到网盘或移动硬盘。
+              需要支持「文件系统访问」的浏览器（Chrome / Edge 桌面版）。可以改用上面的「导出
+              JSON」， 每周手动存一份到网盘或移动硬盘。
             </Alert>
           )}
 
@@ -638,10 +644,18 @@ export const SettingsPage: React.FC = () => {
                 >
                   {folderBusy ? '正在写入…' : '立即写入'}
                 </Button>
-                <Button variant="ghost" disabled={folderBusy} onClick={() => void handleChooseFolder()}>
+                <Button
+                  variant="ghost"
+                  disabled={folderBusy}
+                  onClick={() => void handleChooseFolder()}
+                >
                   换一个文件夹
                 </Button>
-                <Button variant="ghost" disabled={folderBusy} onClick={() => void handleForgetFolder()}>
+                <Button
+                  variant="ghost"
+                  disabled={folderBusy}
+                  onClick={() => void handleForgetFolder()}
+                >
                   取消授权
                 </Button>
               </div>
@@ -827,14 +841,24 @@ export const SettingsPage: React.FC = () => {
                       <tr className="text-content-tertiary">
                         {csvPlan.target === 'books' ? (
                           <>
-                            <th scope="col" className="px-3 py-1.5 font-medium">标题</th>
-                            <th scope="col" className="px-3 py-1.5 font-medium">作者</th>
-                            <th scope="col" className="px-3 py-1.5 font-medium">状态</th>
+                            <th scope="col" className="px-3 py-1.5 font-medium">
+                              标题
+                            </th>
+                            <th scope="col" className="px-3 py-1.5 font-medium">
+                              作者
+                            </th>
+                            <th scope="col" className="px-3 py-1.5 font-medium">
+                              状态
+                            </th>
                           </>
                         ) : (
                           <>
-                            <th scope="col" className="px-3 py-1.5 font-medium">游戏</th>
-                            <th scope="col" className="px-3 py-1.5 font-medium">时长</th>
+                            <th scope="col" className="px-3 py-1.5 font-medium">
+                              游戏
+                            </th>
+                            <th scope="col" className="px-3 py-1.5 font-medium">
+                              时长
+                            </th>
                           </>
                         )}
                       </tr>
@@ -843,15 +867,21 @@ export const SettingsPage: React.FC = () => {
                       {csvPlan.toAdd.slice(0, 8).map((item) =>
                         csvPlan.target === 'books' ? (
                           <tr key={item.id}>
-                            <td className="max-w-40 truncate px-3 py-1.5 text-content">{(item as Book).title}</td>
-                            <td className="max-w-32 truncate px-3 py-1.5 text-content-secondary">{(item as Book).author || '—'}</td>
+                            <td className="max-w-40 truncate px-3 py-1.5 text-content">
+                              {(item as Book).title}
+                            </td>
+                            <td className="max-w-32 truncate px-3 py-1.5 text-content-secondary">
+                              {(item as Book).author || '—'}
+                            </td>
                             <td className="px-3 py-1.5 text-content-tertiary">
                               {(item as Book).status === 'finished' ? '已读' : '想读'}
                             </td>
                           </tr>
                         ) : (
                           <tr key={item.id}>
-                            <td className="max-w-40 truncate px-3 py-1.5 text-content">{(item as Game).name}</td>
+                            <td className="max-w-40 truncate px-3 py-1.5 text-content">
+                              {(item as Game).name}
+                            </td>
                             <td className="px-3 py-1.5 text-content-tertiary tabular">
                               {formatNumber((item as Game).hoursPlayed)} 小时
                             </td>
@@ -872,10 +902,7 @@ export const SettingsPage: React.FC = () => {
                 <Button variant="secondary" onClick={() => setCsvPlan(null)}>
                   放弃
                 </Button>
-                <Button
-                  onClick={confirmCsvImport}
-                  disabled={csvPlan.toAdd.length === 0}
-                >
+                <Button onClick={confirmCsvImport} disabled={csvPlan.toAdd.length === 0}>
                   导入 {csvPlan.toAdd.length} 条
                 </Button>
               </div>

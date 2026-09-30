@@ -165,15 +165,20 @@ export const DevProjectPage: React.FC = () => {
     .reduce((sum, session) => sum + session.hours, 0);
 
   const dailyHours = useMemo(
-    () => seriesByDay(projectSessions, 30, today, (session) => session.date, (session) => session.hours),
+    () =>
+      seriesByDay(
+        projectSessions,
+        30,
+        today,
+        (session) => session.date,
+        (session) => session.hours,
+      ),
     [projectSessions, today],
   );
 
   const doneTasks = project?.tasks.filter((task) => task.status === 'done').length ?? 0;
   const percent =
-    project && project.tasks.length > 0
-      ? Math.round((doneTasks / project.tasks.length) * 100)
-      : 0;
+    project && project.tasks.length > 0 ? Math.round((doneTasks / project.tasks.length) * 100) : 0;
 
   const pendingSession = sessions.find((session) => session.id === pendingSessionId) ?? null;
   const sessionHours = typeof sessionForm.hours === 'number' ? sessionForm.hours : 0;
@@ -300,11 +305,7 @@ export const DevProjectPage: React.FC = () => {
           value={doneTasks}
           tone="success"
           icon={<ListChecks size={16} aria-hidden />}
-          footer={
-            project.tasks.length > 0
-              ? `完成率 ${percent}%`
-              : '还没有任务'
-          }
+          footer={project.tasks.length > 0 ? `完成率 ${percent}%` : '还没有任务'}
         />
         <StatCard
           label="工时流水"
@@ -373,9 +374,7 @@ export const DevProjectPage: React.FC = () => {
             <ul className="space-y-1.5">
               {project.milestones.map((milestone) => {
                 const overdue =
-                  !milestone.done &&
-                  milestone.dueDate !== undefined &&
-                  milestone.dueDate < today;
+                  !milestone.done && milestone.dueDate !== undefined && milestone.dueDate < today;
                 return (
                   <li
                     key={milestone.id}
@@ -391,9 +390,7 @@ export const DevProjectPage: React.FC = () => {
                     />
                     <span
                       className={`min-w-0 flex-1 truncate text-sm ${
-                        milestone.done
-                          ? 'text-content-tertiary line-through'
-                          : 'text-content'
+                        milestone.done ? 'text-content-tertiary line-through' : 'text-content'
                       }`}
                     >
                       {milestone.title}
@@ -470,10 +467,7 @@ export const DevProjectPage: React.FC = () => {
       </Card>
 
       <Card>
-        <CardHeader
-          title="任务看板"
-          subtitle="按状态分三列流转，在下面直接添加任务"
-        />
+        <CardHeader title="任务看板" subtitle="按状态分三列流转，在下面直接添加任务" />
         <CardBody className="space-y-4">
           <form
             className="flex flex-wrap items-end gap-2"
@@ -571,7 +565,9 @@ export const DevProjectPage: React.FC = () => {
                   <span className="shrink-0 text-xs text-content-tertiary tabular">
                     {formatShortDate(log.date)}
                   </span>
-                  <span className="min-w-0 flex-1 text-sm text-content-secondary">{log.content}</span>
+                  <span className="min-w-0 flex-1 text-sm text-content-secondary">
+                    {log.content}
+                  </span>
                   <IconButton
                     label={`删除 ${formatShortDate(log.date)} 的日志`}
                     size="sm"

@@ -48,9 +48,10 @@ describe('DevProjectPage', () => {
     expect(screen.getByRole('heading', { name: '写作助手' })).toBeInTheDocument();
     expect(screen.getByText('一个写作辅助工具')).toBeInTheDocument();
     expect(screen.getByText('React')).toBeInTheDocument();
-    expect(
-      screen.getByRole('link', { name: '打开「写作助手」的仓库地址' }),
-    ).toHaveAttribute('href', 'https://example.com/repo');
+    expect(screen.getByRole('link', { name: '打开「写作助手」的仓库地址' })).toHaveAttribute(
+      'href',
+      'https://example.com/repo',
+    );
 
     const columnOf = (heading: string) =>
       screen.getByRole('heading', { name: heading }).closest('div')!.parentElement!;

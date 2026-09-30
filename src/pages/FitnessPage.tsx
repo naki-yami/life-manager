@@ -279,8 +279,6 @@ export const FitnessPage: React.FC = () => {
     [plans, keyword],
   );
 
-
-
   const groupedRecords = useMemo(() => {
     const sorted = [...visibleRecords].sort((a, b) => b.date.localeCompare(a.date));
     return sorted.reduce<Array<{ date: string; items: typeof sorted }>>((groups, record) => {
@@ -375,13 +373,10 @@ export const FitnessPage: React.FC = () => {
         weight: 0,
       };
       // 第一行还空着就原地填，否则追加一行，方便连续挑好几个动作
-      const firstEmpty =
-        form.exercises.length === 1 && form.exercises[0].name.trim() === '';
+      const firstEmpty = form.exercises.length === 1 && form.exercises[0].name.trim() === '';
       return {
         ...form,
-        exercises: firstEmpty
-          ? [filled]
-          : [...form.exercises, filled],
+        exercises: firstEmpty ? [filled] : [...form.exercises, filled],
       };
     });
   };
@@ -448,12 +443,7 @@ export const FitnessPage: React.FC = () => {
         return previous !== undefined && entry.oneRm > previous;
       });
 
-    addRecord(
-      workoutForm.planName,
-      workoutForm.date,
-      trimmed,
-      workoutForm.notes.trim(),
-    );
+    addRecord(workoutForm.planName, workoutForm.date, trimmed, workoutForm.notes.trim());
 
     const topBroken = brokenRecords[0];
     if (topBroken) {
@@ -684,16 +674,15 @@ export const FitnessPage: React.FC = () => {
 
       {view !== 'body' && records.length > 0 && bests.length > 0 && (
         <Card>
-          <CardHeader
-            title="个人最佳"
-            subtitle="按 Epley 公式估算的 1RM，破纪录时会弹提示"
-          />
+          <CardHeader title="个人最佳" subtitle="按 Epley 公式估算的 1RM，破纪录时会弹提示" />
           <CardBody>
             <ul className="divide-y divide-line-subtle rounded border border-line-subtle">
               {bests.slice(0, 5).map((pr) => (
                 <li key={pr.exercise} className="flex items-center gap-3 px-3 py-2">
                   <Trophy size={14} className="shrink-0 text-warning" aria-hidden />
-                  <span className="min-w-0 flex-1 truncate text-sm text-content">{pr.exercise}</span>
+                  <span className="min-w-0 flex-1 truncate text-sm text-content">
+                    {pr.exercise}
+                  </span>
                   <span className="text-xs text-content-tertiary tabular">{pr.date}</span>
                   <Badge tone="warning">1RM {formatNumber(pr.oneRm)} kg</Badge>
                 </li>
@@ -1018,7 +1007,8 @@ export const FitnessPage: React.FC = () => {
               options={[
                 { value: '', label: '自由训练' },
                 // 复制上次训练时可能带出一个已被删除的计划名，保底让它仍可选
-                ...(workoutForm.planName && !plans.some((plan) => plan.name === workoutForm.planName)
+                ...(workoutForm.planName &&
+                !plans.some((plan) => plan.name === workoutForm.planName)
                   ? [{ value: workoutForm.planName, label: workoutForm.planName }]
                   : []),
                 ...plans.map((plan) => ({ value: plan.name, label: plan.name })),
@@ -1241,7 +1231,10 @@ export const FitnessPage: React.FC = () => {
               </li>
             ) : (
               visibleExercises.map((exercise) => (
-                <li key={exercise.id ?? exercise.name} className="flex items-center gap-3 px-3 py-2">
+                <li
+                  key={exercise.id ?? exercise.name}
+                  className="flex items-center gap-3 px-3 py-2"
+                >
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-x-2">
                       <span className="truncate text-sm text-content">{exercise.name}</span>
@@ -1275,12 +1268,15 @@ export const FitnessPage: React.FC = () => {
           </ul>
           {libraryExercises.length > visibleExercises.length && (
             <p className="text-xs text-content-tertiary">
-              只显示前 {visibleExercises.length} 条，共 {libraryExercises.length} 条，继续输入关键词收窄。
+              只显示前 {visibleExercises.length} 条，共 {libraryExercises.length}{' '}
+              条，继续输入关键词收窄。
             </p>
           )}
 
           <div className="rounded bg-inset p-3">
-            <p className="mb-2 text-sm font-medium text-content-secondary">库里没有？存一条自建的</p>
+            <p className="mb-2 text-sm font-medium text-content-secondary">
+              库里没有？存一条自建的
+            </p>
             <div className="flex flex-wrap items-end gap-2">
               <div className="min-w-32 flex-1">
                 <Input

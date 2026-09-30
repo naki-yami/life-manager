@@ -284,9 +284,7 @@ describe('DietPage', () => {
 
     const picker = screen.getByRole('dialog', { name: '从食物库选择' });
     await userEvent.type(within(picker).getByLabelText('搜索'), '鸡胸');
-    await userEvent.click(
-      within(picker).getByRole('button', { name: '把「鸡胸肉」填入表单' }),
-    );
+    await userEvent.click(within(picker).getByRole('button', { name: '把「鸡胸肉」填入表单' }));
 
     // 原地填进了空着的第一个条目
     expect(within(dialog).getByLabelText('第 1 个食物名称')).toHaveValue('鸡胸肉');

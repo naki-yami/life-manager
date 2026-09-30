@@ -186,8 +186,7 @@ export interface CsvImportPlan<T, Target extends 'books' | 'games' = 'books' | '
   warnings: string[];
 }
 
-const dedupeKey = (...parts: string[]): string =>
-  parts.join('').toLowerCase().replace(/\s+/g, '');
+const dedupeKey = (...parts: string[]): string => parts.join('').toLowerCase().replace(/\s+/g, '');
 
 /** 读书 CSV → Book 计划。Goodreads 与豆瓣共用一个映射骨架 */
 export function planBookCsvImport(
@@ -200,8 +199,7 @@ export function planBookCsvImport(
   const titleIndex = matchHeader(headers, candidates.title!);
   const authorIndex = matchHeader(headers, candidates.author!);
   const dateIndex = matchHeader(headers, candidates.dateRead!);
-  const shelvesIndex =
-    source === 'goodreads' ? matchHeader(headers, candidates.shelves!) : -1;
+  const shelvesIndex = source === 'goodreads' ? matchHeader(headers, candidates.shelves!) : -1;
 
   const warnings: string[] = [];
   if (titleIndex === -1) {
@@ -255,7 +253,10 @@ export function planBookCsvImport(
 }
 
 /** Steam 游戏 CSV → Game 计划 */
-export function planGameCsvImport(text: string, existingGames: readonly Game[]): CsvImportPlan<Game, 'games'> {
+export function planGameCsvImport(
+  text: string,
+  existingGames: readonly Game[],
+): CsvImportPlan<Game, 'games'> {
   const candidates = COLUMN_CANDIDATES.steam;
   const { headers, rows } = parseCsv(text);
   const nameIndex = matchHeader(headers, candidates.name!);

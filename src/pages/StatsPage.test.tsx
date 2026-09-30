@@ -192,12 +192,7 @@ describe('StatsPage', () => {
   it('各模块数据分布与流水趋势图表', async () => {
     useTaskStore.getState().addTask('写周报', '', 'high', '');
     useDevStore.getState().addProject('写作助手', '');
-    useDevStore.getState().addSession(
-      useDevStore.getState().projects[0]!.id,
-      todayKey(),
-      2,
-      '',
-    );
+    useDevStore.getState().addSession(useDevStore.getState().projects[0]!.id, todayKey(), 2, '');
 
     renderStats();
 

@@ -12,12 +12,7 @@ const task = (id: string, status: DevTask['status']): DevTask => ({
 });
 
 describe('moveTaskInArray', () => {
-  const tasks = [
-    task('a', 'todo'),
-    task('b', 'todo'),
-    task('c', 'in-progress'),
-    task('d', 'done'),
-  ];
+  const tasks = [task('a', 'todo'), task('b', 'todo'), task('c', 'in-progress'), task('d', 'done')];
 
   it('跨列移动：放到目标列某一项的前面', () => {
     const next = moveTaskInArray(tasks, 'a', 'in-progress', 'c');

@@ -72,8 +72,12 @@ describe('libraryStore 自建食物', () => {
   });
 
   it('自建动作与自建食物互不影响，名字各自去重', () => {
-    useLibraryStore.getState().addCustomExercise({ name: '上斜卧推', muscleGroup: '胸', equipment: '杠铃' });
-    useLibraryStore.getState().addCustomExercise({ name: '上斜卧推', muscleGroup: '胸', equipment: '哑铃' });
+    useLibraryStore
+      .getState()
+      .addCustomExercise({ name: '上斜卧推', muscleGroup: '胸', equipment: '杠铃' });
+    useLibraryStore
+      .getState()
+      .addCustomExercise({ name: '上斜卧推', muscleGroup: '胸', equipment: '哑铃' });
     useLibraryStore.getState().addCustomFood({
       name: '上斜卧推',
       category: '其他',

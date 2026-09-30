@@ -227,7 +227,14 @@ export const DevPage: React.FC = () => {
   const totalHours = projects.reduce((sum, project) => sum + project.hoursSpent, 0);
 
   const weeklyHours = useMemo(
-    () => seriesByWeek(sessions, WEEK_COUNT, today, (session) => session.date, (session) => session.hours),
+    () =>
+      seriesByWeek(
+        sessions,
+        WEEK_COUNT,
+        today,
+        (session) => session.date,
+        (session) => session.hours,
+      ),
     [sessions, today],
   );
 
@@ -302,7 +309,12 @@ export const DevPage: React.FC = () => {
 
   const handleAddSession = (): void => {
     if (!canSaveSession) return;
-    addSession(sessionForm.projectId, sessionForm.date || today, sessionHours, sessionForm.note.trim());
+    addSession(
+      sessionForm.projectId,
+      sessionForm.date || today,
+      sessionHours,
+      sessionForm.note.trim(),
+    );
     setShowSessionModal(false);
   };
 
@@ -462,7 +474,9 @@ export const DevPage: React.FC = () => {
                       </span>
                     </div>
                     {session.note && (
-                      <p className="mt-0.5 truncate text-xs text-content-tertiary">{session.note}</p>
+                      <p className="mt-0.5 truncate text-xs text-content-tertiary">
+                        {session.note}
+                      </p>
                     )}
                   </div>
                   <IconButton

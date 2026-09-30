@@ -14,7 +14,10 @@ describe('动作库种子数据', () => {
   it('规模够用：至少 60 条，六大肌群全有覆盖', () => {
     expect(EXERCISE_SEEDS.length).toBeGreaterThanOrEqual(60);
     for (const group of MUSCLE_GROUPS) {
-      expect(EXERCISE_SEEDS.some((exercise) => exercise.muscleGroup === group), group).toBe(true);
+      expect(
+        EXERCISE_SEEDS.some((exercise) => exercise.muscleGroup === group),
+        group,
+      ).toBe(true);
     }
   });
 

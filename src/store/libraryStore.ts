@@ -27,7 +27,10 @@ interface LibraryState {
   deleteCustomFood: (id: string) => void;
   addCustomExercise: (exercise: Omit<CustomExercise, 'id' | 'createdAt'>) => void | 'duplicate';
   deleteCustomExercise: (id: string) => void;
-  replaceLibrary: (data: { customFoods?: CustomFood[]; customExercises?: CustomExercise[] }) => void;
+  replaceLibrary: (data: {
+    customFoods?: CustomFood[];
+    customExercises?: CustomExercise[];
+  }) => void;
 }
 
 const defaultState = {

@@ -102,9 +102,7 @@ export const useWritingStore = create<WritingState>()(
       setTargetWords: (id, targetWords) =>
         set((state) => ({
           projects: state.projects.map((p) =>
-            p.id === id
-              ? { ...p, targetWords: Math.max(0, Math.round(targetWords)) }
-              : p,
+            p.id === id ? { ...p, targetWords: Math.max(0, Math.round(targetWords)) } : p,
           ),
         })),
       replaceProjects: (projects) => set({ projects }),

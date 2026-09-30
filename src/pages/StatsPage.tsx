@@ -264,19 +264,39 @@ export const StatsPage: React.FC = () => {
     dietRecords.length > 0 ||
     games.length > 0;
 
-/** 三类流水的近 8 周趋势（周一起始） */
+  /** 三类流水的近 8 周趋势（周一起始） */
   const WEEKS = 8;
   const devWeekly = useMemo(
-    () => seriesByWeek(devSessions, WEEKS, today, (session) => session.date, (session) => session.hours),
+    () =>
+      seriesByWeek(
+        devSessions,
+        WEEKS,
+        today,
+        (session) => session.date,
+        (session) => session.hours,
+      ),
     [devSessions, today],
   );
   const readingWeekly = useMemo(
     () =>
-      seriesByWeek(readingSessions, WEEKS, today, (session) => session.date, (session) => session.minutes),
+      seriesByWeek(
+        readingSessions,
+        WEEKS,
+        today,
+        (session) => session.date,
+        (session) => session.minutes,
+      ),
     [readingSessions, today],
   );
   const gameWeekly = useMemo(
-    () => seriesByWeek(gameSessions, WEEKS, today, (session) => session.date, (session) => session.hours),
+    () =>
+      seriesByWeek(
+        gameSessions,
+        WEEKS,
+        today,
+        (session) => session.date,
+        (session) => session.hours,
+      ),
     [gameSessions, today],
   );
 
@@ -425,7 +445,10 @@ export const StatsPage: React.FC = () => {
                 subtitle={`${goalSummary.reached}/${goalSummary.total} 个已达成 · 进度现算，不做快照`}
               />
               <CardBody>
-                <GoalProgressList items={goalProgressList} className="lg:grid lg:grid-cols-2 lg:gap-x-8 lg:space-y-0" />
+                <GoalProgressList
+                  items={goalProgressList}
+                  className="lg:grid lg:grid-cols-2 lg:gap-x-8 lg:space-y-0"
+                />
               </CardBody>
             </Card>
           )}
@@ -490,7 +513,9 @@ export const StatsPage: React.FC = () => {
               <CardBody className="space-y-3">
                 {moduleDistribution.map((item) => (
                   <div key={item.label} className="flex items-center gap-3">
-                    <span className="w-16 shrink-0 text-xs text-content-secondary">{item.label}</span>
+                    <span className="w-16 shrink-0 text-xs text-content-secondary">
+                      {item.label}
+                    </span>
                     <ProgressBar
                       className="min-w-0 flex-1"
                       value={item.count}

@@ -1,10 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  normalizeCsvDate,
-  parseCsv,
-  planBookCsvImport,
-  planGameCsvImport,
-} from './csvImport';
+import { normalizeCsvDate, parseCsv, planBookCsvImport, planGameCsvImport } from './csvImport';
 import type { Book, Game } from '../types';
 
 const book = (title: string, author = ''): Book => ({

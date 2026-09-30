@@ -158,7 +158,13 @@ export const BooksPage: React.FC = () => {
 
   const weeklyMinutes = useMemo(
     () =>
-      seriesByWeek(sessions, WEEK_COUNT, today, (session) => session.date, (session) => session.minutes),
+      seriesByWeek(
+        sessions,
+        WEEK_COUNT,
+        today,
+        (session) => session.date,
+        (session) => session.minutes,
+      ),
     [sessions, today],
   );
 
@@ -218,7 +224,12 @@ export const BooksPage: React.FC = () => {
 
   const handleAddSession = (): void => {
     if (!canSaveSession) return;
-    addReadingSession(sessionForm.bookId, sessionForm.date || today, sessionMinutes, sessionForm.note.trim());
+    addReadingSession(
+      sessionForm.bookId,
+      sessionForm.date || today,
+      sessionMinutes,
+      sessionForm.note.trim(),
+    );
     setShowSessionModal(false);
   };
 
@@ -234,7 +245,6 @@ export const BooksPage: React.FC = () => {
     const clamped = Math.max(0, Math.min(book.totalPages, page));
     updateProgress(book.id, Math.round((clamped / book.totalPages) * 1000) / 10);
   };
-
 
   const currentYear = new Date().getFullYear();
   const finishedThisYear = books.filter(
@@ -516,7 +526,9 @@ export const BooksPage: React.FC = () => {
                       </span>
                     </div>
                     {session.note && (
-                      <p className="mt-0.5 truncate text-xs text-content-tertiary">{session.note}</p>
+                      <p className="mt-0.5 truncate text-xs text-content-tertiary">
+                        {session.note}
+                      </p>
                     )}
                   </div>
                   <IconButton
@@ -663,7 +675,8 @@ export const BooksPage: React.FC = () => {
                                   value={book.totalPages}
                                   onChange={(value) =>
                                     updateBook(book.id, {
-                                      totalPages: typeof value === 'number' && value > 0 ? value : undefined,
+                                      totalPages:
+                                        typeof value === 'number' && value > 0 ? value : undefined,
                                     })
                                   }
                                   min={1}
@@ -699,7 +712,8 @@ export const BooksPage: React.FC = () => {
                                   value={book.totalPages ?? 0}
                                   onChange={(value) =>
                                     updateBook(book.id, {
-                                      totalPages: typeof value === 'number' && value > 0 ? value : undefined,
+                                      totalPages:
+                                        typeof value === 'number' && value > 0 ? value : undefined,
                                     })
                                   }
                                   min={0}

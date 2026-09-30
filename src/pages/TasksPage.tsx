@@ -55,10 +55,7 @@ const PRIORITY_OPTIONS = [
   { value: 'low', label: '较低' },
 ];
 
-const PRIORITY_FILTER_OPTIONS = [
-  { value: 'all', label: '全部优先级' },
-  ...PRIORITY_OPTIONS,
-];
+const PRIORITY_FILTER_OPTIONS = [{ value: 'all', label: '全部优先级' }, ...PRIORITY_OPTIONS];
 
 const PRIORITY_BADGE: Record<Priority, { tone: 'danger' | 'warning' | 'default'; label: string }> =
   {
@@ -193,9 +190,7 @@ const TaskFormFields: React.FC<{
       <Select
         label="重复"
         value={form.repeatKind}
-        onChange={(value) =>
-          onChange({ ...form, repeatKind: value as 'none' | RepeatKind })
-        }
+        onChange={(value) => onChange({ ...form, repeatKind: value as 'none' | RepeatKind })}
         options={REPEAT_OPTIONS}
       />
       {form.repeatKind === 'weekly' && (
@@ -228,9 +223,7 @@ const TaskFormFields: React.FC<{
         </div>
       )}
       {form.repeatKind !== 'none' && (
-        <p className="mt-1.5 text-xs text-content-tertiary">
-          完成后会按这个规则自动生成下一次
-        </p>
+        <p className="mt-1.5 text-xs text-content-tertiary">完成后会按这个规则自动生成下一次</p>
       )}
     </div>
     <TagInput
@@ -359,9 +352,7 @@ export const TasksPage: React.FC = () => {
     toggleTaskStatus(task.id);
     undoableRemove({
       message:
-        task.status === 'pending'
-          ? `已完成「${task.title}」`
-          : `已把「${task.title}」恢复为待办`,
+        task.status === 'pending' ? `已完成「${task.title}」` : `已把「${task.title}」恢复为待办`,
       description: '点「撤销」可以还原。',
       snapshot,
       restore: replaceTasks,
@@ -631,11 +622,7 @@ export const TasksPage: React.FC = () => {
             }}
           />
         ) : view === 'kanban' ? (
-          <KanbanBoard
-            label="任务看板"
-            columns={kanbanColumns}
-            onMove={handleKanbanMove}
-          />
+          <KanbanBoard label="任务看板" columns={kanbanColumns} onMove={handleKanbanMove} />
         ) : view === 'quadrant' ? (
           <div className="grid gap-4 md:grid-cols-2">
             {QUADRANTS.map((quadrant) => {
@@ -749,10 +736,7 @@ export const TasksPage: React.FC = () => {
                                   {task.subtasks.length > 0 && (
                                     <ul className="space-y-1">
                                       {task.subtasks.map((subtask) => (
-                                        <li
-                                          key={subtask.id}
-                                          className="flex items-center gap-2"
-                                        >
+                                        <li key={subtask.id} className="flex items-center gap-2">
                                           <input
                                             type="checkbox"
                                             checked={subtask.done}

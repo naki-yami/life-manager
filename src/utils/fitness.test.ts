@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { epley1RM, personalBests } from './fitness';
 import type { WorkoutRecord } from '../types';
 
-const record = (date: string, exercises: Array<{ name: string; sets: number; reps: number; weight: number }>): WorkoutRecord => ({
+const record = (
+  date: string,
+  exercises: Array<{ name: string; sets: number; reps: number; weight: number }>,
+): WorkoutRecord => ({
   id: `r-${date}-${exercises[0]?.name ?? ''}`,
   date,
   planName: '',

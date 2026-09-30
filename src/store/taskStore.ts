@@ -116,10 +116,7 @@ export const useTaskStore = create<TaskState>()(
             t.id === taskId
               ? {
                   ...t,
-                  subtasks: [
-                    ...t.subtasks,
-                    { id: createId(), title, done: false },
-                  ],
+                  subtasks: [...t.subtasks, { id: createId(), title, done: false }],
                 }
               : t,
           ),
@@ -140,9 +137,7 @@ export const useTaskStore = create<TaskState>()(
       deleteSubtask: (taskId, subtaskId) =>
         set((state) => ({
           tasks: state.tasks.map((t) =>
-            t.id === taskId
-              ? { ...t, subtasks: t.subtasks.filter((s) => s.id !== subtaskId) }
-              : t,
+            t.id === taskId ? { ...t, subtasks: t.subtasks.filter((s) => s.id !== subtaskId) } : t,
           ),
         })),
       addMemo: (content) =>
