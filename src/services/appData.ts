@@ -9,6 +9,7 @@ import { useFocusStore } from '../store/focusStore';
 import { useGameStore } from '../store/gameStore';
 import { useGoalStore } from '../store/goalStore';
 import { useHabitStore } from '../store/habitStore';
+import { useJournalStore } from '../store/journalStore';
 import { useLibraryStore } from '../store/libraryStore';
 import { useReviewStore } from '../store/reviewStore';
 import { useTaskStore } from '../store/taskStore';
@@ -41,6 +42,7 @@ export function readAllData(): BackupData {
     habits: useHabitStore.getState().habits,
     focusSessions: useFocusStore.getState().sessions,
     reviews: useReviewStore.getState().reviews,
+    journal: useJournalStore.getState().entries,
     goals: useGoalStore.getState().goals,
     customFoods: useLibraryStore.getState().customFoods,
     customExercises: useLibraryStore.getState().customExercises,

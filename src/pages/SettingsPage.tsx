@@ -54,6 +54,7 @@ import { useHabitStore } from '../store/habitStore';
 import { useBodyStore } from '../store/bodyStore';
 import { useFocusStore } from '../store/focusStore';
 import { useReviewStore } from '../store/reviewStore';
+import { useJournalStore } from '../store/journalStore';
 import { useGoalStore } from '../store/goalStore';
 import { useThemeStore } from '../store/themeStore';
 import { useUiStore } from '../store/uiStore';
@@ -113,6 +114,7 @@ function applyPlan(data: Partial<BackupData>): void {
   if (data.habits) useHabitStore.getState().replaceHabits(data.habits);
   if (data.focusSessions) useFocusStore.getState().replaceSessions(data.focusSessions);
   if (data.reviews) useReviewStore.getState().replaceReviews(data.reviews);
+  if (data.journal) useJournalStore.getState().replaceEntries(data.journal);
   if (data.goals) useGoalStore.getState().replaceGoals(data.goals);
   const settings = data.settings;
   if (settings) {
@@ -143,6 +145,7 @@ function resetStores(): void {
   useHabitStore.getState().replaceHabits([]);
   useFocusStore.getState().replaceSessions([]);
   useReviewStore.getState().replaceReviews([]);
+  useJournalStore.getState().replaceEntries([]);
   useGoalStore.getState().replaceGoals([]);
   // 进行中的专注也要停掉：清空数据后还挂着一个秒表，只会让人以为没清干净
   useFocusStore.getState().cancelFocus();
@@ -236,6 +239,7 @@ export const SettingsPage: React.FC = () => {
   const habitCount = useHabitStore((state) => state.habits.length);
   const focusCount = useFocusStore((state) => state.sessions.length);
   const reviewCount = useReviewStore((state) => state.reviews.length);
+  const journalCount = useJournalStore((state) => state.entries.length);
   const goalCount = useGoalStore((state) => state.goals.length);
 
   const counts: { module: BackupModule; label: string; count: number }[] = [
@@ -255,6 +259,7 @@ export const SettingsPage: React.FC = () => {
     { module: 'habits', label: MODULE_LABELS.habits, count: habitCount },
     { module: 'focusSessions', label: MODULE_LABELS.focusSessions, count: focusCount },
     { module: 'reviews', label: MODULE_LABELS.reviews, count: reviewCount },
+    { module: 'journal', label: MODULE_LABELS.journal, count: journalCount },
     { module: 'goals', label: MODULE_LABELS.goals, count: goalCount },
   ];
 

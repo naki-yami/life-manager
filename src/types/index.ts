@@ -501,3 +501,28 @@ export interface Goal {
   target: number;
   createdAt: string;
 }
+// Journal types
+/**
+ * 心情档位。0 = 当天没记心情，1（很糟）… 5（很好）。
+ *
+ * 用数字而不是字符串：趋势图要算平均值与分布，存字符串每次都要再映射一遍；
+ * 0 单独代表「没记」是因为「忘了选」和「今天很糟」是两件事，不能都算成 1。
+ */
+export type MoodLevel = 0 | 1 | 2 | 3 | 4 | 5;
+
+/**
+ * 一篇日记：一天一条，`date`（本地日键 YYYY-MM-DD）是逻辑主键。
+ *
+ * 正文字数不落库（要用就现算）：存下来会在改正文之后悄悄对不上，
+ * 而一段 UTF-16 文本数一遍字几乎不花时间。
+ */
+export interface JournalEntry {
+  id: string;
+  date: string;
+  /** 0 = 没记心情 */
+  mood: MoodLevel;
+  tags: string[];
+  text: string;
+  createdAt: string;
+  updatedAt: string;
+}

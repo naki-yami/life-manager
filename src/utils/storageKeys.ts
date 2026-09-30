@@ -22,6 +22,7 @@ export const STORAGE_KEYS = {
   body: 'lm:body',
   focus: 'lm:focus',
   review: 'lm:review',
+  journal: 'lm:journal',
   goals: 'lm:goals',
   library: 'lm:library',
   theme: 'lm:theme',
@@ -46,6 +47,7 @@ export const DATA_STORAGE_KEYS: readonly string[] = [
   STORAGE_KEYS.body,
   STORAGE_KEYS.focus,
   STORAGE_KEYS.review,
+  STORAGE_KEYS.journal,
   STORAGE_KEYS.goals,
   STORAGE_KEYS.library,
 ];

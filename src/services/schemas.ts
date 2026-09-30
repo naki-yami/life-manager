@@ -3,6 +3,7 @@ import { normalizeTags } from '../utils/tags';
 import { normalizeSchedule, sanitizeHabitLogs } from '../utils/habits';
 import { readMetric, sanitizeMeasurements } from '../utils/body';
 import { normalizeTimebox } from '../utils/focus';
+import { clampMood } from '../utils/journal';
 import type { HabitSchedule } from '../types';
 
 /**
@@ -25,8 +26,10 @@ export const APP_ID = 'life-manager';
  * 17：新增「自建食物 / 自建动作」模块（种子库之外用户自己加的那些）。
  * 18：书与游戏条目化：新增评分 / 短评 / 收藏 / 状态时间线，游戏新增通关日期。
  *     这几项都在已有的 books / games 里，旧备份缺字段时按 schema 默认值补齐。
+ * 19：新增「日记与心情」模块（一天一条，心情 1–5 + 标签 + 正文）；旧文件里没有它，
+ *     按缺失处理，不会清空用户已经写下的日记。
  */
-export const BACKUP_SCHEMA_VERSION = 18;
+export const BACKUP_SCHEMA_VERSION = 19;
 
 const isoDateString = z.string();
 const percent = z.number().min(0).max(100).catch(0);
@@ -439,6 +442,28 @@ export const reviewSchema = z.object({
   updatedAt: isoDateString.default(() => new Date().toISOString()),
 });
 
+// ---------- 日记与心情 ----------
+/**
+ * 一篇日记。
+ *
+ * `date` 是逻辑主键（一天一条），所以给了默认值：手写 JSON 缺了它不至于整条作废。
+ * `mood` 走 catch + transform：认不出的值退回 0（= 没记），
+ * 越界或小数则收进 0–5 的整数档 —— 与 store 写入时共用同一个函数。
+ */
+export const journalSchema = z.object({
+  id: z.string().min(1),
+  date: z.string().default(''),
+  mood: z
+    .number()
+    .catch(0)
+    .default(0)
+    .transform((value) => clampMood(value)),
+  tags,
+  text: z.string().default(''),
+  createdAt: isoDateString.default(() => new Date().toISOString()),
+  updatedAt: isoDateString.default(() => new Date().toISOString()),
+});
+
 // ---------- 目标 ----------
 /**
  * 一个目标。
@@ -511,6 +536,7 @@ export const backupDataSchema = z.object({
   habits: z.array(habitSchema).default([]),
   focusSessions: z.array(focusSessionSchema).default([]),
   reviews: z.array(reviewSchema).default([]),
+  journal: z.array(journalSchema).default([]),
   goals: z.array(goalSchema).default([]),
   customFoods: z.array(customFoodSchema).default([]),
   customExercises: z.array(customExerciseSchema).default([]),
@@ -536,6 +562,7 @@ export const BACKUP_MODULES = [
   'habits',
   'focusSessions',
   'reviews',
+  'journal',
   'goals',
   'customFoods',
   'customExercises',
@@ -560,6 +587,7 @@ export const MODULE_LABELS: Record<BackupModule, string> = {
   habits: '习惯',
   focusSessions: '专注记录',
   reviews: '复盘',
+  journal: '日记',
   goals: '目标',
   customFoods: '自建食物',
   customExercises: '自建动作',

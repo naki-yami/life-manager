@@ -263,6 +263,17 @@ function sampleData(): BackupData {
         updatedAt: '2026-09-27T12:00:00.000Z',
       },
     ],
+    journal: [
+      {
+        id: 'journal-1',
+        date: '2026-09-29',
+        mood: 4,
+        tags: ['工作'],
+        text: '把日记模块的数据层收干净',
+        createdAt: '2026-09-29T13:00:00.000Z',
+        updatedAt: '2026-09-29T13:00:00.000Z',
+      },
+    ],
     goals: [
       {
         id: 'goal-1',
@@ -306,6 +317,7 @@ const emptyData = (): BackupData => ({
   habits: [],
   focusSessions: [],
   reviews: [],
+  journal: [],
   goals: [],
   customFoods: [],
   customExercises: [],
@@ -338,6 +350,7 @@ describe('导出 / 导入 往返', () => {
     expect(plan.data.habits).toEqual(original.habits);
     expect(plan.data.focusSessions).toEqual(original.focusSessions);
     expect(plan.data.reviews).toEqual(original.reviews);
+    expect(plan.data.journal).toEqual(original.journal);
     expect(plan.data.settings).toEqual(original.settings);
   });
 
@@ -366,7 +379,7 @@ describe('导出 / 导入 往返', () => {
   it('信封结构包含 schemaVersion 与 exportedAt', () => {
     const envelope = buildBackupEnvelope(emptyData(), new Date('2026-09-28T00:00:00.000Z'));
     expect(envelope.app).toBe('life-manager');
-    expect(envelope.schemaVersion).toBe(18);
+    expect(envelope.schemaVersion).toBe(19);
     expect(envelope.exportedAt).toBe('2026-09-28T00:00:00.000Z');
   });
 });
@@ -1071,6 +1084,7 @@ describe('导入模式', () => {
       plan.data.habits,
       plan.data.focusSessions,
       plan.data.reviews,
+      plan.data.journal,
       plan.data.goals,
       plan.data.customFoods,
       plan.data.customExercises,

@@ -34,6 +34,7 @@ import {
   readingSessionSchema,
   mealRecordSchema,
   reviewSchema,
+  journalSchema,
   memoSchema,
   settingsSchema,
   taskSchema,
@@ -168,6 +169,7 @@ export function parseBackup(
   modules.habits = pick(habitSchema, 'habits');
   modules.focusSessions = pick(focusSessionSchema, 'focusSessions');
   modules.reviews = pick(reviewSchema, 'reviews');
+  modules.journal = pick(journalSchema, 'journal');
   modules.goals = pick(goalSchema, 'goals');
   modules.customFoods = pick(customFoodSchema, 'customFoods');
   modules.customExercises = pick(customExerciseSchema, 'customExercises');
@@ -279,6 +281,7 @@ export function planImport(
   const habits = merge('habits', current.habits ?? []);
   const focusSessions = merge('focusSessions', current.focusSessions ?? []);
   const reviews = merge('reviews', current.reviews ?? []);
+  const journal = merge('journal', current.journal ?? []);
   const goals = merge('goals', current.goals ?? []);
   const customFoods = merge('customFoods', current.customFoods ?? []);
   const customExercises = merge('customExercises', current.customExercises ?? []);
@@ -303,6 +306,7 @@ export function planImport(
       habits: habits.items,
       focusSessions: focusSessions.items,
       reviews: reviews.items,
+      journal: journal.items,
       goals: goals.items,
       customFoods: customFoods.items,
       customExercises: customExercises.items,
@@ -368,6 +372,11 @@ export function planImport(
         incoming: count(backup.reviews),
         added: reviews.added,
         skipped: reviews.skipped,
+      },
+      journal: {
+        incoming: count(backup.journal),
+        added: journal.added,
+        skipped: journal.skipped,
       },
       goals: { incoming: count(backup.goals), added: goals.added, skipped: goals.skipped },
       customFoods: {

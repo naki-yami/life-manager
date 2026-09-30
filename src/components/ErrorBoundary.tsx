@@ -7,6 +7,7 @@ import { useHabitStore } from '../store/habitStore';
 import { useBodyStore } from '../store/bodyStore';
 import { useFocusStore } from '../store/focusStore';
 import { useReviewStore } from '../store/reviewStore';
+import { useJournalStore } from '../store/journalStore';
 import { useGoalStore } from '../store/goalStore';
 import { useDevStore } from '../store/devStore';
 import { useWritingStore } from '../store/writingStore';
@@ -78,6 +79,7 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
         habits: safeRead(() => useHabitStore.getState().habits, [], '习惯'),
         focusSessions: safeRead(() => useFocusStore.getState().sessions, [], '专注记录'),
         reviews: safeRead(() => useReviewStore.getState().reviews, [], '复盘'),
+        journal: safeRead(() => useJournalStore.getState().entries, [], '日记'),
         goals: safeRead(() => useGoalStore.getState().goals, [], '目标'),
         customFoods: safeRead(() => useLibraryStore.getState().customFoods, [], '自建食物'),
         customExercises: safeRead(() => useLibraryStore.getState().customExercises, [], '自建动作'),

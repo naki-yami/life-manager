@@ -75,6 +75,7 @@ const emptyBackup: BackupData = {
   habits: [],
   focusSessions: [],
   reviews: [],
+  journal: [],
   goals: [],
   customFoods: [],
   customExercises: [],

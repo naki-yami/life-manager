@@ -9,6 +9,7 @@ import { useHabitStore } from './habitStore';
 import { useBodyStore } from './bodyStore';
 import { useFocusStore } from './focusStore';
 import { useReviewStore } from './reviewStore';
+import { useJournalStore } from './journalStore';
 import { useGoalStore } from './goalStore';
 import { useThemeStore } from './themeStore';
 import { useUiStore } from './uiStore';
@@ -46,6 +47,7 @@ const STORES: HydratableStore[] = [
   useBodyStore,
   useFocusStore,
   useReviewStore,
+  useJournalStore,
   useGoalStore,
   useThemeStore,
   useUiStore,

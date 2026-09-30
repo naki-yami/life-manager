@@ -42,6 +42,7 @@ function emptyBackupData(): BackupData {
     habits: [],
     focusSessions: [],
     reviews: [],
+  journal: [],
     goals: [],
     customFoods: [],
     customExercises: [],
