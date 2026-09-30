@@ -55,7 +55,7 @@ import {
   todayKey,
 } from '../utils/date';
 import { seriesByDay, seriesByMonth, seriesByWeek } from '../utils/stats';
-import { FoodItem, MealRecord, MealType } from '../types';
+import { FoodItem, MealRecord, MealTemplate, MealType } from '../types';
 import { useNewEntryShortcut } from '../hooks/useShortcuts';
 
 type View = 'day' | 'all';
@@ -116,14 +116,26 @@ const emptyItem = (): FoodDraft => ({
 });
 
 export const DietPage: React.FC = () => {
-  const { records, addRecord, deleteRecord, replaceRecords, goals, water, setGoals, setWater } =
-    useDietStore();
+  const {
+    records,
+    templates,
+    addRecord,
+    deleteRecord,
+    replaceRecords,
+    addTemplateFromRecord,
+    deleteTemplate,
+    goals,
+    water,
+    setGoals,
+    setWater,
+  } = useDietStore();
   const undoableRemove = useUndoableRemove();
 
   const [view, setView] = useState<View>('day');
   const [trendRange, setTrendRange] = useState<TrendRange>('day');
   const [selectedDate, setSelectedDate] = useState(todayKey());
   const [showAddModal, setShowAddModal] = useState(false);
+  const [pendingTemplateId, setPendingTemplateId] = useState<string | null>(null);
   useNewEntryShortcut(() => setShowAddModal(true));
 
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
@@ -246,9 +258,29 @@ export const DietPage: React.FC = () => {
   const trendLabel = TREND_RANGE.find((range) => range.value === trendRange)?.label ?? '';
 
   const pendingRecord = records.find((record) => record.id === pendingDeleteId) ?? null;
+  const pendingTemplate = templates.find((template) => template.id === pendingTemplateId) ?? null;
 
-  const openAddModal = (type: MealType, date = selectedDate): void => {
-    setForm({ type, date, items: [emptyItem()] });
+  const openAddModal = (type: MealType, date = selectedDate, template?: MealTemplate): void => {
+    /*
+     * 套用餐次模板（F16）：把模板的食物清单铺进表单。
+     *
+     * 剥掉条目 id —— 表单里的每一行都要是新的草稿，带着模板的 id 保存会让
+     * 记录的条目和模板的条目共用 id，之后「按 id 定位条目」的地方就会改错地方。
+     * 模板没有条目时退回一行空的，别让用户打开看到一个空白表单以为坏了。
+     */
+    const seeded: FoodDraft[] =
+      template && template.items.length > 0
+        ? template.items.map((item) => ({
+            name: item.name,
+            category: item.category,
+            calories: item.calories,
+            protein: item.protein ?? 0,
+            carbs: item.carbs ?? 0,
+            fat: item.fat ?? 0,
+          }))
+        : [emptyItem()];
+
+    setForm({ type: template?.type ?? type, date, items: seeded });
     setShowAddModal(true);
   };
 
@@ -354,13 +386,24 @@ export const DietPage: React.FC = () => {
             {view === 'all' ? ` · ${MEAL_LABEL[mealType]} · ${recordDate}` : ''}
           </p>
         </div>
-        <IconButton
-          label={`删除「${itemNames(record.items)}」这条记录`}
-          size="sm"
-          icon={<Trash2 size={15} />}
-          onClick={() => setPendingDeleteId(record.id)}
-          className="hover:text-danger"
-        />
+        <div className="flex shrink-0 items-center">
+          {/* 有食物条目才给「存成模板」：空记录存出来的模板没有意义 */}
+          {record.items.length > 0 && (
+            <IconButton
+              label={`把「${itemNames(record.items)}」存成模板`}
+              size="sm"
+              icon={<Copy size={15} />}
+              onClick={() => addTemplateFromRecord(record)}
+            />
+          )}
+          <IconButton
+            label={`删除「${itemNames(record.items)}」这条记录`}
+            size="sm"
+            icon={<Trash2 size={15} />}
+            onClick={() => setPendingDeleteId(record.id)}
+            className="hover:text-danger"
+          />
+        </div>
       </div>
     );
 
@@ -609,6 +652,51 @@ export const DietPage: React.FC = () => {
               onSelect={setSelectedDate}
               marks={calendarMarks}
             />
+          </CardBody>
+        </Card>
+      )}
+
+      {/*
+        餐次模板（F16）：只在日视图出现，因为它的用途就是「给这一天快速铺一餐」。
+        一条模板都没攒起来时整块不显示 —— 空着占地方，用户也不知道该拿它做什么。
+      */}
+      {view === 'day' && templates.length > 0 && (
+        <Card>
+          <CardHeader
+            title="常吃组合"
+            subtitle="点一下就按这一天的日期铺开，之后还能在表单里改"
+          />
+          <CardBody>
+            <ul className="flex flex-wrap gap-2">
+              {templates.map((template) => (
+                <li key={template.id}>
+                  <div className="flex items-center overflow-hidden rounded-full border border-line-subtle bg-inset">
+                    <button
+                      type="button"
+                      aria-label={`用模板「${template.name}」记录到 ${selectedDate}`}
+                      onClick={() => openAddModal(template.type, selectedDate, template)}
+                      className="px-3 py-1 text-xs text-content-secondary transition-colors duration-fast hover:bg-inset-strong hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-line-focus"
+                    >
+                      {template.name}
+                      <span className="ml-1.5 text-2xs text-content-tertiary">
+                        {formatNumber(
+                          template.items.reduce((sum, item) => sum + item.calories, 0),
+                        )}{' '}
+                        kcal
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={`删除模板「${template.name}」`}
+                      onClick={() => setPendingTemplateId(template.id)}
+                      className="border-l border-line-subtle px-2 py-1 text-content-tertiary transition-colors duration-fast hover:text-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-line-focus"
+                    >
+                      <X size={12} aria-hidden />
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
           </CardBody>
         </Card>
       )}
@@ -997,6 +1085,27 @@ export const DietPage: React.FC = () => {
         description={
           pendingRecord
             ? `确定要删除${pendingRecord.date}的「${itemNames(pendingRecord.items)}」吗？共 ${pendingRecord.totalCalories} kcal。`
+            : ''
+        }
+        confirmText="删除"
+        tone="danger"
+      />
+
+      {/*
+        删模板的确认框也是「删除」，但语气不一样：模板删掉不影响任何已有记录，
+        重建也只是再攒一次。所以描述里把这点说清楚，免得用户以为会连带丢数据。
+      */}
+      <ConfirmDialog
+        isOpen={pendingTemplate !== null}
+        onClose={() => setPendingTemplateId(null)}
+        onConfirm={() => {
+          if (pendingTemplateId) deleteTemplate(pendingTemplateId);
+          setPendingTemplateId(null);
+        }}
+        title="删除餐次模板"
+        description={
+          pendingTemplate
+            ? `确定要删除模板「${pendingTemplate.name}」吗？已经记录下来的饮食不受影响。`
             : ''
         }
         confirmText="删除"

@@ -37,7 +37,7 @@ import { useBodyStore } from '../store/bodyStore';
 import { useUndoableRemove } from '../hooks/useUndoableRemove';
 import { filterByKeyword } from '../utils/search';
 import { useEntityList } from '../hooks/useEntityList';
-import { formatNumber, todayKey } from '../utils/date';
+import { formatNumber, formatShortDate, todayKey } from '../utils/date';
 import { activeDays, seriesByDay, seriesByWeek } from '../utils/stats';
 import { epley1RM, personalBests } from '../utils/fitness';
 import {
@@ -59,7 +59,7 @@ import {
   weightOf,
   type BodyFieldMeta,
 } from '../utils/body';
-import type { BodyMetric, WorkoutRecord } from '../types';
+import type { BodyMetric, Exercise, FitnessPlan, WorkoutRecord } from '../types';
 import { ToastContext } from '../components/ui/toastContext';
 import { useNewEntryShortcut } from '../hooks/useShortcuts';
 import { allExercises, useLibraryStore, type LibraryExercise } from '../store/libraryStore';
@@ -76,6 +76,23 @@ interface ExerciseDraft {
 }
 
 const emptyExercise = (): ExerciseDraft => ({ name: '', sets: 3, reps: 10, weight: 0 });
+
+/**
+ * 把模板草稿清成能存的样子：丢掉没填名字的行，并剥掉 id。
+ *
+ * 不剥 id 会出事：同一份草稿保存两次（或先存模板再套用），模板里的动作会带着
+ * 上一轮的 id 进新记录，两条记录的动作用同一个 id 后，「按 id 定位动作」的地方
+ * 就会改到不该改的那条。
+ */
+const cleanPlanExercises = (drafts: ExerciseDraft[]): Exercise[] =>
+  drafts
+    .filter((draft) => draft.name.trim() !== '')
+    .map((draft) => ({
+      name: draft.name.trim(),
+      sets: draft.sets,
+      reps: draft.reps,
+      weight: draft.weight,
+    }));
 
 const emptyWorkoutForm = (): {
   planName: string;
@@ -154,6 +171,8 @@ export const FitnessPage: React.FC = () => {
     plans,
     records,
     addPlan,
+    updatePlan,
+    addPlanFromRecord,
     deletePlan,
     addRecord,
     deleteRecord,
@@ -169,6 +188,12 @@ export const FitnessPage: React.FC = () => {
   const [pendingPlanId, setPendingPlanId] = useState<string | null>(null);
   const [pendingRecordId, setPendingRecordId] = useState<string | null>(null);
   const [planForm, setPlanForm] = useState({ name: '', description: '' });
+  /** 新建计划的弹窗里要一并编动作清单（F16）；这套草稿与训练表单各自独立 */
+  const [planExercises, setPlanExercises] = useState<ExerciseDraft[]>([]);
+  /** 非空表示这个弹窗是「把某次训练存成模板」，保存时从那条记录取动作 */
+  const [planFromRecordId, setPlanFromRecordId] = useState<string | null>(null);
+  /** 非空表示在编辑已有模板（而不是新建） */
+  const [editingPlanId, setEditingPlanId] = useState<string | null>(null);
   const [workoutForm, setWorkoutForm] = useState(emptyWorkoutForm);
 
   // 动作库选择器（F9）：搜索 + 肌群/器械过滤 + 自建；选中后填进表单
@@ -303,14 +328,49 @@ export const FitnessPage: React.FC = () => {
   /** 表单选中的那天是不是已经有记录（用来提示「保存会更新它」） */
   const bodyFormHasRecord = bodyRecords.some((record) => record.date === bodyForm.date);
 
-  const openPlanModal = (): void => {
-    setPlanForm({ name: '', description: '' });
+  const openPlanModal = (template?: FitnessPlan): void => {
+    setPlanForm(
+      template
+        ? { name: template.name, description: template.description }
+        : { name: '', description: '' },
+    );
+    setPlanExercises(
+      template && template.exercises.length > 0
+        ? template.exercises.map(({ name, sets, reps, weight }) => ({ name, sets, reps, weight }))
+        : [],
+    );
+    setPlanFromRecordId(null);
+    setEditingPlanId(template?.id ?? null);
     setShowPlanModal(true);
   };
 
-  const openWorkoutModal = (planName = ''): void => {
-    setWorkoutForm({ ...emptyWorkoutForm(), planName });
+  const openWorkoutModal = (planName = '', exercises?: Exercise[]): void => {
+    /*
+     * 套用模板（F16）：把模板的动作清单铺进表单。
+     *
+     * 几条处理是刻意的：
+     * - 剥掉 id —— 表单里的每一行都要是新的草稿，id 留着会让保存时把模板的动作
+     *   和这条记录的动作用上同一个 id；
+     * - 重量留 0，模板里存的本来就是 0（见 fitnessStore.planExercisesFrom 的注释）；
+     * - 模板没有动作时退回一行空动作，否则用户打开表单看到一片空白会以为坏了。
+     */
+    const seeded: ExerciseDraft[] =
+      exercises && exercises.length > 0
+        ? exercises.map(({ name, sets, reps, weight }) => ({ name, sets, reps, weight }))
+        : [emptyExercise()];
+
+    setWorkoutForm({ ...emptyWorkoutForm(), planName, exercises: seeded });
     setShowWorkoutModal(true);
+  };
+
+  /** 把一次训练存成模板：直接拿记录里的动作，重量由 store 清掉 */
+  const openSaveAsPlanModal = (record: WorkoutRecord): void => {
+    setPlanForm({
+      name: record.planName.trim() || `${formatShortDate(record.date)} 的训练`,
+      description: '',
+    });
+    setPlanFromRecordId(record.id);
+    setShowPlanModal(true);
   };
 
   /** 身体指标的弹窗：新建时默认今天，编辑时带出那天的数据 */
@@ -413,7 +473,23 @@ export const FitnessPage: React.FC = () => {
   const handleAddPlan = (): void => {
     const name = planForm.name.trim();
     if (!name) return;
-    addPlan(name, planForm.description.trim());
+    const description = planForm.description.trim();
+
+    // 「把这次训练存成模板」：动作从那条记录来，忽略弹窗里编的那套
+    if (planFromRecordId !== null) {
+      const record = records.find((item) => item.id === planFromRecordId);
+      if (record) addPlanFromRecord(record, name);
+    } else if (editingPlanId !== null) {
+      // 编辑已有模板：连动作清单一起换掉
+      updatePlan(editingPlanId, {
+        name,
+        description,
+        exercises: cleanPlanExercises(planExercises),
+      });
+    } else {
+      addPlan(name, description, cleanPlanExercises(planExercises));
+    }
+
     setShowPlanModal(false);
   };
 
@@ -492,7 +568,7 @@ export const FitnessPage: React.FC = () => {
               >
                 记录训练
               </Button>
-              <Button icon={<Plus size={16} aria-hidden />} onClick={openPlanModal}>
+              <Button icon={<Plus size={16} aria-hidden />} onClick={() => openPlanModal()}>
                 新建计划
               </Button>
             </>
@@ -822,7 +898,7 @@ export const FitnessPage: React.FC = () => {
               }
               action={
                 plans.length === 0 ? (
-                  <Button icon={<Plus size={16} aria-hidden />} onClick={openPlanModal}>
+                  <Button icon={<Plus size={16} aria-hidden />} onClick={() => openPlanModal()}>
                     新建计划
                   </Button>
                 ) : (
@@ -845,20 +921,61 @@ export const FitnessPage: React.FC = () => {
                         {plan.description || '没有填写说明'}
                       </p>
                     </div>
-                    <IconButton
-                      label={`删除计划「${plan.name}」`}
-                      size="sm"
-                      icon={<Trash2 size={15} />}
-                      onClick={() => setPendingPlanId(plan.id)}
-                      className="hover:text-danger"
-                    />
+                    <div className="flex shrink-0 items-center">
+                      <IconButton
+                        label={`编辑计划「${plan.name}」`}
+                        size="sm"
+                        icon={<Pencil size={15} />}
+                        onClick={() => openPlanModal(plan)}
+                      />
+                      <IconButton
+                        label={`删除计划「${plan.name}」`}
+                        size="sm"
+                        icon={<Trash2 size={15} />}
+                        onClick={() => setPendingPlanId(plan.id)}
+                        className="hover:text-danger"
+                      />
+                    </div>
                   </div>
+
+                  {/*
+                    动作清单只露前 3 个：卡片是网格里的一个格子，把整套动作摊开会把
+                    其它模板挤下去。想看全的点「编辑」。
+                  */}
+                  <div className="mt-3">
+                    {plan.exercises.length === 0 ? (
+                      <p className="text-2xs text-content-tertiary">
+                        还没有动作，点「编辑」补上就能一键开练
+                      </p>
+                    ) : (
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="text-2xs text-content-tertiary">
+                          {plan.exercises.length} 个动作
+                        </span>
+                        {plan.exercises.slice(0, 3).map((exercise, index) => (
+                          <Badge key={index} tone="default">
+                            {exercise.name}
+                          </Badge>
+                        ))}
+                        {plan.exercises.length > 3 && (
+                          <span className="text-2xs text-content-tertiary">
+                            +{plan.exercises.length - 3}
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
                   <div className="mt-3 flex items-center justify-between gap-2">
                     <span className="text-2xs text-content-tertiary">
                       建于 {new Date(plan.createdAt).toLocaleDateString('zh-CN')}
                     </span>
-                    <Button size="sm" variant="ghost" onClick={() => openWorkoutModal(plan.name)}>
-                      用它记录训练
+                    <Button
+                      size="sm"
+                      variant={plan.exercises.length > 0 ? 'primary' : 'ghost'}
+                      onClick={() => openWorkoutModal(plan.name, plan.exercises)}
+                    >
+                      {plan.exercises.length > 0 ? '用模板开始训练' : '用它记录训练'}
                     </Button>
                   </div>
                 </Card>
@@ -929,13 +1046,27 @@ export const FitnessPage: React.FC = () => {
                             <p className="mt-2 text-sm text-content-tertiary">{record.notes}</p>
                           )}
                         </div>
-                        <IconButton
-                          label={`删除 ${record.date} 的训练记录`}
-                          size="sm"
-                          icon={<Trash2 size={15} />}
-                          onClick={() => setPendingRecordId(record.id)}
-                          className="hover:text-danger"
-                        />
+                        <div className="flex shrink-0 items-center">
+                          {/*
+                            只在有动作时才给「存成模板」：空记录存出来的模板没有意义，
+                            点了也是白点，不如干脆不显示。
+                          */}
+                          {record.exercises.length > 0 && (
+                            <IconButton
+                              label={`把 ${record.date} 的训练存成模板`}
+                              size="sm"
+                              icon={<Copy size={15} />}
+                              onClick={() => openSaveAsPlanModal(record)}
+                            />
+                          )}
+                          <IconButton
+                            label={`删除 ${record.date} 的训练记录`}
+                            size="sm"
+                            icon={<Trash2 size={15} />}
+                            onClick={() => setPendingRecordId(record.id)}
+                            className="hover:text-danger"
+                          />
+                        </div>
                       </div>
                     </Card>
                   </li>
@@ -949,15 +1080,26 @@ export const FitnessPage: React.FC = () => {
       <Modal
         isOpen={showPlanModal}
         onClose={() => setShowPlanModal(false)}
-        title="新建训练计划"
-        description="一个计划可以对应一天或一个训练周期"
+        title={
+          planFromRecordId !== null
+            ? '存成训练日模板'
+            : editingPlanId !== null
+              ? '编辑训练计划'
+              : '新建训练计划'
+        }
+        description={
+          planFromRecordId !== null
+            ? '把这天做的动作存成模板，下次一键铺开'
+            : '把动作清单填进来，以后就能一键开始这一天的训练'
+        }
+        size="lg"
         footer={
           <>
             <Button variant="secondary" onClick={() => setShowPlanModal(false)}>
               取消
             </Button>
             <Button onClick={handleAddPlan} disabled={!planForm.name.trim()}>
-              创建
+              {editingPlanId !== null ? '保存' : '创建'}
             </Button>
           </>
         }
@@ -978,6 +1120,92 @@ export const FitnessPage: React.FC = () => {
             multiline
             rows={3}
           />
+
+          {planFromRecordId !== null ? (
+            // 从记录推导动作：不给编辑入口，免得用户以为自己改的是模板内容。
+            // 真要改，建完模板再点「编辑」。
+            <div className="rounded border border-line-subtle bg-inset p-3">
+              <p className="text-xs text-content-tertiary">
+                动作清单将从这条记录里取（
+                {records.find((item) => item.id === planFromRecordId)?.exercises.length ?? 0} 个动作）。
+                重量不会带过来，模板只记动作、组数与次数。
+              </p>
+            </div>
+          ) : (
+            <div>
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <span className="text-sm font-medium text-content">动作清单</span>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  icon={<Plus size={15} aria-hidden />}
+                  onClick={() => setPlanExercises((list) => [...list, emptyExercise()])}
+                >
+                  加动作
+                </Button>
+              </div>
+              {planExercises.length === 0 ? (
+                <p className="text-xs text-content-tertiary">
+                  还没有动作。可以先留空，之后再来补 —— 空模板仍然可以「用它记录训练」。
+                </p>
+              ) : (
+                <ul className="space-y-2">
+                  {planExercises.map((exercise, index) => (
+                    <li key={index} className="flex items-center gap-2">
+                      <Input
+                        aria-label={`动作 ${index + 1} 名称`}
+                        value={exercise.name}
+                        onChange={(event) =>
+                          setPlanExercises((list) =>
+                            list.map((item, i) =>
+                              i === index ? { ...item, name: event.target.value } : item,
+                            ),
+                          )
+                        }
+                        placeholder="动作名称"
+                        className="min-w-0 flex-1"
+                      />
+                      <NumberInput
+                        ariaLabel={`动作 ${index + 1} 组数`}
+                        value={exercise.sets}
+                        min={0}
+                        onChange={(value) =>
+                          setPlanExercises((list) =>
+                            list.map((item, i) =>
+                              i === index ? { ...item, sets: value === '' ? 0 : value } : item,
+                            ),
+                          )
+                        }
+                        className="w-20 shrink-0"
+                      />
+                      <NumberInput
+                        ariaLabel={`动作 ${index + 1} 次数`}
+                        value={exercise.reps}
+                        min={0}
+                        onChange={(value) =>
+                          setPlanExercises((list) =>
+                            list.map((item, i) =>
+                              i === index ? { ...item, reps: value === '' ? 0 : value } : item,
+                            ),
+                          )
+                        }
+                        className="w-20 shrink-0"
+                      />
+                      <IconButton
+                        label={`删除动作 ${index + 1}`}
+                        size="sm"
+                        icon={<X size={15} />}
+                        onClick={() =>
+                          setPlanExercises((list) => list.filter((_, i) => i !== index))
+                        }
+                        className="shrink-0 hover:text-danger"
+                      />
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
         </div>
       </Modal>
 

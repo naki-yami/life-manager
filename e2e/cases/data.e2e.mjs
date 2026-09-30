@@ -16,8 +16,10 @@ import { delay } from '../lib/cdp.mjs';
 export const TASK_TITLE = 'E2E 冒烟任务';
 /** 迁移用例用的标题，与上面的刻意区分开，免得两条用例互相看到对方的数据 */
 export const LEGACY_TASK_TITLE = 'E2E 迁移任务';
+/** 餐次模板用例的专用食物名，避免与别的用例撞上 */
+export const TEMPLATE_FOOD = 'E2E 模板燕麦';
 /** 与 src/store/persist.ts 的 STORE_VERSION 对应；写回时版本对不上 zustand 会走 migrate */
-export const STORE_VERSION = 11;
+export const STORE_VERSION = 12;
 
 /** 在页面里读 IndexedDB 中某个 key 的原始字符串 */
 async function readRaw(session, key) {
@@ -204,6 +206,171 @@ export function registerDataCases() {
 
     // 收尾：把旧 key 清掉，免得影响后面的用例
     await session.evaluate(`localStorage.removeItem('tasks-storage'); 1`);
+  });
+
+  test('v12-migration', 'v11 的旧档升到 v12：补出空的动作清单与餐次模板，旧数据不丢', async (ctx) => {
+    const { session, baseUrl } = ctx;
+
+    /*
+     * 这条盯的是升级路径，不是「能不能读」。
+     *
+     * 真实场景是：用户机器上躺着一份 v11 的 lm:fitness 与 lm:diet，装上 v12 之后
+     * 首次打开。migrateState 只补根级字段，所以 templates / exercises 这两个新字段
+     * 会由 normalize 层在读到记录时补齐。整条链路上任何一环漏了，用户看到的就是
+     * 「模板区不见了」或者「训练计划点开是空的」—— 而旧数据本身必须一个不少。
+     *
+     * 刻意写 v11 而不是当前版本：版本号对得上就不会走 migrate，等于什么都没测。
+     */
+    await session.goto(`${baseUrl}/`, { waitMs: 1500 });
+
+    const fitnessV11 = {
+      state: {
+        plans: [
+          {
+            id: 'p-legacy',
+            name: 'E2E 旧版推日',
+            description: 'v11 建的，当时还没有动作清单',
+            createdAt: '2026-01-01T00:00:00.000Z',
+          },
+        ],
+        records: [],
+      },
+      version: 11,
+    };
+    const dietV11 = {
+      state: {
+        records: [
+          {
+            id: 'd-legacy',
+            date: '2026-01-01',
+            type: 'breakfast',
+            items: [{ id: 'it1', name: 'E2E 旧版燕麦', category: '主食', calories: 300 }],
+            totalCalories: 300,
+            createdAt: '2026-01-01T00:00:00.000Z',
+          },
+        ],
+        goals: { calories: 2000, protein: 80 },
+        water: {},
+      },
+      version: 11,
+    };
+
+    const seeded = await session.evaluate(
+      `(() => {
+        localStorage.removeItem('lm:fitness');
+        localStorage.removeItem('lm:diet');
+        localStorage.setItem('fitness-storage', ${JSON.stringify(JSON.stringify(fitnessV11))});
+        localStorage.setItem('diet-storage', ${JSON.stringify(JSON.stringify(dietV11))});
+        return true;
+      })()`,
+    );
+    assert.ok(seeded, 'v11 旧档的播种');
+
+    // 整页刷新让模块重新求值，迁移与 hydrate 才有机会跑
+    await session.goto(`${baseUrl}/fitness`, { waitMs: 2000 });
+    session.clearErrors();
+
+    const fitness = await readState(session, 'lm:fitness');
+    assert.ok(fitness, 'lm:fitness 应当已落到 IndexedDB');
+    const plan = (fitness.plans ?? []).find((p) => p.id === 'p-legacy');
+    assert.ok(plan, 'v11 的训练计划必须原样保留');
+    assert.equal(plan.name, 'E2E 旧版推日', '计划名不该被改写');
+    assert.equal(plan.description, 'v11 建的，当时还没有动作清单', '说明不该被改写');
+    // v12 新增字段：补成空数组而不是 undefined，否则渲染层 plan.exercises.length 会炸
+    assert.ok(Array.isArray(plan.exercises), '新补的动作清单应当是数组');
+    assert.equal(plan.exercises.length, 0, '旧计划没有动作，补出来就该是空的');
+
+    await session.goto(`${baseUrl}/diet`, { waitMs: 2000 });
+    const diet = await readState(session, 'lm:diet');
+    assert.ok(diet, 'lm:diet 应当已落到 IndexedDB');
+    assert.ok(Array.isArray(diet.templates), '新补的餐次模板应当是数组');
+    assert.equal(diet.templates.length, 0, '旧档没有模板，补出来就该是空的');
+    const record = (diet.records ?? []).find((r) => r.id === 'd-legacy');
+    assert.ok(record, 'v11 的饮食记录必须原样保留');
+    assert.equal(record.totalCalories, 300, '旧记录的热量不该丢');
+
+    // 界面上也要能看见旧数据，别只活在库里
+    const bodyText = await session.text('#main-content');
+    assert.includes(bodyText, '早餐', '饮食页应当渲染出旧记录所在的餐次');
+    assert.empty(session.pageErrors, '升级路径上不该有未捕获异常');
+
+    await session.evaluate(
+      `localStorage.removeItem('fitness-storage'); localStorage.removeItem('diet-storage'); 1`,
+    );
+  });
+
+  test('meal-template-prefill', '一餐存成模板后，点一下就能按今天预填进表单', async (ctx) => {
+    const { session, baseUrl } = ctx;
+    await session.goto(`${baseUrl}/diet`, { waitMs: 1500 });
+    session.clearErrors();
+
+    // 先记一餐，才有东西可存成模板
+    const opened = await session.clickByText('记录饮食');
+    assert.clicked(opened, '「记录饮食」按钮');
+    await delay(600);
+    await session.fill('input[aria-label="第 1 个食物名称"]', TEMPLATE_FOOD);
+    await session.fill('input[aria-label="第 1 个食物的热量"]', '233');
+    await session.clickByText('保存');
+    await delay(800);
+
+    const afterSave = await readState(session, 'lm:diet');
+    assert.equal(
+      (afterSave?.records ?? []).length,
+      1,
+      `保存后应当有 1 条记录（实际 ${JSON.stringify(afterSave?.records ?? [])}）`,
+    );
+
+    // 记录行上的「存成模板」
+    const saved = await session.evaluate(
+      `(() => {
+        const b = [...document.querySelectorAll('button')].find(n =>
+          (n.getAttribute('aria-label') ?? '').startsWith('把「'));
+        if (!b) return 'MISS';
+        b.click();
+        return b.getAttribute('aria-label');
+      })()`,
+    );
+    assert.ok(saved !== 'MISS', '记录行上应当有「存成模板」按钮');
+    await delay(500);
+
+    const templates = await readState(session, 'lm:diet');
+    assert.equal((templates?.templates ?? []).length, 1, '模板应当落库');
+
+    // 模板区出现，点它预填
+    const bodyText = await session.text('#main-content');
+    assert.includes(bodyText, '常吃组合', '有模板之后应当出现模板区');
+
+    const filled = await session.evaluate(
+      `(() => {
+        const b = [...document.querySelectorAll('button')].find(n =>
+          (n.getAttribute('aria-label') ?? '').startsWith('用模板「'));
+        if (!b) return 'MISS';
+        b.click();
+        return b.getAttribute('aria-label');
+      })()`,
+    );
+    assert.ok(filled !== 'MISS', '模板胶囊应当可点');
+    await delay(800);
+
+    // 表单里应当已经铺好了模板的食物，日期是今天
+    const name = await session.evaluate(
+      `(() => { const el = document.querySelector('input[aria-label="第 1 个食物名称"]'); return el ? el.value : null; })()`,
+    );
+    assert.equal(name, TEMPLATE_FOOD, '模板的食物名应当被预填');
+
+    const today = new Date().toLocaleDateString('sv-SE');
+    // 日期字段走的是可见 <label for>，不是 aria-label，得按 label 文本反查 id
+    const date = await session.evaluate(
+      `(() => {
+        const label = [...document.querySelectorAll('label')].find(n => n.textContent.trim().replace(/\\*$/, '') === '日期');
+        if (!label) return 'NO_LABEL';
+        const el = document.getElementById(label.getAttribute('for'));
+        return el ? el.value : null;
+      })()`,
+    );
+    assert.equal(date, today, '预填的日期应当是今天');
+
+    assert.empty(session.pageErrors, '这条链路里不该有未捕获异常');
   });
 
   test('theme-persists', '主题存在 lm:theme 上，且刷新后保持', async (ctx) => {

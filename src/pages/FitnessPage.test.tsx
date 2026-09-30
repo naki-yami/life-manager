@@ -439,6 +439,94 @@ describe('FitnessPage', () => {
     expect(useLibraryStore.getState().customExercises).toHaveLength(0);
   });
 
+  it('训练日模板：建计划时能填动作清单，卡片露出动作与一键开练', async () => {
+    render(<FitnessPage />);
+
+    await userEvent.click(screen.getAllByRole('button', { name: '新建计划' })[0]!);
+    const dialog = screen.getByRole('dialog', { name: '新建训练计划' });
+    await userEvent.type(within(dialog).getByLabelText(/^计划名称/), '推日');
+
+    expect(within(dialog).getByText(/还没有动作/)).toBeInTheDocument();
+    await userEvent.click(within(dialog).getByRole('button', { name: '加动作' }));
+    await userEvent.type(within(dialog).getByLabelText('动作 1 名称'), '杠铃卧推');
+    await userEvent.click(within(dialog).getByRole('button', { name: '加动作' }));
+    await userEvent.type(within(dialog).getByLabelText('动作 2 名称'), '绳索下压');
+    const sets2 = within(dialog).getByRole('spinbutton', { name: '动作 2 组数' });
+    await userEvent.clear(sets2);
+    await userEvent.type(sets2, '4');
+    await userEvent.click(within(dialog).getByRole('button', { name: '创建' }));
+
+    const plan = useFitnessStore.getState().plans[0]!;
+    expect(plan.exercises.map((exercise) => exercise.name)).toEqual(['杠铃卧推', '绳索下压']);
+    expect(plan.exercises[1]!.sets).toBe(4);
+    expect(plan.exercises.every((exercise) => exercise.weight === 0)).toBe(true);
+
+    expect(screen.getByText('2 个动作')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '用模板开始训练' })).toBeInTheDocument();
+  });
+
+  it('用模板开始训练会把动作铺进表单，且不共用模板的动作 id', async () => {
+    useFitnessStore
+      .getState()
+      .addPlan('推日', '', [{ name: '杠铃卧推', sets: 5, reps: 5, weight: 0 }]);
+
+    render(<FitnessPage />);
+    await userEvent.click(screen.getByRole('button', { name: '用模板开始训练' }));
+
+    const dialog = screen.getByRole('dialog', { name: '记录训练' });
+    expect(within(dialog).getByLabelText('训练计划')).toHaveValue('推日');
+    expect(within(dialog).getByLabelText('第 1 个动作名称')).toHaveValue('杠铃卧推');
+    expect(within(dialog).getByRole('spinbutton', { name: '第 1 个动作的组数' })).toHaveValue(5);
+
+    await userEvent.click(within(dialog).getByRole('button', { name: '保存记录' }));
+
+    const record = useFitnessStore.getState().records[0]!;
+    const plan = useFitnessStore.getState().plans[0]!;
+    expect(record.exercises[0]!.name).toBe('杠铃卧推');
+    // 表单里的每一行都是新草稿，不该复用模板的条目 id
+    expect(record.exercises[0]!.id).not.toBe(plan.exercises[0]!.id);
+  });
+
+  it('计划可以二次编辑，保存是修正而不是新建', async () => {
+    useFitnessStore.getState().addPlan('推日', '胸肩三头', [
+      { name: '杠铃卧推', sets: 5, reps: 5, weight: 0 },
+    ]);
+    render(<FitnessPage />);
+
+    await userEvent.click(screen.getByRole('button', { name: '编辑计划「推日」' }));
+    const dialog = screen.getByRole('dialog', { name: '编辑训练计划' });
+
+    expect(within(dialog).getByLabelText(/^计划名称/)).toHaveValue('推日');
+    expect(within(dialog).getByLabelText('动作 1 名称')).toHaveValue('杠铃卧推');
+    expect(within(dialog).getByRole('button', { name: '保存' })).toBeInTheDocument();
+
+    await userEvent.type(within(dialog).getByLabelText(/^计划名称/), '（改）');
+    await userEvent.click(within(dialog).getByRole('button', { name: '保存' }));
+
+    expect(useFitnessStore.getState().plans).toHaveLength(1);
+    expect(useFitnessStore.getState().plans[0]!.name).toBe('推日（改）');
+  });
+
+  it('把一次训练存成模板：重量不带过来', async () => {
+    addRecord('推日', todayKey(), 60);
+    render(<FitnessPage />);
+    await userEvent.click(screen.getByRole('button', { name: /^训练记录/ }));
+
+    await userEvent.click(
+      screen.getByRole('button', { name: `把 ${todayKey()} 的训练存成模板` }),
+    );
+    const dialog = screen.getByRole('dialog', { name: '存成训练日模板' });
+
+    expect(within(dialog).getByText(/重量不会带过来/)).toBeInTheDocument();
+    await userEvent.click(within(dialog).getByRole('button', { name: '创建' }));
+
+    const plan = useFitnessStore.getState().plans[0]!;
+    expect(plan.name).toBe('推日');
+    expect(plan.exercises.map((exercise) => exercise.name)).toEqual(['杠铃卧推']);
+    // 60kg 是那天的状态，不是模板的一部分
+    expect(plan.exercises[0]!.weight).toBe(0);
+  });
+
   it('库里没有的动作可以存为自建，并立刻能选', async () => {
     render(<FitnessPage />);
 

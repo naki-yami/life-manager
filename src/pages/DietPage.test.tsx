@@ -9,7 +9,12 @@ import { addDays, formatDayLabel, todayKey } from '../utils/date';
 import { FoodItem, MealType } from '../types';
 
 beforeEach(() => {
-  useDietStore.setState({ records: [], goals: { calories: 2000, protein: 80 }, water: {} });
+  useDietStore.setState({
+    records: [],
+    goals: { calories: 2000, protein: 80 },
+    water: {},
+    templates: [],
+  });
   useLibraryStore.setState({ customFoods: [], customExercises: [] });
 });
 
@@ -290,6 +295,72 @@ describe('DietPage', () => {
     expect(within(dialog).getByLabelText('第 1 个食物名称')).toHaveValue('鸡胸肉');
     expect(within(dialog).getByLabelText('第 1 个食物的热量')).toHaveValue(133);
     expect(useLibraryStore.getState().customFoods).toHaveLength(0);
+  });
+
+  it('餐次模板：把一餐存成模板，再从「常吃组合」一键预填', async () => {
+    addMeal(today, 'lunch', [{ name: '鸡胸肉', category: '蛋白质', calories: 200 }]);
+    render(<DietPage />);
+
+    // 一条模板都没有时整块不渲染
+    expect(screen.queryByText('常吃组合')).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: '把「鸡胸肉」存成模板' }));
+
+    const templates = useDietStore.getState().templates;
+    expect(templates).toHaveLength(1);
+    expect(templates[0]!.name).toBe('午餐 · 鸡胸肉');
+    expect(templates[0]!.type).toBe('lunch');
+    // 模板与来源记录各自持有条目，id 不能撞
+    const record = useDietStore.getState().records[0]!;
+    expect(templates[0]!.items[0]!.id).not.toBe(record.items[0]!.id);
+
+    expect(screen.getByText('常吃组合')).toBeInTheDocument();
+    await userEvent.click(
+      screen.getByRole('button', { name: `用模板「午餐 · 鸡胸肉」记录到 ${today}` }),
+    );
+
+    const dialog = screen.getByRole('dialog', { name: '记录饮食' });
+    expect(within(dialog).getByLabelText('日期')).toHaveValue(today);
+    expect(within(dialog).getByLabelText('餐次')).toHaveValue('lunch');
+    expect(within(dialog).getByLabelText('第 1 个食物名称')).toHaveValue('鸡胸肉');
+    expect(within(dialog).getByRole('spinbutton', { name: '第 1 个食物的热量' })).toHaveValue(200);
+  });
+
+  it('套用模板保存后，记录里的条目 id 与模板不同', async () => {
+    addMeal(today, 'breakfast', [{ name: '燕麦', category: '主食', calories: 300 }]);
+    render(<DietPage />);
+    await userEvent.click(screen.getByRole('button', { name: '把「燕麦」存成模板' }));
+
+    await userEvent.click(screen.getByRole('button', { name: `用模板「早餐 · 燕麦」记录到 ${today}` }));
+    const dialog = screen.getByRole('dialog', { name: '记录饮食' });
+    await userEvent.click(within(dialog).getByRole('button', { name: '保存' }));
+
+    const template = useDietStore.getState().templates[0]!;
+    const seeded = useDietStore
+      .getState()
+      .records.find((item) => item.id !== useDietStore.getState().records[0]!.id)!;
+    expect(seeded.items[0]!.id).not.toBe(template.items[0]!.id);
+  });
+
+  it('重名模板自动加序号，删除模板不影响已经记录的饮食', async () => {
+    addMeal(today, 'lunch', [{ name: '鸡胸肉', category: '蛋白质', calories: 200 }]);
+    render(<DietPage />);
+
+    await userEvent.click(screen.getByRole('button', { name: '把「鸡胸肉」存成模板' }));
+    await userEvent.click(screen.getByRole('button', { name: '把「鸡胸肉」存成模板' }));
+
+    const names = useDietStore.getState().templates.map((template) => template.name);
+    expect(names).toEqual(['午餐 · 鸡胸肉', '午餐 · 鸡胸肉 (2)']);
+
+    await userEvent.click(screen.getByRole('button', { name: '删除模板「午餐 · 鸡胸肉 (2)」' }));
+    const dialog = screen.getByRole('dialog', { name: '删除餐次模板' });
+    expect(within(dialog).getByText(/已经记录下来的饮食不受影响/)).toBeInTheDocument();
+    await userEvent.click(within(dialog).getByRole('button', { name: '删除' }));
+
+    expect(useDietStore.getState().templates.map((template) => template.name)).toEqual([
+      '午餐 · 鸡胸肉',
+    ]);
+    expect(useDietStore.getState().records).toHaveLength(1);
   });
 
   it('库里没有的可以存为自建，并立刻能选', async () => {
