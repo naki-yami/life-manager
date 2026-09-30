@@ -16,6 +16,10 @@ const book = (title: string, author = ''): Book => ({
   progress: 0,
   notes: [],
   tags: [],
+  rating: 0,
+  review: '',
+  favorite: false,
+  statusHistory: [],
   createdAt: '2026-01-01T00:00:00.000Z',
 });
 
@@ -29,6 +33,10 @@ const game = (name: string): Game => ({
   achievements: [],
   notes: '',
   tags: [],
+  rating: 0,
+  review: '',
+  favorite: false,
+  statusHistory: [],
   createdAt: '2026-01-01T00:00:00.000Z',
 });
 

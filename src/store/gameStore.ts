@@ -7,6 +7,7 @@ import { persistOptions } from './persist';
 import { asRecord, normalizeArray } from './normalize';
 import { gameSchema, gameSessionSchema } from '../services/schemas';
 import { normalizeTags } from '../utils/tags';
+import { todayKey } from '../utils/date';
 
 interface GameState {
   games: Game[];
@@ -50,6 +51,10 @@ export const useGameStore = create<GameState>()(
               achievements: [],
               notes: '',
               tags: normalizeTags(tags),
+              rating: 0,
+              review: '',
+              favorite: false,
+              statusHistory: [],
               createdAt: new Date().toISOString(),
             },
           ],
@@ -61,7 +66,22 @@ export const useGameStore = create<GameState>()(
       deleteGame: (id) => set((state) => ({ games: state.games.filter((g) => g.id !== id) })),
       updateGameStatus: (id, status) =>
         set((state) => ({
-          games: state.games.map((g) => (g.id === id ? { ...g, status } : g)),
+          games: state.games.map((g) => {
+            if (g.id !== id) return g;
+            // F11 状态时间线：状态真的变了才记一笔，最近变更排最前
+            const statusHistory =
+              g.status === status
+                ? g.statusHistory
+                : [{ id: createId(), status, date: todayKey() }, ...g.statusHistory];
+            return {
+              ...g,
+              status,
+              statusHistory,
+              // 标记通关记下通关日期；退回其它状态清掉
+              ...(status === 'completed' && !g.finishedAt ? { finishedAt: todayKey() } : {}),
+              ...(status !== 'completed' && g.finishedAt ? { finishedAt: undefined } : {}),
+            };
+          }),
         })),
       updateHoursPlayed: (id, hours) =>
         set((state) => ({

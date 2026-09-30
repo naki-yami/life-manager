@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Clock, Gamepad2, Plus, StickyNote, Trash2, Trophy } from 'lucide-react';
+import { Clock, Gamepad2, Plus, Star, StickyNote, Trash2, Trophy } from 'lucide-react';
 import {
   Badge,
   Button,
@@ -158,6 +158,10 @@ export const GamesPage: React.FC = () => {
   });
   const [achievementForm, setAchievementForm] = useState({ name: '', description: '' });
   const [noteInput, setNoteInput] = useState('');
+  const [reviewInput, setReviewInput] = useState('');
+  const [finishedAtInput, setFinishedAtInput] = useState('');
+  /** 评分草稿：和短评 / 通关日期一样随「保存」写入，`取消` 就该什么都不改 */
+  const [ratingInput, setRatingInput] = useState(0);
   const [showSessionModal, setShowSessionModal] = useState(false);
   const [pendingSessionId, setPendingSessionId] = useState<string | null>(null);
   const [sessionForm, setSessionForm] = useState<{
@@ -168,6 +172,26 @@ export const GamesPage: React.FC = () => {
   }>({ gameId: '', date: todayKey(), hours: 1, note: '' });
 
   const totalHours = games.reduce((sum, game) => sum + game.hoursPlayed, 0);
+
+  // 「下一步玩什么」（F11）：搁置的优先，按选定方式挑一个推荐
+  const [nextUpSort, setNextUpSort] = useState<'backlog' | 'rating' | 'hours'>('backlog');
+  const backlogCount = games.filter((game) => game.status === 'backlog').length;
+  const nextUpCandidates = useMemo(
+    () =>
+      games.filter(
+        (game) => game.status === 'backlog' || (game.status === 'playing' && game.hoursPlayed < 2),
+      ),
+    [games],
+  );
+  const nextUpGame = useMemo(() => {
+    const sorted = [...nextUpCandidates].sort((a, b) => {
+      if (a.status !== b.status) return a.status === 'backlog' ? -1 : 1;
+      if (nextUpSort === 'rating') return b.rating - a.rating;
+      if (nextUpSort === 'hours') return a.hoursPlayed - b.hoursPlayed;
+      return a.createdAt.localeCompare(b.createdAt);
+    });
+    return sorted[0] ?? null;
+  }, [nextUpCandidates, nextUpSort]);
 
   const today = todayKey();
   const currentYear = today.slice(0, 4);
@@ -205,7 +229,6 @@ export const GamesPage: React.FC = () => {
     [sessions],
   );
 
-
   const detailGame = games.find((game) => game.id === detail?.gameId) ?? null;
   /** 详情栏标题：宽屏是卡片标题，窄屏是抽屉的可访问名称 */
   const detailKindLabel = detail?.kind === 'notes' ? '笔记' : '成就';
@@ -219,6 +242,9 @@ export const GamesPage: React.FC = () => {
 
   const openNotes = (game: Game): void => {
     setNoteInput(game.notes);
+    setReviewInput(game.review);
+    setFinishedAtInput(game.finishedAt ?? '');
+    setRatingInput(game.rating);
     setDetail({ gameId: game.id, kind: 'notes' });
   };
 
@@ -228,7 +254,14 @@ export const GamesPage: React.FC = () => {
   };
 
   const handleSaveNotes = (): void => {
-    if (detail) updateGame(detail.gameId, { notes: noteInput.trim() });
+    if (detail) {
+      updateGame(detail.gameId, {
+        notes: noteInput.trim(),
+        review: reviewInput.trim(),
+        rating: ratingInput,
+        finishedAt: finishedAtInput || undefined,
+      });
+    }
     closeDetail();
   };
 
@@ -522,7 +555,71 @@ export const GamesPage: React.FC = () => {
             </div>
           ) : (
             <div className="space-y-4">
-              <p className="text-xs text-content-tertiary">留空并保存即可清空</p>
+              {detailGame && (
+                <>
+                  <div>
+                    <p className="mb-1.5 text-sm font-medium text-content-secondary">评分</p>
+                    <div
+                      role="group"
+                      aria-label={`给「${detailGame.name}」评分`}
+                      className="flex flex-wrap gap-1"
+                    >
+                      {Array.from({ length: 10 }, (_, index) => index + 1).map((score) => (
+                        <button
+                          key={score}
+                          type="button"
+                          aria-pressed={ratingInput === score}
+                          onClick={() => setRatingInput(score)}
+                          className={`h-8 w-8 rounded text-xs font-medium transition-colors duration-fast ease-standard focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-line-focus ${
+                            ratingInput >= score
+                              ? 'bg-warning-soft text-warning'
+                              : 'bg-inset text-content-tertiary hover:text-content-secondary'
+                          }`}
+                        >
+                          {score}
+                        </button>
+                      ))}
+                      <Button size="sm" variant="ghost" onClick={() => setRatingInput(0)}>
+                        清除
+                      </Button>
+                    </div>
+                  </div>
+
+                  <Input
+                    label="短评"
+                    value={reviewInput}
+                    onChange={(event) => setReviewInput(event.target.value)}
+                    placeholder="一句话说说怎么样（可与笔记分开）"
+                  />
+
+                  {detailGame.status === 'completed' && (
+                    <Input
+                      label="通关日期"
+                      type="date"
+                      value={finishedAtInput}
+                      onChange={(event) => setFinishedAtInput(event.target.value)}
+                    />
+                  )}
+
+                  {detailGame.statusHistory.length > 0 && (
+                    <div>
+                      <p className="mb-1 text-sm font-medium text-content-secondary">状态时间线</p>
+                      <ul className="space-y-1 text-xs text-content-tertiary">
+                        {detailGame.statusHistory.map((entry) => (
+                          <li key={entry.id} className="flex items-center gap-2">
+                            <Badge tone="default">
+                              {STATUS_LABEL[entry.status as GameStatus] ?? entry.status}
+                            </Badge>
+                            <span className="tabular">{entry.date}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </>
+              )}
+
+              <p className="text-xs text-content-tertiary">笔记留空并保存即可清空</p>
               <Textarea
                 label="笔记"
                 value={noteInput}
@@ -540,6 +637,48 @@ export const GamesPage: React.FC = () => {
           )
         }
       >
+        {nextUpCandidates.length >= 2 && (
+          <Card>
+            <CardHeader
+              title="下一步玩什么"
+              subtitle={'从搁置和刚开坑的游戏里挑一个，按你选的方式排'}
+              action={
+                backlogCount > 1 ? (
+                  <Select
+                    aria-label="推荐排序方式"
+                    value={nextUpSort}
+                    onChange={(value) => setNextUpSort(value as typeof nextUpSort)}
+                    className="w-36"
+                    options={[
+                      { value: 'backlog', label: '积压最久优先' },
+                      { value: 'rating', label: '评分最高优先' },
+                      { value: 'hours', label: '耗时最短优先' },
+                    ]}
+                  />
+                ) : null
+              }
+            />
+            <CardBody>
+              {nextUpGame ? (
+                <div className="flex flex-wrap items-center gap-3">
+                  <Gamepad2 size={18} className="shrink-0 text-accent" aria-hidden />
+                  <span className="min-w-0 flex-1 truncate text-sm font-medium text-content">
+                    {nextUpGame.name}
+                  </span>
+                  <Badge tone="info">{nextUpGame.platform}</Badge>
+                  {nextUpGame.rating > 0 && <Badge tone="warning">★ {nextUpGame.rating}</Badge>}
+                  <span className="text-xs text-content-tertiary tabular">
+                    已玩 {formatNumber(Math.round(nextUpGame.hoursPlayed * 10) / 10)} 小时
+                    {nextUpGame.status === 'backlog' ? ' · 还没开过' : ' · 进行中'}
+                  </span>
+                </div>
+              ) : (
+                <p className="text-sm text-content-tertiary">没有搁置的游戏，随便玩！</p>
+              )}
+            </CardBody>
+          </Card>
+        )}
+
         <Toolbar
           search={{
             value: keyword,
@@ -597,7 +736,27 @@ export const GamesPage: React.FC = () => {
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
                           <h3 className="font-semibold text-content">{game.name}</h3>
+                          <button
+                            type="button"
+                            aria-pressed={game.favorite}
+                            aria-label={
+                              game.favorite ? `取消收藏「${game.name}」` : `收藏「${game.name}」`
+                            }
+                            onClick={() => updateGame(game.id, { favorite: !game.favorite })}
+                            className={`shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-line-focus ${
+                              game.favorite
+                                ? 'text-warning'
+                                : 'text-content-tertiary hover:text-content-secondary'
+                            }`}
+                          >
+                            <Star
+                              size={15}
+                              fill={game.favorite ? 'currentColor' : 'none'}
+                              aria-hidden
+                            />
+                          </button>
                           <Badge tone="info">{game.platform}</Badge>
+                          {game.rating > 0 && <Badge tone="warning">★ {game.rating}</Badge>}
                           {game.achievements.length > 0 && (
                             <Badge tone={unlocked > 0 ? 'success' : 'default'}>
                               成就 {unlocked}/{game.achievements.length}

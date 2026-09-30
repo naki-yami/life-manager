@@ -7,6 +7,7 @@ import { persistOptions } from './persist';
 import { asRecord, normalizeArray } from './normalize';
 import { bookSchema, readingSessionSchema } from '../services/schemas';
 import { normalizeTags } from '../utils/tags';
+import { todayKey } from '../utils/date';
 
 interface BookState {
   books: Book[];
@@ -44,6 +45,10 @@ export const useBookStore = create<BookState>()(
               progress: 0,
               notes: [],
               tags: normalizeTags(tags),
+              rating: 0,
+              review: '',
+              favorite: false,
+              statusHistory: [],
               createdAt: new Date().toISOString(),
             },
           ],
@@ -60,6 +65,11 @@ export const useBookStore = create<BookState>()(
               ? {
                   ...b,
                   status,
+                  // F11 状态时间线：状态真的变了才记一笔，最近变更排最前
+                  statusHistory:
+                    b.status === status
+                      ? b.statusHistory
+                      : [{ id: createId(), status, date: todayKey() }, ...b.statusHistory],
                   // 记下第一次读完的时间，重复标记不覆盖，便于按年统计
                   finishedAt:
                     status === 'finished' ? (b.finishedAt ?? new Date().toISOString()) : undefined,

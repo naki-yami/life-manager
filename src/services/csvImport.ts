@@ -242,6 +242,10 @@ export function planBookCsvImport(
       progress: finished ? 100 : 0,
       notes: [],
       tags: [],
+      rating: 0,
+      review: '',
+      favorite: false,
+      statusHistory: [],
       createdAt: now,
       ...(finished && dateRead ? { finishedAt: new Date(dateRead).toISOString() } : {}),
     });
@@ -292,6 +296,10 @@ export function planGameCsvImport(text: string, existingGames: readonly Game[]):
       achievements: [],
       notes: '',
       tags: [],
+      rating: 0,
+      review: '',
+      favorite: false,
+      statusHistory: [],
       createdAt: new Date().toISOString(),
     });
   });

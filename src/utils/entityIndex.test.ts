@@ -43,6 +43,10 @@ const book = (over: Partial<Book> & { id: string; title: string }): Book => ({
   createdAt: '2026-09-01T00:00:00.000Z',
   ...over,
   tags: over.tags ?? [],
+  rating: over.rating ?? 0,
+  review: over.review ?? '',
+  favorite: over.favorite ?? false,
+  statusHistory: over.statusHistory ?? [],
 });
 
 const devProject = (over: Partial<DevProject> & { id: string; name: string }): DevProject => ({
@@ -86,6 +90,10 @@ const game = (over: Partial<Game> & { id: string; name: string }): Game => ({
   createdAt: '2026-09-01T00:00:00.000Z',
   ...over,
   tags: over.tags ?? [],
+  rating: over.rating ?? 0,
+  review: over.review ?? '',
+  favorite: over.favorite ?? false,
+  statusHistory: over.statusHistory ?? [],
 });
 
 const workout = (over: Partial<WorkoutRecord> & { id: string }): WorkoutRecord => ({

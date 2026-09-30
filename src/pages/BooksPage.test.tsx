@@ -382,3 +382,97 @@ describe('BooksPage 宽屏双栏', () => {
     expect(within(panel).getByText('还没有笔记')).toBeInTheDocument();
   });
 });
+
+describe('BooksPage F11 条目化媒体库', () => {
+  const expectWideLayout = (): void => mockMediaQueries({ [MASTER_DETAIL_QUERY]: true });
+  const panelOf = (title: string): HTMLElement =>
+    screen.getByRole('complementary', { name: `《${title}》的笔记` });
+  const bookOf = (title: string) =>
+    useBookStore.getState().books.find((book) => book.title === title)!;
+
+  it('列表里的星标立即生效，评分以角标显示', async () => {
+    useBookStore.getState().addBook('人类简史', 'Harari', '历史');
+
+    render(<BooksPage />);
+
+    expect(screen.queryByText('★ 9')).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: '收藏《人类简史》' }));
+    expect(bookOf('人类简史').favorite).toBe(true);
+    expect(screen.getByRole('button', { name: '取消收藏《人类简史》' })).toBeInTheDocument();
+
+    act(() => {
+      useBookStore.getState().updateBook(bookOf('人类简史').id, { rating: 9 });
+    });
+    expect(screen.getByText('★ 9')).toBeInTheDocument();
+  });
+
+  it('评分与短评随「保存」写入，「取消」不落盘', async () => {
+    useBookStore.getState().addBook('人类简史', 'Harari', '历史');
+    expectWideLayout();
+
+    render(<BooksPage />);
+
+    // 先点一堆草稿再取消
+    await userEvent.click(screen.getByRole('button', { name: /笔记（0）/ }));
+    let panel = panelOf('人类简史');
+    await userEvent.click(within(panel).getByRole('button', { name: '7' }));
+    await userEvent.type(within(panel).getByLabelText('短评'), '不该被保存');
+    await userEvent.click(within(panel).getByRole('button', { name: '取消' }));
+    expect(bookOf('人类简史').rating).toBe(0);
+    expect(bookOf('人类简史').review).toBe('');
+
+    // 重新打开：草稿按 store 现状初始化，上次那 7 分不该留着
+    await userEvent.click(screen.getByRole('button', { name: /笔记（0）/ }));
+    panel = panelOf('人类简史');
+    expect(within(panel).getByRole('button', { name: '7' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
+
+    await userEvent.click(within(panel).getByRole('button', { name: '7' }));
+    await userEvent.type(within(panel).getByLabelText('短评'), '值得一读再读');
+    await userEvent.click(within(panel).getByRole('button', { name: '保存' }));
+
+    expect(bookOf('人类简史').rating).toBe(7);
+    expect(bookOf('人类简史').review).toBe('值得一读再读');
+  });
+
+  it('状态时间线记录每次变更，重复设同一状态不重复记', async () => {
+    useBookStore.getState().addBook('人类简史', 'Harari', '历史');
+    const id = bookId('人类简史');
+    act(() => {
+      useBookStore.getState().updateBookStatus(id, 'reading');
+      useBookStore.getState().updateBookStatus(id, 'reading');
+      useBookStore.getState().updateBookStatus(id, 'finished');
+    });
+    expectWideLayout();
+
+    render(<BooksPage />);
+    await userEvent.click(screen.getByRole('button', { name: /笔记（0）/ }));
+
+    const timeline = within(panelOf('人类简史')).getByText('状态时间线').parentElement!;
+    expect(within(timeline).getByText('在读')).toBeInTheDocument();
+    expect(within(timeline).getByText('已读')).toBeInTheDocument();
+    expect(within(timeline).getAllByText('在读')).toHaveLength(1);
+  });
+
+  it('没改过状态的书不显示时间线，笔记仍是「立即保存」', async () => {
+    useBookStore.getState().addBook('人类简史', 'Harari', '历史');
+    expectWideLayout();
+
+    render(<BooksPage />);
+    await userEvent.click(screen.getByRole('button', { name: /笔记（0）/ }));
+
+    const panel = panelOf('人类简史');
+    expect(within(panel).queryByText('状态时间线')).not.toBeInTheDocument();
+
+    // 笔记不经过「保存」按钮：点了 5 分但没保存，笔记照样落盘，评分仍是 0
+    await userEvent.click(within(panel).getByRole('button', { name: '5' }));
+    await userEvent.type(within(panel).getByRole('textbox', { name: '笔记内容' }), '认知革命很棒');
+    await userEvent.click(within(panel).getByRole('button', { name: '保存笔记' }));
+
+    expect(bookOf('人类简史').notes).toHaveLength(1);
+    expect(bookOf('人类简史').rating).toBe(0);
+  });
+});

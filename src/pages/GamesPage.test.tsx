@@ -107,12 +107,13 @@ describe('GamesPage', () => {
 
     await userEvent.click(screen.getByRole('button', { name: /^已通关/ }));
     expect(screen.getByText('哈迪斯')).toBeInTheDocument();
-    expect(screen.queryByText('塞尔达传说')).not.toBeInTheDocument();
+    // 游戏列表里按 h3 找；「下一步玩什么」推荐卡是全局的，可能提到列表外的游戏名
+    expect(screen.queryByRole('heading', { name: '塞尔达传说' })).not.toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('button', { name: /^全部/ }));
     await userEvent.type(screen.getByRole('textbox', { name: '搜索' }), '速通');
     expect(screen.getByText('空洞骑士')).toBeInTheDocument();
-    expect(screen.queryByText('哈迪斯')).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: '哈迪斯' })).not.toBeInTheDocument();
   });
 
   it('可以改状态、改时长与拖动进度', async () => {
@@ -344,7 +345,7 @@ describe('GamesPage 标签', () => {
     await userEvent.type(screen.getByRole('textbox', { name: '搜索' }), '#休闲');
 
     expect(screen.getByText('星露谷物语')).toBeInTheDocument();
-    expect(screen.queryByText('极乐迪斯科')).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: '极乐迪斯科' })).not.toBeInTheDocument();
   });
 });
 describe('GamesPage 宽屏双栏', () => {
@@ -452,5 +453,81 @@ describe('GamesPage 宽屏双栏', () => {
 
     expect(panel('《星露谷物语》的笔记')).toBeInTheDocument();
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('F11：评分与短评随「保存」写入，「取消」不落盘', async () => {
+    addGame('哈迪斯');
+    expectWideLayout();
+
+    render(<GamesPage />);
+
+    // 先点一堆草稿再取消：store 里不该有任何变化
+    await userEvent.click(screen.getByRole('button', { name: '笔记' }));
+    let aside = panel('《哈迪斯》的笔记');
+    await userEvent.click(within(aside).getByRole('button', { name: '8' }));
+    await userEvent.type(within(aside).getByLabelText('短评'), '不该被保存');
+    await userEvent.click(within(aside).getByRole('button', { name: '取消' }));
+    expect(gameOf('哈迪斯').rating).toBe(0);
+    expect(gameOf('哈迪斯').review).toBe('');
+
+    // 重新打开：草稿要按 store 里的现状初始化（上次的 8 分不该留着）
+    await userEvent.click(screen.getByRole('button', { name: '笔记' }));
+    aside = panel('《哈迪斯》的笔记');
+    expect(within(aside).getByRole('button', { name: '8' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
+
+    await userEvent.click(within(aside).getByRole('button', { name: '8' }));
+    await userEvent.type(within(aside).getByLabelText('短评'), '手感一流');
+    await userEvent.click(within(aside).getByRole('button', { name: '保存' }));
+
+    expect(gameOf('哈迪斯').rating).toBe(8);
+    expect(gameOf('哈迪斯').review).toBe('手感一流');
+    expect(screen.getByText('★ 8')).toBeInTheDocument();
+
+    // 「清除」把评分收回 0
+    await userEvent.click(screen.getByRole('button', { name: '笔记' }));
+    aside = panel('《哈迪斯》的笔记');
+    await userEvent.click(within(aside).getByRole('button', { name: '清除' }));
+    await userEvent.click(within(aside).getByRole('button', { name: '保存' }));
+    expect(gameOf('哈迪斯').rating).toBe(0);
+  });
+
+  it('F11：收藏星标与「下一步玩什么」的三种排序', async () => {
+    addGame('哈迪斯');
+    addGame('星露谷物语');
+    addGame('空洞骑士');
+    setStatus('哈迪斯', 'completed');
+    setStatus('星露谷物语', 'backlog');
+    setStatus('空洞骑士', 'backlog');
+    useGameStore.getState().updateHoursPlayed(gameOf('星露谷物语').id, 20);
+    useGameStore.getState().updateGame(gameOf('空洞骑士').id, { rating: 9 });
+    expectWideLayout();
+
+    render(<GamesPage />);
+
+    // 收藏：列表里的星标是即时生效的开关
+    await userEvent.click(screen.getByRole('button', { name: '收藏「哈迪斯」' }));
+    expect(gameOf('哈迪斯').favorite).toBe(true);
+    expect(screen.getByRole('button', { name: '取消收藏「哈迪斯」' })).toBeInTheDocument();
+
+    // 推荐卡：已通关的不进候选，只剩先加的星露谷
+    const card = screen.getByText('下一步玩什么').closest('div.rounded-lg') as HTMLElement;
+    expect(within(card).queryByText('哈迪斯')).not.toBeInTheDocument();
+    expect(within(card).getByText('星露谷物语')).toBeInTheDocument();
+
+    // 两个候选时才给排序选择器：换成评分最高 → 空洞骑士（9 分）
+    const sort = within(card).getByRole('combobox', { name: '推荐排序方式' });
+    await userEvent.selectOptions(sort, 'rating');
+    expect(within(card).getByText('空洞骑士')).toBeInTheDocument();
+
+    // 换成耗时最短 → 空洞骑士（0 小时，星露谷已玩 20 小时）
+    await userEvent.selectOptions(sort, 'hours');
+    expect(within(card).getByText('空洞骑士')).toBeInTheDocument();
+
+    // 回到积压最久 → 先加入的星露谷
+    await userEvent.selectOptions(sort, 'backlog');
+    expect(within(card).getByText('星露谷物语')).toBeInTheDocument();
   });
 });

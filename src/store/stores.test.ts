@@ -9,6 +9,7 @@ import { useDevStore } from './devStore';
 import { useThemeStore } from './themeStore';
 import { STORAGE_KEYS } from '../utils/storageKeys';
 import { migrateState, STORE_VERSION } from './persist';
+import { todayKey } from '../utils/date';
 
 beforeEach(async () => {
   localStorage.clear();
@@ -521,6 +522,40 @@ describe('bookStore 读完时间', () => {
   });
 });
 
+describe('bookStore 条目化（F11）', () => {
+  it('状态变更记进时间线：最近在前，重复设同一状态不重复记', () => {
+    useBookStore.getState().addBook('人类简史', '赫拉利', '历史');
+    const id = useBookStore.getState().books[0]!.id;
+    expect(useBookStore.getState().books[0]!.statusHistory).toEqual([]);
+
+    useBookStore.getState().updateBookStatus(id, 'reading');
+    useBookStore.getState().updateBookStatus(id, 'reading');
+    useBookStore.getState().updateBookStatus(id, 'finished');
+
+    const history = useBookStore.getState().books[0]!.statusHistory;
+    expect(history.map((entry) => entry.status)).toEqual(['finished', 'reading']);
+    expect(new Set(history.map((entry) => entry.id)).size).toBe(2);
+  });
+
+  it('时间线记本地日期，不是 UTC 日期', () => {
+    vi.useFakeTimers();
+    // 本地凌晨 00:30：旧写法 toISOString().slice(0, 10) 在东八区会算成前一天
+    vi.setSystemTime(new Date(2026, 8, 30, 0, 30));
+    try {
+      useBookStore.getState().addBook('人类简史', '赫拉利', '历史');
+      const id = useBookStore.getState().books[0]!.id;
+      useBookStore.getState().updateBookStatus(id, 'reading');
+
+      expect(useBookStore.getState().books[0]!.statusHistory[0]!.date).toBe('2026-09-30');
+      expect(useBookStore.getState().books[0]!.statusHistory[0]!.date).toBe(
+        todayKey(new Date(2026, 8, 30, 0, 30)),
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
 describe('gameStore 游玩流水', () => {
   const addGame = (name = '黑神话'): string => {
     useGameStore.getState().addGame(name, 'PC');
@@ -580,6 +615,47 @@ describe('gameStore 游玩流水', () => {
     expect(useGameStore.getState().sessions).toHaveLength(1);
     useGameStore.getState().replaceSessions([]);
     expect(useGameStore.getState().sessions).toHaveLength(0);
+  });
+});
+
+describe('gameStore 条目化（F11）', () => {
+  it('标记通关时记通关日期与状态时间线，退回则清掉通关日期', () => {
+    useGameStore.setState({ games: [], sessions: [] });
+    useGameStore.getState().addGame('哈迪斯', 'PC');
+    const id = useGameStore.getState().games[0]!.id;
+
+    useGameStore.getState().updateGameStatus(id, 'completed');
+    let game = useGameStore.getState().games[0]!;
+    expect(game.status).toBe('completed');
+    expect(game.finishedAt).toBeTruthy();
+    expect(game.statusHistory[0]!.status).toBe('completed');
+
+    // 再切别的状态：通关日期清掉，时间线追加
+    useGameStore.getState().updateGameStatus(id, 'playing');
+    game = useGameStore.getState().games[0]!;
+    expect(game.finishedAt).toBeUndefined();
+    expect(game.statusHistory[0]!.status).toBe('playing');
+    expect(game.statusHistory).toHaveLength(2);
+
+    // 状态没变不重复记录
+    useGameStore.getState().updateGameStatus(id, 'playing');
+    expect(useGameStore.getState().games[0]!.statusHistory).toHaveLength(2);
+  });
+
+  it('通关日期与时间线都记本地日期，不是 UTC 日期', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 8, 30, 0, 30));
+    try {
+      useGameStore.getState().addGame('哈迪斯', 'PC');
+      const id = useGameStore.getState().games[0]!.id;
+      useGameStore.getState().updateGameStatus(id, 'completed');
+
+      const game = useGameStore.getState().games[0]!;
+      expect(game.finishedAt).toBe('2026-09-30');
+      expect(game.statusHistory[0]!.date).toBe('2026-09-30');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

@@ -22,8 +22,11 @@ export const APP_ID = 'life-manager';
  * 14：新增「专注记录」模块，任务增加可选的时间盒字段。
  * 15：新增「复盘」模块（每日 / 每周三个固定问题）。
  * 16：新增「目标」模块（指标 + 周期 + 目标值，进度现算不落库）。
+ * 17：新增「自建食物 / 自建动作」模块（种子库之外用户自己加的那些）。
+ * 18：书与游戏条目化：新增评分 / 短评 / 收藏 / 状态时间线，游戏新增通关日期。
+ *     这几项都在已有的 books / games 里，旧备份缺字段时按 schema 默认值补齐。
  */
-export const BACKUP_SCHEMA_VERSION = 17;
+export const BACKUP_SCHEMA_VERSION = 18;
 
 const isoDateString = z.string();
 const percent = z.number().min(0).max(100).catch(0);
@@ -102,6 +105,13 @@ export const bookNoteSchema = z.object({
   page: z.number().min(0).optional(),
 });
 
+/** v18：状态时间线的一条记录 */
+export const statusEntrySchema = z.object({
+  id: z.string().min(1),
+  status: z.string().default(''),
+  date: z.string().default(''),
+});
+
 export const bookSchema = z.object({
   id: z.string().min(1),
   title: z.string(),
@@ -116,6 +126,11 @@ export const bookSchema = z.object({
   startedAt: isoDateString.optional(),
   createdAt: isoDateString.default(() => new Date().toISOString()),
   finishedAt: isoDateString.optional(),
+  /** v18：条目化媒体库（评分 / 短评 / 收藏 / 状态时间线）；旧备份缺省补齐 */
+  rating: z.number().min(0).max(10).catch(0),
+  review: z.string().default(''),
+  favorite: z.boolean().default(false),
+  statusHistory: z.array(statusEntrySchema).default([]),
 });
 
 /** 阅读流水；旧的备份文件里没有这个模块，导入时不会清空现有记录 */
@@ -317,6 +332,11 @@ export const gameSchema = z.object({
   achievements: z.array(gameAchievementSchema).default([]),
   notes: z.string().default(''),
   tags,
+  finishedAt: isoDateString.optional(),
+  rating: z.number().min(0).max(10).catch(0),
+  review: z.string().default(''),
+  favorite: z.boolean().default(false),
+  statusHistory: z.array(statusEntrySchema).default([]),
   createdAt: isoDateString.default(() => new Date().toISOString()),
 });
 

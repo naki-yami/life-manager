@@ -7,6 +7,7 @@ import {
   NotebookPen,
   Play,
   Plus,
+  Star,
   StickyNote,
   Trash2,
 } from 'lucide-react';
@@ -132,6 +133,9 @@ export const BooksPage: React.FC = () => {
     note: string;
   }>({ bookId: '', date: todayKey(), minutes: 30, note: '' });
   const [notePage, setNotePage] = useState<number | ''>('');
+  /** F11 条目化：评分与短评的草稿，随面板里的「保存」写入 */
+  const [ratingInput, setRatingInput] = useState(0);
+  const [reviewInput, setReviewInput] = useState('');
 
   /** 关键词 + 状态筛选 + 计数 + 「是空书单还是没筛出来」，六个列表页共用同一份实现 */
   const {
@@ -197,10 +201,13 @@ export const BooksPage: React.FC = () => {
 
   /** 打开某本书的笔记面板；命令面板搜到这本书时也走这里 */
   const openNotes = (bookId: string): void => {
-    if (!books.some((book) => book.id === bookId)) return;
+    const target = books.find((book) => book.id === bookId);
+    if (!target) return;
     setNoteInput('');
     setNoteError(undefined);
     setNotePage('');
+    setRatingInput(target.rating);
+    setReviewInput(target.review);
     setNoteBookId(bookId);
   };
 
@@ -265,11 +272,84 @@ export const BooksPage: React.FC = () => {
     setNotePage('');
   };
 
+  /** 保存评分与短评；笔记有自己「回车即存」的一套，不从这里走 */
+  const handleSaveEntry = (): void => {
+    if (!noteBook) return;
+    updateBook(noteBook.id, { rating: ratingInput, review: reviewInput.trim() });
+    closeNotes();
+  };
+
   const progressTone = (book: Book) => (book.progress >= 100 ? 'success' : 'accent');
 
   /** 宽屏右栏与窄屏抽屉共用的笔记面板 */
   const noteDetail = noteBook ? (
     <div className="space-y-4">
+      {/* F11 条目化：评分 / 短评 / 状态时间线属于「这本书」，随「保存」写入；
+          下面的笔记列表仍保持「回车即存」的老流程，两者互不干扰 */}
+      <div className="space-y-3">
+        <div>
+          <p className="mb-1.5 text-sm font-medium text-content-secondary">评分</p>
+          <div
+            role="group"
+            aria-label={`给《${noteBook.title}》评分`}
+            className="flex flex-wrap gap-1"
+          >
+            {Array.from({ length: 10 }, (_, index) => index + 1).map((score) => (
+              <button
+                key={score}
+                type="button"
+                aria-pressed={ratingInput === score}
+                onClick={() => setRatingInput(score)}
+                className={`h-8 w-8 rounded text-xs font-medium transition-colors duration-fast ease-standard focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-line-focus ${
+                  ratingInput >= score
+                    ? 'bg-warning-soft text-warning'
+                    : 'bg-inset text-content-tertiary hover:text-content-secondary'
+                }`}
+              >
+                {score}
+              </button>
+            ))}
+            <Button size="sm" variant="ghost" onClick={() => setRatingInput(0)}>
+              清除
+            </Button>
+          </div>
+        </div>
+
+        <Input
+          label="短评"
+          value={reviewInput}
+          onChange={(event) => setReviewInput(event.target.value)}
+          placeholder="一句话说说怎么样（可与笔记分开）"
+        />
+
+        {noteBook.statusHistory.length > 0 && (
+          <div>
+            <p className="mb-1 text-sm font-medium text-content-secondary">状态时间线</p>
+            <ul className="space-y-1 text-xs text-content-tertiary">
+              {noteBook.statusHistory.map((entry) => (
+                <li key={entry.id} className="flex items-center gap-2">
+                  <Badge tone="default">
+                    {STATUS_LABEL[entry.status as BookStatus] ?? entry.status}
+                  </Badge>
+                  <span className="tabular">{entry.date}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <Button variant="secondary" size="sm" onClick={closeNotes}>
+            取消
+          </Button>
+          <Button size="sm" onClick={handleSaveEntry}>
+            保存
+          </Button>
+        </div>
+      </div>
+
+      <hr className="border-line-subtle" />
+
       <p className="text-xs text-content-tertiary">回车即可保存，笔记会按时间倒序排列</p>
 
       <div className="w-40">
@@ -516,7 +596,27 @@ export const BooksPage: React.FC = () => {
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
                         <h3 className="font-semibold text-content">{book.title}</h3>
+                        <button
+                          type="button"
+                          aria-pressed={book.favorite}
+                          aria-label={
+                            book.favorite ? `取消收藏《${book.title}》` : `收藏《${book.title}》`
+                          }
+                          onClick={() => updateBook(book.id, { favorite: !book.favorite })}
+                          className={`shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-line-focus ${
+                            book.favorite
+                              ? 'text-warning'
+                              : 'text-content-tertiary hover:text-content-secondary'
+                          }`}
+                        >
+                          <Star
+                            size={15}
+                            fill={book.favorite ? 'currentColor' : 'none'}
+                            aria-hidden
+                          />
+                        </button>
                         <Badge tone={STATUS_TONE[book.status]}>{STATUS_LABEL[book.status]}</Badge>
+                        {book.rating > 0 && <Badge tone="warning">★ {book.rating}</Badge>}
                         {(() => {
                           const stalled = stalledDaysOf(book);
                           return stalled !== null ? (

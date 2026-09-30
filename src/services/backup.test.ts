@@ -50,6 +50,10 @@ function sampleData(): BackupData {
         progress: 42,
         notes: [{ id: 'note-1', content: '不二法门', createdAt: '2026-09-27T03:00:00.000Z' }],
         tags: ['佛学'],
+        rating: 9,
+        review: '值得一读再读',
+        favorite: true,
+        statusHistory: [{ id: 'sh-1', status: 'reading', date: '2026-09-20' }],
         createdAt: '2026-09-20T00:00:00.000Z',
       },
     ],
@@ -181,6 +185,11 @@ function sampleData(): BackupData {
         achievements: [{ id: 'ach-1', name: '初始的艾尔登之王', description: '', unlocked: true }],
         notes: '卡在女武神',
         tags: ['单机'],
+        finishedAt: '2026-09-28',
+        rating: 10,
+        review: '年度最佳',
+        favorite: false,
+        statusHistory: [{ id: 'sh-g1', status: 'completed', date: '2026-09-28' }],
         createdAt: '2026-08-01T00:00:00.000Z',
       },
     ],
@@ -357,7 +366,7 @@ describe('导出 / 导入 往返', () => {
   it('信封结构包含 schemaVersion 与 exportedAt', () => {
     const envelope = buildBackupEnvelope(emptyData(), new Date('2026-09-28T00:00:00.000Z'));
     expect(envelope.app).toBe('life-manager');
-    expect(envelope.schemaVersion).toBe(17);
+    expect(envelope.schemaVersion).toBe(18);
     expect(envelope.exportedAt).toBe('2026-09-28T00:00:00.000Z');
   });
 });
@@ -445,6 +454,10 @@ describe('覆盖模式下的数据安全', () => {
         progress: 10,
         notes: [],
         tags: [],
+        rating: 0,
+        review: '',
+        favorite: false,
+        statusHistory: [],
         createdAt: '2026-01-01T00:00:00.000Z',
       },
     ];

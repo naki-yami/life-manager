@@ -79,7 +79,23 @@ export interface Book {
   finishedAt?: string;
   /** 最近一次开始阅读的时间，用来估算读完所需天数；旧数据可能没有 */
   startedAt?: string;
+  /** 评分 1-10；0 表示未评分（F11） */
+  rating: number;
+  /** 一句话短评，与读书笔记分开（F11） */
+  review: string;
+  /** 收藏（F11） */
+  favorite: boolean;
+  /** 状态变更时间线，最近在前（F11） */
+  statusHistory: StatusEntry[];
   createdAt: string;
+}
+
+/** 条目状态变更的一条记录（F11 状态时间线），最近变更排在最前 */
+export interface StatusEntry {
+  id: string;
+  status: string;
+  /** 变更日期 YYYY-MM-DD */
+  date: string;
 }
 
 /** 一次阅读记录；与游戏游玩流水、开发工时流水同一套模式 */
@@ -296,6 +312,16 @@ export interface Game {
   notes: string;
   /** 统一标签（不带 #）；旧数据由归一化补 [] */
   tags: string[];
+  /** 通关日期 YYYY-MM-DD；未通关时没有（F11） */
+  finishedAt?: string;
+  /** 评分 1-10；0 表示未评分（F11） */
+  rating: number;
+  /** 一句话短评（F11） */
+  review: string;
+  /** 收藏（F11） */
+  favorite: boolean;
+  /** 状态变更时间线，最近在前（F11） */
+  statusHistory: StatusEntry[];
   createdAt: string;
 }
 

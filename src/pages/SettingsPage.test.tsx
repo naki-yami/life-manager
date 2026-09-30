@@ -208,6 +208,10 @@ describe('SettingsPage', () => {
           author: 'Harari',
           category: '历史',
           status: 'reading',
+          rating: 0,
+          review: '',
+          favorite: false,
+          statusHistory: [],
           progress: 30,
           notes: [],
           tags: [],
@@ -400,7 +404,7 @@ describe('SettingsPage', () => {
     const csv = ['Title,Author,Date Read,Bookshelves', '新的一本书,某作者,2024/5/1,read', '1984,Orwell,,to-read'].join('\n');
     const file = new File([csv], 'goodreads.csv', { type: 'text/csv' });
     // 1984 已在库里（beforeEach 铺的种子没有，这里直接种一本）
-    useBookStore.getState().addBook('1984', 'Orwell');
+    useBookStore.getState().addBook('1984', 'Orwell', '');
     fireEvent.change(fileInput, { target: { files: [file] } });
 
     // 预览出现：新增 1、去重跳过 1
