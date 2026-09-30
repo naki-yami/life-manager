@@ -62,6 +62,8 @@ import {
 import type { BodyMetric, WorkoutRecord } from '../types';
 import { ToastContext } from '../components/ui/toastContext';
 import { useNewEntryShortcut } from '../hooks/useShortcuts';
+import { allExercises, useLibraryStore, type LibraryExercise } from '../store/libraryStore';
+import { EQUIPMENTS, EXERCISE_SEEDS, MUSCLE_GROUPS } from '../data/exercises';
 import { MonthCalendar, type CalendarMark } from '../components/ui';
 
 type View = 'plans' | 'records' | 'body';
@@ -168,6 +170,18 @@ export const FitnessPage: React.FC = () => {
   const [pendingRecordId, setPendingRecordId] = useState<string | null>(null);
   const [planForm, setPlanForm] = useState({ name: '', description: '' });
   const [workoutForm, setWorkoutForm] = useState(emptyWorkoutForm);
+
+  // 动作库选择器（F9）：搜索 + 肌群/器械过滤 + 自建；选中后填进表单
+  const [showExercisePicker, setShowExercisePicker] = useState(false);
+  const [exerciseKeyword, setExerciseKeyword] = useState('');
+  const [exerciseMuscle, setExerciseMuscle] = useState<string>('all');
+  const [exerciseEquipment, setExerciseEquipment] = useState<string>('all');
+  const [customExerciseName, setCustomExerciseName] = useState('');
+  const [customExerciseMuscle, setCustomExerciseMuscle] = useState<string>('胸');
+  const [customExerciseEquipment, setCustomExerciseEquipment] = useState<string>('杠铃');
+  const customExercises = useLibraryStore((state) => state.customExercises);
+  const addCustomExercise = useLibraryStore((state) => state.addCustomExercise);
+  const deleteCustomExercise = useLibraryStore((state) => state.deleteCustomExercise);
   const toastContext = React.useContext(ToastContext);
   const [recordDateFilter, setRecordDateFilter] = useState<string | null>(null);
 
@@ -338,6 +352,50 @@ export const FitnessPage: React.FC = () => {
 
   // 按 n 时跟着当前标签走：身体指标页记身体数据，其余标签记训练
   useNewEntryShortcut(() => (view === 'body' ? openBodyModal() : openWorkoutModal()));
+
+  /** 动作库的搜索结果：肌群 + 器械过滤 + 关键词匹配 */
+  const libraryExercises: LibraryExercise[] = useMemo(() => {
+    const all = allExercises(customExercises);
+    const kw = exerciseKeyword.trim().toLowerCase();
+    return all.filter((exercise) => {
+      if (exerciseMuscle !== 'all' && exercise.muscleGroup !== exerciseMuscle) return false;
+      if (exerciseEquipment !== 'all' && exercise.equipment !== exerciseEquipment) return false;
+      return kw === '' || exercise.name.toLowerCase().includes(kw);
+    });
+  }, [customExercises, exerciseKeyword, exerciseMuscle, exerciseEquipment]);
+
+  const visibleExercises = libraryExercises.slice(0, 60);
+
+  const fillFromExerciseLibrary = (exercise: LibraryExercise): void => {
+    setWorkoutForm((form) => {
+      const filled = {
+        name: exercise.name,
+        sets: 3,
+        reps: 10,
+        weight: 0,
+      };
+      // 第一行还空着就原地填，否则追加一行，方便连续挑好几个动作
+      const firstEmpty =
+        form.exercises.length === 1 && form.exercises[0].name.trim() === '';
+      return {
+        ...form,
+        exercises: firstEmpty
+          ? [filled]
+          : [...form.exercises, filled],
+      };
+    });
+  };
+
+  const handleAddCustomExercise = (): void => {
+    const name = customExerciseName.trim();
+    if (!name) return;
+    addCustomExercise({
+      name,
+      muscleGroup: customExerciseMuscle,
+      equipment: customExerciseEquipment,
+    });
+    setCustomExerciseName('');
+  };
 
   /** 复制最近一次训练：带出计划名与全部动作，日期改为今天 */
   const copyLastWorkout = (): void => {
@@ -974,6 +1032,20 @@ export const FitnessPage: React.FC = () => {
             />
           </div>
 
+          <Button
+            size="sm"
+            variant="secondary"
+            icon={<Dumbbell size={14} aria-hidden />}
+            onClick={() => {
+              setExerciseKeyword('');
+              setExerciseMuscle('all');
+              setExerciseEquipment('all');
+              setShowExercisePicker(true);
+            }}
+          >
+            从动作库选择
+          </Button>
+
           <div className="space-y-3">
             {workoutForm.exercises.map((exercise, index) => (
               <div key={index} className="rounded border border-line-subtle p-3">
@@ -1116,6 +1188,131 @@ export const FitnessPage: React.FC = () => {
                   step={part.step}
                 />
               ))}
+            </div>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={showExercisePicker}
+        onClose={() => setShowExercisePicker(false)}
+        title="从动作库选择"
+        description="挑常见动作直接填入，组次重量再按当天的量改"
+        size="lg"
+      >
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-end gap-2">
+            <div className="min-w-40 flex-1">
+              <Input
+                label="搜索"
+                value={exerciseKeyword}
+                onChange={(event) => setExerciseKeyword(event.target.value)}
+                placeholder="如：卧推、深蹲、划船…"
+              />
+            </div>
+            <div className="w-28">
+              <Select
+                label="肌群"
+                value={exerciseMuscle}
+                onChange={(value) => setExerciseMuscle(value)}
+                options={[
+                  { value: 'all', label: '全部肌群' },
+                  ...MUSCLE_GROUPS.map((group) => ({ value: group, label: group })),
+                ]}
+              />
+            </div>
+            <div className="w-28">
+              <Select
+                label="器械"
+                value={exerciseEquipment}
+                onChange={(value) => setExerciseEquipment(value)}
+                options={[
+                  { value: 'all', label: '全部器械' },
+                  ...EQUIPMENTS.map((equipment) => ({ value: equipment, label: equipment })),
+                ]}
+              />
+            </div>
+          </div>
+
+          <ul className="max-h-64 divide-y divide-line-subtle overflow-y-auto rounded border border-line-subtle">
+            {visibleExercises.length === 0 ? (
+              <li className="px-3 py-6 text-center text-sm text-content-tertiary">
+                库里没有匹配的动作，可以在下面存一条自建的。
+              </li>
+            ) : (
+              visibleExercises.map((exercise) => (
+                <li key={exercise.id ?? exercise.name} className="flex items-center gap-3 px-3 py-2">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-x-2">
+                      <span className="truncate text-sm text-content">{exercise.name}</span>
+                      <Badge tone="default">{exercise.muscleGroup}</Badge>
+                      <Badge tone="info">{exercise.equipment}</Badge>
+                      {!EXERCISE_SEEDS.some((seed) => seed.name === exercise.name) && (
+                        <Badge tone="accent">自建</Badge>
+                      )}
+                    </div>
+                  </div>
+                  {exercise.id && (
+                    <IconButton
+                      label={`删除自建动作「${exercise.name}」`}
+                      size="sm"
+                      icon={<X size={13} />}
+                      onClick={() => deleteCustomExercise(exercise.id!)}
+                      className="hover:text-danger"
+                    />
+                  )}
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    aria-label={`把「${exercise.name}」填入表单`}
+                    onClick={() => fillFromExerciseLibrary(exercise)}
+                  >
+                    填入
+                  </Button>
+                </li>
+              ))
+            )}
+          </ul>
+          {libraryExercises.length > visibleExercises.length && (
+            <p className="text-xs text-content-tertiary">
+              只显示前 {visibleExercises.length} 条，共 {libraryExercises.length} 条，继续输入关键词收窄。
+            </p>
+          )}
+
+          <div className="rounded bg-inset p-3">
+            <p className="mb-2 text-sm font-medium text-content-secondary">库里没有？存一条自建的</p>
+            <div className="flex flex-wrap items-end gap-2">
+              <div className="min-w-32 flex-1">
+                <Input
+                  label="名称"
+                  value={customExerciseName}
+                  onChange={(event) => setCustomExerciseName(event.target.value)}
+                  placeholder={exerciseKeyword.trim() || '自定义动作名'}
+                />
+              </div>
+              <div className="w-24">
+                <Select
+                  label="肌群"
+                  value={customExerciseMuscle}
+                  onChange={(value) => setCustomExerciseMuscle(value)}
+                  options={MUSCLE_GROUPS.map((group) => ({ value: group, label: group }))}
+                />
+              </div>
+              <div className="w-24">
+                <Select
+                  label="器械"
+                  value={customExerciseEquipment}
+                  onChange={(value) => setCustomExerciseEquipment(value)}
+                  options={EQUIPMENTS.map((equipment) => ({ value: equipment, label: equipment }))}
+                />
+              </div>
+              <Button
+                variant="secondary"
+                onClick={handleAddCustomExercise}
+                disabled={!customExerciseName.trim()}
+              >
+                存入动作库
+              </Button>
             </div>
           </div>
         </div>

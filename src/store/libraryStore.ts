@@ -8,6 +8,7 @@ import { persistOptions } from './persist';
 import { customExerciseSchema, customFoodSchema } from '../services/schemas';
 import { FOOD_CATEGORIES } from '../data/foodCategories';
 import { FOOD_SEEDS } from '../data/foods';
+import { EXERCISE_SEEDS } from '../data/exercises';
 
 export type CustomFood = z.infer<typeof customFoodSchema>;
 export type CustomExercise = z.infer<typeof customExerciseSchema>;
@@ -133,4 +134,17 @@ export interface LibraryFood {
 /** 食物库的完整视图：自建在前（最近加的最先看到），种子在后 */
 export function allFoods(customFoods: CustomFood[]): LibraryFood[] {
   return [...customFoods, ...FOOD_SEEDS];
+}
+
+/** 动作库条目在选择器里的统一形状 */
+export interface LibraryExercise {
+  id?: string;
+  name: string;
+  muscleGroup: string;
+  equipment: string;
+}
+
+/** 动作库的完整视图：自建在前，种子在后 */
+export function allExercises(customExercises: CustomExercise[]): LibraryExercise[] {
+  return [...customExercises, ...EXERCISE_SEEDS];
 }

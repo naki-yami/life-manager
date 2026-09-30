@@ -5,11 +5,13 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { FitnessPage } from './FitnessPage';
 import { ToastProvider } from '../components/ui';
 import { useFitnessStore } from '../store/fitnessStore';
+import { useLibraryStore } from '../store/libraryStore';
 import { useBodyStore } from '../store/bodyStore';
 import { addDays, todayKey } from '../utils/date';
 
 beforeEach(() => {
   useFitnessStore.setState({ plans: [], records: [] });
+  useLibraryStore.setState({ customFoods: [], customExercises: [] });
   useBodyStore.setState({ records: [] });
 });
 
@@ -417,5 +419,43 @@ describe('FitnessPage', () => {
     });
 
     expect(screen.getByRole('dialog', { name: '记录身体数据' })).toBeInTheDocument();
+  });
+
+  it('从动作库选择：搜索、肌群过滤、填入表单', async () => {
+    render(<FitnessPage />);
+
+    await userEvent.click(screen.getByRole('button', { name: '记录训练' }));
+    const dialog = screen.getByRole('dialog', { name: '记录训练' });
+    await userEvent.click(within(dialog).getByRole('button', { name: '从动作库选择' }));
+
+    const picker = screen.getByRole('dialog', { name: '从动作库选择' });
+    await userEvent.selectOptions(within(picker).getAllByRole('combobox', { name: '肌群' })[0]!, '背');
+    await userEvent.click(
+      within(picker).getByRole('button', { name: '把「引体向上」填入表单' }),
+    );
+
+    expect(within(dialog).getByLabelText('第 1 个动作名称')).toHaveValue('引体向上');
+    expect(useLibraryStore.getState().customExercises).toHaveLength(0);
+  });
+
+  it('库里没有的动作可以存为自建，并立刻能选', async () => {
+    render(<FitnessPage />);
+
+    await userEvent.click(screen.getByRole('button', { name: '记录训练' }));
+    const dialog = screen.getByRole('dialog', { name: '记录训练' });
+    await userEvent.click(within(dialog).getByRole('button', { name: '从动作库选择' }));
+
+    const picker = screen.getByRole('dialog', { name: '从动作库选择' });
+    await userEvent.type(within(picker).getByLabelText('名称'), '壶铃土耳其起立');
+    await userEvent.click(within(picker).getByRole('button', { name: '存入动作库' }));
+
+    expect(useLibraryStore.getState().customExercises[0]!.name).toBe('壶铃土耳其起立');
+    expect(within(picker).getByText('壶铃土耳其起立')).toBeInTheDocument();
+    expect(within(picker).getByText('自建')).toBeInTheDocument();
+
+    await userEvent.click(
+      within(picker).getByRole('button', { name: '删除自建动作「壶铃土耳其起立」' }),
+    );
+    expect(useLibraryStore.getState().customExercises).toHaveLength(0);
   });
 });
