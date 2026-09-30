@@ -87,11 +87,55 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const pendingSelection = useRef<{ start: number; end: number } | null>(null);
 
-  /** 打字机滚动：把光标所在的那一行钉在可视区中线上 */
+  /**
+   * 量一个半角字符有多宽。
+   *
+   * textarea 自身量不出来「某个字符多宽」，所以借一个绝对定位的隐藏 span 实测。
+   *
+   * 标尺用**汉字**而不是数字：CJK 字形是标准的方块（宽度 = font-size），把它的宽度除以 2
+   * 就是真正的半角宽。用 `0` 当标尺会偏 —— 实测 Microsoft YaHei 下 `0` 宽 7.55px、
+   * 而真半角宽是 7.0px，高估 7.8%，一整篇长文折下来能多算出好几行，滚动就会跑偏。
+   *
+   * 挂到 body 上量完就摘；结果按字号 + 字体缓存，缩放或改字号会让缓存失效。
+   */
+  const charWidthRef = useRef<{ key: string; width: number }>({ key: '', width: 0 });
+
+  const measureCharWidth = useCallback((textarea: HTMLTextAreaElement, style: CSSStyleDeclaration) => {
+    const key = `${style.fontSize}|${style.fontFamily}`;
+    const cached = charWidthRef.current;
+    if (cached.key === key && cached.width > 0) return cached.width;
+
+    const probe = document.createElement('span');
+    probe.textContent = '中'.repeat(20);
+    // 必须 inline-block + 不换行，否则文本会被折行、量出来的宽度就废了
+    probe.style.cssText =
+      'position:absolute;left:-9999px;top:-9999px;white-space:pre;visibility:hidden;';
+    probe.style.fontSize = style.fontSize;
+    probe.style.fontFamily = style.fontFamily;
+    probe.style.fontWeight = style.fontWeight;
+    probe.style.letterSpacing = style.letterSpacing;
+    document.body.appendChild(probe);
+    const width = probe.getBoundingClientRect().width / 20 / 2;
+    probe.remove();
+
+    const resolved = width > 0 ? width : Number.parseFloat(style.fontSize) / 2;
+    charWidthRef.current = { key, width: resolved };
+    return resolved;
+  }, []);
+
+  /** 打字机滚动：把光标所在的那一**视觉行**钉在可视区中线上（长行折行也认） */
   const keepCaretCentered = useCallback((): void => {
     const textarea = textareaRef.current;
     if (!textarea) return;
     const style = window.getComputedStyle(textarea);
+    // 可用宽度要减掉左右内边距与纵向滚动条，否则会多算出一行的余量
+    const scrollbar = textarea.offsetWidth - textarea.clientWidth;
+    const contentWidth =
+      textarea.clientWidth -
+      (Number.parseFloat(style.paddingLeft) || 0) -
+      (Number.parseFloat(style.paddingRight) || 0) -
+      scrollbar;
+
     textarea.scrollTop = typewriterScrollTop({
       caret: textarea.selectionStart,
       value: textarea.value,
@@ -99,8 +143,10 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
       lineHeight: Number.parseFloat(style.lineHeight) || 24,
       viewportHeight: textarea.clientHeight,
       paddingTop: Number.parseFloat(style.paddingTop) || 0,
+      contentWidth: contentWidth > 0 ? contentWidth : undefined,
+      charWidth: measureCharWidth(textarea, style),
     });
-  }, []);
+  }, [measureCharWidth]);
 
   useLayoutEffect(() => {
     const selection = pendingSelection.current;
