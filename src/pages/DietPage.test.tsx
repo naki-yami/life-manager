@@ -4,11 +4,13 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { DietPage } from './DietPage';
 import { useDietStore } from '../store/dietStore';
+import { useLibraryStore } from '../store/libraryStore';
 import { addDays, formatDayLabel, todayKey } from '../utils/date';
 import { FoodItem, MealType } from '../types';
 
 beforeEach(() => {
   useDietStore.setState({ records: [], goals: { calories: 2000, protein: 80 }, water: {} });
+  useLibraryStore.setState({ customFoods: [], customExercises: [] });
 });
 
 const today = todayKey();
@@ -271,5 +273,46 @@ describe('DietPage', () => {
 
     // 切到 9 月 1 日后，当日摄入归零（那天没记录）
     expect(screen.getByText(/这天还是空的/)).toBeInTheDocument();
+  });
+
+  it('从食物库选择：搜索、填入表单', async () => {
+    render(<DietPage />);
+
+    await userEvent.click(screen.getAllByRole('button', { name: '记录饮食' })[0]!);
+    const dialog = screen.getByRole('dialog', { name: '记录饮食' });
+    await userEvent.click(within(dialog).getByRole('button', { name: '从食物库选择' }));
+
+    const picker = screen.getByRole('dialog', { name: '从食物库选择' });
+    await userEvent.type(within(picker).getByLabelText('搜索'), '鸡胸');
+    await userEvent.click(
+      within(picker).getByRole('button', { name: '把「鸡胸肉」填入表单' }),
+    );
+
+    // 原地填进了空着的第一个条目
+    expect(within(dialog).getByLabelText('第 1 个食物名称')).toHaveValue('鸡胸肉');
+    expect(within(dialog).getByLabelText('第 1 个食物的热量')).toHaveValue(133);
+    expect(useLibraryStore.getState().customFoods).toHaveLength(0);
+  });
+
+  it('库里没有的可以存为自建，并立刻能选', async () => {
+    render(<DietPage />);
+
+    await userEvent.click(screen.getAllByRole('button', { name: '记录饮食' })[0]!);
+    const dialog = screen.getByRole('dialog', { name: '记录饮食' });
+    await userEvent.click(within(dialog).getByRole('button', { name: '从食物库选择' }));
+
+    const picker = screen.getByRole('dialog', { name: '从食物库选择' });
+    await userEvent.type(within(picker).getByLabelText('名称'), '妈妈牌红烧肉');
+    await userEvent.click(within(picker).getByRole('button', { name: '存入食物库' }));
+
+    expect(useLibraryStore.getState().customFoods[0]!.name).toBe('妈妈牌红烧肉');
+    expect(within(picker).getByText('妈妈牌红烧肉')).toBeInTheDocument();
+    expect(within(picker).getByText('自建')).toBeInTheDocument();
+
+    // 自建条目也能删
+    await userEvent.click(
+      within(picker).getByRole('button', { name: '删除自建食物「妈妈牌红烧肉」' }),
+    );
+    expect(useLibraryStore.getState().customFoods).toHaveLength(0);
   });
 });

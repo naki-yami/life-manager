@@ -9,6 +9,7 @@ import { useFocusStore } from '../store/focusStore';
 import { useGameStore } from '../store/gameStore';
 import { useGoalStore } from '../store/goalStore';
 import { useHabitStore } from '../store/habitStore';
+import { useLibraryStore } from '../store/libraryStore';
 import { useReviewStore } from '../store/reviewStore';
 import { useTaskStore } from '../store/taskStore';
 import { useThemeStore } from '../store/themeStore';
@@ -41,6 +42,8 @@ export function readAllData(): BackupData {
     focusSessions: useFocusStore.getState().sessions,
     reviews: useReviewStore.getState().reviews,
     goals: useGoalStore.getState().goals,
+    customFoods: useLibraryStore.getState().customFoods,
+    customExercises: useLibraryStore.getState().customExercises,
     settings: {
       themeMode: useThemeStore.getState().themeMode,
       density: useUiStore.getState().density,

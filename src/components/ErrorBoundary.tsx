@@ -14,6 +14,7 @@ import { useFitnessStore } from '../store/fitnessStore';
 import { useDietStore } from '../store/dietStore';
 import { useGameStore } from '../store/gameStore';
 import { useThemeStore } from '../store/themeStore';
+import { useLibraryStore } from '../store/libraryStore';
 import { useUiStore } from '../store/uiStore';
 
 interface ErrorBoundaryProps {
@@ -78,6 +79,8 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
         focusSessions: safeRead(() => useFocusStore.getState().sessions, [], '专注记录'),
         reviews: safeRead(() => useReviewStore.getState().reviews, [], '复盘'),
         goals: safeRead(() => useGoalStore.getState().goals, [], '目标'),
+        customFoods: safeRead(() => useLibraryStore.getState().customFoods, [], '自建食物'),
+        customExercises: safeRead(() => useLibraryStore.getState().customExercises, [], '自建动作'),
         settings: {
           themeMode: safeRead(() => useThemeStore.getState().themeMode, 'system' as const, '主题'),
           density: safeRead(() => useUiStore.getState().density, 'comfortable' as const, '密度'),

@@ -40,6 +40,13 @@ import { ListEmptyState, PageHeader, Toolbar } from '../components/layout';
 import { BarChart, Sparkline } from '../components/charts';
 import { MonthCalendar, type CalendarMark } from '../components/ui';
 import { useDietStore } from '../store/dietStore';
+import {
+  allFoods,
+  useLibraryStore,
+  type LibraryFood,
+} from '../store/libraryStore';
+import { FOOD_CATEGORIES, type FoodCategory } from '../data/foodCategories';
+import { FOOD_SEEDS } from '../data/foods';
 import { useUndoableRemove } from '../hooks/useUndoableRemove';
 import { matchesKeyword } from '../utils/search';
 import { useEntityList } from '../hooks/useEntityList';
@@ -89,7 +96,7 @@ const MEAL_ICON: Record<MealType, LucideIcon> = {
   snack: Coffee,
 };
 
-const FOOD_CATEGORIES = ['主食', '蛋白质', '蔬菜', '水果', '乳制品', '饮品', '零食', '其他'];
+
 
 const CATEGORY_OPTIONS = FOOD_CATEGORIES.map((category) => ({
   value: category,
@@ -131,6 +138,17 @@ export const DietPage: React.FC = () => {
     date: todayKey(),
     items: [emptyItem()],
   });
+
+  // 食物库选择器（F9）：搜索 + 分类过滤 + 自建；选中后填进当前表单
+  const [showFoodPicker, setShowFoodPicker] = useState(false);
+  const [foodKeyword, setFoodKeyword] = useState('');
+  const [foodCategory, setFoodCategory] = useState<'all' | FoodCategory>('all');
+  const [customName, setCustomName] = useState('');
+  const [customCategory, setCustomCategory] = useState<FoodCategory>('其他');
+  const [customCalories, setCustomCalories] = useState<number | ''>('');
+  const customFoods = useLibraryStore((state) => state.customFoods);
+  const addCustomFood = useLibraryStore((state) => state.addCustomFood);
+  const deleteCustomFood = useLibraryStore((state) => state.deleteCustomFood);
 
   const today = todayKey();
 
@@ -239,6 +257,56 @@ export const DietPage: React.FC = () => {
   const openAddModal = (type: MealType, date = selectedDate): void => {
     setForm({ type, date, items: [emptyItem()] });
     setShowAddModal(true);
+  };
+
+/** 食物库的搜索结果：分类过滤 + 关键词匹配（名称） */
+  const libraryFoods: LibraryFood[] = useMemo(() => {
+    const all = allFoods(customFoods);
+    const kw = foodKeyword.trim().toLowerCase();
+    return all.filter((food) => {
+      if (foodCategory !== 'all' && food.category !== foodCategory) return false;
+      return kw === '' || food.name.toLowerCase().includes(kw);
+    });
+  }, [customFoods, foodKeyword, foodCategory]);
+
+  /** 只展示前 60 条，避免一次渲染上千行；搜索本身就是收窄手段 */
+  const visibleFoods = libraryFoods.slice(0, 60);
+
+  const fillFromLibrary = (food: LibraryFood): void => {
+    setForm((current) => {
+      const filled: FoodDraft = {
+        name: food.name,
+        category: FOOD_CATEGORIES.includes(food.category as FoodCategory)
+          ? (food.category as FoodCategory)
+          : '其他',
+        calories: food.calories,
+        protein: food.protein,
+        carbs: food.carbs,
+        fat: food.fat,
+      };
+      // 第一行还空着就原地填，否则追加一行，方便连续加好几样
+      const firstEmpty =
+        current.items.length === 1 && current.items[0].name.trim() === '';
+      return {
+        ...current,
+        items: firstEmpty ? [filled] : [...current.items, filled],
+      };
+    });
+  };
+
+  const handleAddCustomFood = (): void => {
+    const name = customName.trim();
+    if (!name) return;
+    addCustomFood({
+      name,
+      category: customCategory,
+      calories: typeof customCalories === 'number' ? customCalories : 0,
+      protein: 0,
+      carbs: 0,
+      fat: 0,
+    });
+    setCustomName('');
+    setCustomCalories('');
   };
 
   const updateItem = (index: number, patch: Partial<FoodDraft>): void => {
@@ -690,6 +758,19 @@ export const DietPage: React.FC = () => {
             />
           </div>
 
+          <Button
+            size="sm"
+            variant="secondary"
+            icon={<UtensilsCrossed size={14} aria-hidden />}
+            onClick={() => {
+              setFoodKeyword('');
+              setFoodCategory('all');
+              setShowFoodPicker(true);
+            }}
+          >
+            从食物库选择
+          </Button>
+
           <div className="space-y-3">
             {form.items.map((item, index) => (
               <div key={index} className="rounded border border-line-subtle p-3">
@@ -776,6 +857,131 @@ export const DietPage: React.FC = () => {
             <span className="font-semibold text-content tabular">{formatNumber(formCalories)}</span>{' '}
             kcal
           </p>
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={showFoodPicker}
+        onClose={() => setShowFoodPicker(false)}
+        title="从食物库选择"
+        description="数值按 100g 可食部分记，填进来之后按实际吃的量改"
+        size="lg"
+      >
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-end gap-2">
+            <div className="min-w-40 flex-1">
+              <Input
+                label="搜索"
+                value={foodKeyword}
+                onChange={(event) => setFoodKeyword(event.target.value)}
+                placeholder="如：鸡胸、米饭、拿铁…"
+              />
+            </div>
+            <div className="w-36">
+              <Select
+                label="分类"
+                value={foodCategory}
+                onChange={(value) => setFoodCategory(value as 'all' | FoodCategory)}
+                options={[
+                  { value: 'all', label: '全部分类' },
+                  ...FOOD_CATEGORIES.map((category) => ({
+                    value: category,
+                    label: category,
+                  })),
+                ]}
+              />
+            </div>
+          </div>
+
+          <ul className="max-h-64 divide-y divide-line-subtle overflow-y-auto rounded border border-line-subtle">
+            {visibleFoods.length === 0 ? (
+              <li className="px-3 py-6 text-center text-sm text-content-tertiary">
+                库里没有匹配的食物，可以在下面存一条自建的。
+              </li>
+            ) : (
+              visibleFoods.map((food) => (
+                <li key={food.id ?? food.name} className="flex items-center gap-3 px-3 py-2">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-x-2">
+                      <span className="truncate text-sm text-content">{food.name}</span>
+                      <Badge tone="default">{food.category}</Badge>
+                      {!FOOD_SEEDS.some((seed) => seed.name === food.name) && (
+                        <Badge tone="accent">自建</Badge>
+                      )}
+                    </div>
+                    <span className="text-2xs text-content-tertiary tabular">
+                      {food.calories} kcal · 蛋白 {food.protein}g · 碳水 {food.carbs}g · 脂肪{' '}
+                      {food.fat}g
+                    </span>
+                  </div>
+                  {food.id && (
+                    <IconButton
+                      label={`删除自建食物「${food.name}」`}
+                      size="sm"
+                      icon={<X size={13} />}
+                      onClick={() => deleteCustomFood(food.id!)}
+                      className="hover:text-danger"
+                    />
+                  )}
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    aria-label={`把「${food.name}」填入表单`}
+                    onClick={() => fillFromLibrary(food)}
+                  >
+                    填入
+                  </Button>
+                </li>
+              ))
+            )}
+          </ul>
+          {libraryFoods.length > visibleFoods.length && (
+            <p className="text-xs text-content-tertiary">
+              只显示前 {visibleFoods.length} 条，共 {libraryFoods.length} 条，继续输入关键词收窄。
+            </p>
+          )}
+
+          <div className="rounded bg-inset p-3">
+            <p className="mb-2 text-sm font-medium text-content-secondary">库里没有？存一条自建的</p>
+            <div className="flex flex-wrap items-end gap-2">
+              <div className="min-w-32 flex-1">
+                <Input
+                  label="名称"
+                  value={customName}
+                  onChange={(event) => setCustomName(event.target.value)}
+                  placeholder={foodKeyword.trim() || '自定义食物名'}
+                />
+              </div>
+              <div className="w-32">
+                <Select
+                  label="分类"
+                  value={customCategory}
+                  onChange={(value) => setCustomCategory(value as FoodCategory)}
+                  options={FOOD_CATEGORIES.map((category) => ({
+                    value: category,
+                    label: category,
+                  }))}
+                />
+              </div>
+              <div className="w-32">
+                <NumberInput
+                  label="热量(100g)"
+                  value={customCalories}
+                  onChange={(value) => setCustomCalories(value)}
+                  min={0}
+                  step={10}
+                  suffix="kcal"
+                />
+              </div>
+              <Button
+                variant="secondary"
+                onClick={handleAddCustomFood}
+                disabled={!customName.trim()}
+              >
+                存入食物库
+              </Button>
+            </div>
+          </div>
         </div>
       </Modal>
 

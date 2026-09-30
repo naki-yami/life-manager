@@ -76,6 +76,8 @@ const emptyBackup: BackupData = {
   focusSessions: [],
   reviews: [],
   goals: [],
+  customFoods: [],
+  customExercises: [],
   settings: { themeMode: 'system', density: 'comfortable', sidebarCollapsed: false },
 };
 

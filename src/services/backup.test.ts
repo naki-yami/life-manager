@@ -264,6 +264,19 @@ function sampleData(): BackupData {
       },
     ],
     settings: { theme: 'dark' },
+    customFoods: [
+      {
+        id: 'cfood-1',
+        name: '妈妈牌红烧肉',
+        category: '其他',
+        calories: 320,
+        protein: 15,
+        carbs: 8,
+        fat: 26,
+        createdAt: '2026-09-29T10:00:00.000Z',
+      },
+    ],
+    customExercises: [],
   };
 }
 
@@ -285,6 +298,8 @@ const emptyData = (): BackupData => ({
   focusSessions: [],
   reviews: [],
   goals: [],
+  customFoods: [],
+  customExercises: [],
 });
 
 describe('导出 / 导入 往返', () => {
@@ -342,7 +357,7 @@ describe('导出 / 导入 往返', () => {
   it('信封结构包含 schemaVersion 与 exportedAt', () => {
     const envelope = buildBackupEnvelope(emptyData(), new Date('2026-09-28T00:00:00.000Z'));
     expect(envelope.app).toBe('life-manager');
-    expect(envelope.schemaVersion).toBe(16);
+    expect(envelope.schemaVersion).toBe(17);
     expect(envelope.exportedAt).toBe('2026-09-28T00:00:00.000Z');
   });
 });
@@ -1044,6 +1059,8 @@ describe('导入模式', () => {
       plan.data.focusSessions,
       plan.data.reviews,
       plan.data.goals,
+      plan.data.customFoods,
+      plan.data.customExercises,
     ].reduce((sum, list) => sum + (list?.length ?? 0), 0);
 
     expect(totals.added).toBe(actual);

@@ -23,7 +23,7 @@ export const APP_ID = 'life-manager';
  * 15：新增「复盘」模块（每日 / 每周三个固定问题）。
  * 16：新增「目标」模块（指标 + 周期 + 目标值，进度现算不落库）。
  */
-export const BACKUP_SCHEMA_VERSION = 16;
+export const BACKUP_SCHEMA_VERSION = 17;
 
 const isoDateString = z.string();
 const percent = z.number().min(0).max(100).catch(0);
@@ -443,6 +443,27 @@ export const goalSchema = z.object({
 });
 
 // ---------- 设置 ----------
+/** v17：自建食物（食物库种子之外用户自己加的） */
+export const customFoodSchema = z.object({
+  id: z.string().min(1),
+  name: z.string(),
+  category: z.string().default('其他'),
+  calories: z.number().min(0).catch(0),
+  protein: z.number().min(0).catch(0),
+  carbs: z.number().min(0).catch(0),
+  fat: z.number().min(0).catch(0),
+  createdAt: isoDateString.default(() => new Date().toISOString()),
+});
+
+/** v17：自建动作（动作库种子之外用户自己加的） */
+export const customExerciseSchema = z.object({
+  id: z.string().min(1),
+  name: z.string(),
+  muscleGroup: z.string().default(''),
+  equipment: z.string().default(''),
+  createdAt: isoDateString.default(() => new Date().toISOString()),
+});
+
 export const settingsSchema = z.object({
   /** 新字段（v3）：三态主题 */
   themeMode: z.enum(['light', 'dark', 'system']).optional(),
@@ -471,6 +492,8 @@ export const backupDataSchema = z.object({
   focusSessions: z.array(focusSessionSchema).default([]),
   reviews: z.array(reviewSchema).default([]),
   goals: z.array(goalSchema).default([]),
+  customFoods: z.array(customFoodSchema).default([]),
+  customExercises: z.array(customExerciseSchema).default([]),
   settings: settingsSchema.optional(),
 });
 
@@ -494,6 +517,8 @@ export const BACKUP_MODULES = [
   'focusSessions',
   'reviews',
   'goals',
+  'customFoods',
+  'customExercises',
 ] as const;
 
 export type BackupModule = (typeof BACKUP_MODULES)[number];
@@ -516,4 +541,6 @@ export const MODULE_LABELS: Record<BackupModule, string> = {
   focusSessions: '专注记录',
   reviews: '复盘',
   goals: '目标',
+  customFoods: '自建食物',
+  customExercises: '自建动作',
 };
