@@ -14,6 +14,7 @@ import {
   StatCard,
 } from '../components/ui';
 import { BarChart, Heatmap, Sparkline, StackedBar } from '../components/charts';
+import type { ChartBucket } from '../components/charts';
 import { ProgressBar } from '../components/ui';
 import { PageHeader } from '../components/layout';
 import { GoalProgressList } from '../components/goals';
@@ -34,7 +35,6 @@ import {
   monthBuckets,
   percentOf,
   seriesByDay,
-  seriesByWeek,
   sumOf,
   sumSeries,
   weekBuckets,
@@ -50,6 +50,7 @@ import {
   todayKey,
 } from '../utils/date';
 import { goalProgress, sortGoals, summarizeGoals } from '../utils/goals';
+import { summarizeModule, volumeByDay, writingDailyWords } from '../utils/moduleInsights';
 import type { DayPoint } from '../utils/stats';
 import type { MetricSnapshot } from '../utils/metrics';
 
@@ -76,8 +77,8 @@ const WEEKLY_THRESHOLD = 31;
 /** 再长就按月汇总：300 多根柱子挤在一起，谁也读不出来 */
 const MONTHLY_THRESHOLD = 120;
 
-/** 图表的聚合粒度：7 / 30 天看每天，90 天看每周，再长看每月 */
-type BucketMode = 'day' | 'week' | 'month';
+/** 图表的聚合粒度：7 / 30 天看每天，90 天看每周，再长看每月（与图表描述里的说法同源） */
+type BucketMode = ChartBucket;
 
 const BUCKET_UNIT: Record<BucketMode, string> = { day: '天', week: '周', month: '月' };
 
@@ -312,41 +313,110 @@ export const StatsPage: React.FC = () => {
     dietRecords.length > 0 ||
     games.length > 0;
 
-  /** 三类流水的近 8 周趋势（周一起始） */
-  const WEEKS = 8;
-  const devWeekly = useMemo(
-    () =>
-      seriesByWeek(
-        devSessions,
-        WEEKS,
-        today,
-        (session) => session.date,
-        (session) => session.hours,
-      ),
-    [devSessions, today],
-  );
-  const readingWeekly = useMemo(
-    () =>
-      seriesByWeek(
-        readingSessions,
-        WEEKS,
-        today,
-        (session) => session.date,
-        (session) => session.minutes,
-      ),
-    [readingSessions, today],
-  );
-  const gameWeekly = useMemo(
-    () =>
-      seriesByWeek(
-        gameSessions,
-        WEEKS,
-        today,
-        (session) => session.date,
-        (session) => session.hours,
-      ),
-    [gameSessions, today],
-  );
+  /**
+   * 每模块独立分析：同一个区间、同一套聚合粒度，每个模块看**自己的那个指标**。
+   *
+   * 与上面几张图的分工是视角不同：上面看的是跨模块的活动量与热量（所有模块被折成「条数」），
+   * 这里各看各的 —— 读书看时长、健身看训练容量、写作看当天写下的字数。
+   * 这些图跟着时间范围一起变，取代了原来固定「近 8 周」的那三张：固定窗口和上面的区间选择器
+   * 摆在一起时，用户改区间却有三张图不动，只会让人以为坏了。
+   */
+  const moduleInsights = useMemo(() => {
+    const built = [
+      {
+        key: 'reading',
+        label: '读书 · 阅读时长',
+        unit: '分钟',
+        tone: 'accent' as const,
+        available: readingSessions.length > 0,
+        series: seriesByDay(
+          readingSessions,
+          rangeDays,
+          anchor,
+          (session) => session.date,
+          (session) => session.minutes,
+        ),
+      },
+      {
+        key: 'fitness',
+        label: '健身 · 训练容量',
+        unit: 'kg',
+        tone: 'warning' as const,
+        available: fitnessRecords.length > 0,
+        series: volumeByDay(fitnessRecords, rangeDays, anchor),
+      },
+      {
+        key: 'diet',
+        label: '饮食 · 蛋白质',
+        unit: 'g',
+        tone: 'danger' as const,
+        available: dietRecords.length > 0,
+        series: seriesByDay(
+          dietRecords,
+          rangeDays,
+          anchor,
+          (record) => record.date,
+          (record) => record.totalProtein,
+        ),
+      },
+      {
+        key: 'dev',
+        label: '开发 · 投入工时',
+        unit: '小时',
+        tone: 'accent' as const,
+        available: devSessions.length > 0,
+        series: seriesByDay(
+          devSessions,
+          rangeDays,
+          anchor,
+          (session) => session.date,
+          (session) => session.hours,
+        ),
+      },
+      {
+        key: 'writing',
+        label: '写作 · 写下字数',
+        unit: '字',
+        tone: 'success' as const,
+        // 写作没有流水，只有保存正文时留下的快照，文案里得说清这是推算
+        note: '按保存快照推算',
+        available: writingProjects.some((project) => project.snapshots.length > 0),
+        series: writingDailyWords(writingProjects, rangeDays, anchor),
+      },
+      {
+        key: 'game',
+        label: '游戏 · 游玩时长',
+        unit: '小时',
+        tone: 'warning' as const,
+        available: gameSessions.length > 0,
+        series: seriesByDay(
+          gameSessions,
+          rangeDays,
+          anchor,
+          (session) => session.date,
+          (session) => session.hours,
+        ),
+      },
+    ];
+
+    return built
+      .filter((item) => item.available)
+      .map((item) => ({
+        ...item,
+        chart: bucketize(item.series, bucketMode),
+        summary: summarizeModule(item.series),
+      }));
+  }, [
+    readingSessions,
+    fitnessRecords,
+    dietRecords,
+    devSessions,
+    writingProjects,
+    gameSessions,
+    rangeDays,
+    anchor,
+    bucketMode,
+  ]);
 
   /** 各模块的数据量分布 */
   const moduleDistribution = useMemo(
@@ -537,6 +607,7 @@ export const StatsPage: React.FC = () => {
             <CardBody>
               <StackedBar
                 dates={activityDates}
+                bucket={bucketMode}
                 series={[
                   { name: '任务', values: taskChart.map((point) => point.value) },
                   { name: '训练', values: fitnessChart.map((point) => point.value) },
@@ -558,6 +629,7 @@ export const StatsPage: React.FC = () => {
               <CardBody>
                 <BarChart
                   data={taskChart}
+                  bucket={bucketMode}
                   label={`${rangeLabel}任务完成数（按${bucketUnit}）`}
                   tone="success"
                   formatValue={(value) => `${value} 个`}
@@ -574,6 +646,7 @@ export const StatsPage: React.FC = () => {
               <CardBody>
                 <BarChart
                   data={calorieChart}
+                  bucket={bucketMode}
                   label={`${rangeLabel}摄入热量（按${bucketUnit}）`}
                   tone="warning"
                   formatValue={(value) => `${formatNumber(value)} kcal`}
@@ -608,47 +681,35 @@ export const StatsPage: React.FC = () => {
             </Card>
           )}
 
-          {(devSessions.length > 0 || readingSessions.length > 0 || gameSessions.length > 0) && (
-            <div className="grid gap-4 lg:grid-cols-3">
-              {devSessions.length > 0 && (
-                <Card>
-                  <CardHeader title="工时趋势" subtitle="近 8 周每周投入的开发工时" />
+          {moduleInsights.length > 0 && (
+            <div className="grid gap-4 lg:grid-cols-2">
+              {moduleInsights.map((item) => (
+                <Card key={item.key}>
+                  <CardHeader
+                    title={item.label}
+                    subtitle={`${rangeLabel}，按${bucketUnit}汇总${item.note ? ` · ${item.note}` : ''}`}
+                  />
                   <CardBody>
+                    <div className="mb-3 flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                      <span className="text-xl font-semibold tabular text-content">
+                        {formatNumber(item.summary.total)}
+                      </span>
+                      <span className="text-xs text-content-tertiary">{item.unit}</span>
+                      <span className="ml-auto text-2xs text-content-tertiary">
+                        有记录 {item.summary.days} 天 · 单日最高 {formatNumber(item.summary.best)}
+                      </span>
+                    </div>
                     <BarChart
-                      data={devWeekly}
-                      label="近 8 周每周投入工时"
-                      formatValue={(value) => `${formatNumber(value)} 小时`}
-                      formatDate={formatShortDate}
+                      data={item.chart}
+                      bucket={bucketMode}
+                      label={`${rangeLabel}${item.label}`}
+                      tone={item.tone}
+                      formatValue={(value) => `${formatNumber(value)} ${item.unit}`}
+                      formatDate={formatBucketDate}
                     />
                   </CardBody>
                 </Card>
-              )}
-              {readingSessions.length > 0 && (
-                <Card>
-                  <CardHeader title="阅读趋势" subtitle="近 8 周每周阅读时长" />
-                  <CardBody>
-                    <BarChart
-                      data={readingWeekly}
-                      label="近 8 周每周阅读分钟"
-                      formatValue={(value) => `${formatNumber(value)} 分钟`}
-                      formatDate={formatShortDate}
-                    />
-                  </CardBody>
-                </Card>
-              )}
-              {gameSessions.length > 0 && (
-                <Card>
-                  <CardHeader title="游玩趋势" subtitle="近 8 周每周游玩时长" />
-                  <CardBody>
-                    <BarChart
-                      data={gameWeekly}
-                      label="近 8 周每周游玩小时"
-                      formatValue={(value) => `${formatNumber(value)} 小时`}
-                      formatDate={formatShortDate}
-                    />
-                  </CardBody>
-                </Card>
-              )}
+              ))}
             </div>
           )}
 

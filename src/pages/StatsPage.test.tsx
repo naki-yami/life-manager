@@ -201,9 +201,9 @@ describe('StatsPage', () => {
     expect(screen.getByText('今日计划')).toBeInTheDocument();
     expect(screen.getByText('开发项目')).toBeInTheDocument();
 
-    // 工时趋势卡出现
-    expect(screen.getByText('工时趋势')).toBeInTheDocument();
-    expect(screen.getByRole('img', { name: /近 8 周每周投入工时/ })).toBeInTheDocument();
+    // 每模块分析里出现开发那一格，指标是投入工时
+    expect(cardFor('开发 · 投入工时').getByText('2')).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: /最近 30 天开发 · 投入工时/ })).toBeInTheDocument();
   });
 
   it('有目标时单列一张达成卡片，进度与首页同源', () => {
@@ -388,5 +388,73 @@ describe('StatsPage', () => {
     // 区间挪到 40 天前那一带，这一格仍是「今天的最近 7 天」：600 而不是 300
     expect(cardFor('近 7 天日均热量').getByText('600')).toBeInTheDocument();
     expect(cardFor('近 7 天日均热量').getByText('按 1 天有记录的天数计算')).toBeInTheDocument();
+  });
+
+  it('每模块分析：各模块看自己的那个指标，并跟着区间一起变', async () => {
+    useBookStore.getState().addReadingSession('b1', todayKey(), 45, '');
+    useBookStore.getState().addReadingSession('b1', addDays(todayKey(), -20), 30, '');
+    useDevStore.getState().addProject('写作助手', '');
+    useDevStore.getState().addSession(useDevStore.getState().projects[0]!.id, todayKey(), 2, '');
+    useFitnessStore.getState().addRecord('推日', todayKey(), workout, '');
+    useDietStore
+      .getState()
+      .addRecord(todayKey(), 'lunch', [
+        { name: '鸡胸肉', category: 'protein', calories: 600, protein: 30 },
+      ]);
+
+    renderStats();
+
+    expect(cardFor('读书 · 阅读时长').getByText('75')).toBeInTheDocument();
+    expect(cardFor('读书 · 阅读时长').getByText('有记录 2 天 · 单日最高 45')).toBeInTheDocument();
+    // 健身看的是容量（组数 × 次数 × 重量），不是「练了几次」：3 × 10 × 60
+    expect(cardFor('健身 · 训练容量').getByText('1,800')).toBeInTheDocument();
+    // 饮食这一格看蛋白质，和上面的热量趋势是两回事
+    expect(cardFor('饮食 · 蛋白质').getByText('30')).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: /最近 30 天读书 · 阅读时长/ })).toBeInTheDocument();
+
+    // 切到 7 天，20 天前那 30 分钟被挡在区间外
+    await userEvent.click(screen.getByRole('button', { name: '7 天' }));
+    expect(cardFor('读书 · 阅读时长').getByText('45')).toBeInTheDocument();
+    expect(cardFor('读书 · 阅读时长').getByText('有记录 1 天 · 单日最高 45')).toBeInTheDocument();
+  });
+
+  it('每模块分析：写作那一格按保存快照推算当天写下的字数', () => {
+    useWritingStore.getState().addProject('长文', 'article');
+    const projectId = useWritingStore.getState().projects[0]!.id;
+    useWritingStore.getState().updateContent(projectId, 'x'.repeat(100));
+    useWritingStore.getState().updateContent(projectId, 'x'.repeat(300));
+
+    renderStats();
+
+    expect(cardFor('写作 · 写下字数').getByText('300')).toBeInTheDocument();
+    expect(screen.getByText(/按保存快照推算/)).toBeInTheDocument();
+  });
+
+  it('长区间下图与描述一起切到按周聚合，读屏说的是「单周最高」', async () => {
+    useBookStore.getState().addBook('置身事内', '兰小欢', '经济');
+    const bookId = useBookStore.getState().books[0]!.id;
+    useBookStore.getState().addReadingSession(bookId, todayKey(), 45, '');
+    useBookStore.getState().addReadingSession(bookId, addDays(todayKey(), -40), 30, '');
+
+    renderStats();
+    await userEvent.click(screen.getByRole('button', { name: '90 天' }));
+
+    expect(
+      screen.getByRole('img', {
+        name: '最近 90 天读书 · 阅读时长：合计 75 分钟，单周最高 45 分钟',
+      }),
+    ).toBeInTheDocument();
+    // 每个模块卡的副标题都会写明聚合粒度，所以是多处命中
+    expect(screen.getAllByText(/最近 90 天，按周汇总/).length).toBeGreaterThan(0);
+  });
+
+  it('每模块分析：没有流水的模块不出现，只有任务时整块都不出现', () => {
+    useTaskStore.getState().addTask('写周报', '', 'high', '');
+
+    renderStats();
+
+    expect(screen.queryByText('读书 · 阅读时长')).not.toBeInTheDocument();
+    expect(screen.queryByText('健身 · 训练容量')).not.toBeInTheDocument();
+    expect(screen.queryByRole('img', { name: /写下字数/ })).not.toBeInTheDocument();
   });
 });
