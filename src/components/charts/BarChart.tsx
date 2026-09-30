@@ -1,6 +1,8 @@
 import React from 'react';
 import type { DayPoint } from '../../utils/stats';
 import { sumOf } from '../../utils/stats';
+import { BAR_PEAK_LABEL } from './buckets';
+import type { ChartBucket } from './buckets';
 import { CHART_BAR } from './tones';
 import type { ChartTone } from './tones';
 import { formatShortDate } from '../../utils/date';
@@ -15,6 +17,8 @@ export interface BarChartProps {
   formatValue?: (value: number) => string;
   /** 底部首尾刻度的格式化；按周或按月聚合时换成对应标签 */
   formatDate?: (key: string) => string;
+  /** 聚合粒度：描述里「单日最高」还是「单周最高」跟着它走 */
+  bucket?: ChartBucket;
   className?: string;
 }
 
@@ -29,6 +33,7 @@ export const BarChart: React.FC<BarChartProps> = ({
   height = 120,
   formatValue = (value) => String(value),
   formatDate = formatShortDate,
+  bucket = 'day',
   className = '',
 }) => {
   const cursor = useChartCursor(data.length);
@@ -58,7 +63,7 @@ export const BarChart: React.FC<BarChartProps> = ({
       <div
         {...cursor.containerProps}
         role="img"
-        aria-label={`${label}：合计 ${formatValue(total)}，单日最高 ${formatValue(peak)}`}
+        aria-label={`${label}：合计 ${formatValue(total)}，${BAR_PEAK_LABEL[bucket]} ${formatValue(peak)}`}
         className={`flex items-end gap-1 ${CHART_FOCUS_RING}`}
         style={{ height }}
       >

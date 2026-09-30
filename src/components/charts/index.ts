@@ -20,5 +20,7 @@ export {
   seriesAt,
 } from './tones';
 export type { ChartSeriesIndex, ChartTone } from './tones';
+export { BAR_PEAK_LABEL, STACKED_PEAK_LABEL } from './buckets';
+export type { ChartBucket } from './buckets';
 export { CHART_FOCUS_RING, useChartCursor } from './useChartCursor';
 export type { ChartCursor } from './useChartCursor';

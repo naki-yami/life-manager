@@ -1,5 +1,7 @@
 import React from 'react';
 import { formatShortDate } from '../../utils/date';
+import { STACKED_PEAK_LABEL } from './buckets';
+import type { ChartBucket } from './buckets';
 import { CHART_SERIES_BAR, CHART_SERIES_DOT, seriesAt, type ChartSeriesIndex } from './tones';
 import { CHART_FOCUS_RING, useChartCursor } from './useChartCursor';
 
@@ -20,6 +22,8 @@ export interface StackedBarProps {
   height?: number;
   formatValue?: (value: number) => string;
   formatDate?: (key: string) => string;
+  /** 聚合粒度：描述里「最高一天」还是「最高一周」跟着它走 */
+  bucket?: ChartBucket;
   className?: string;
 }
 
@@ -37,6 +41,7 @@ export const StackedBar: React.FC<StackedBarProps> = ({
   height = 120,
   formatValue = (value) => String(value),
   formatDate = formatShortDate,
+  bucket = 'day',
   className = '',
 }) => {
   const cursor = useChartCursor(dates.length);
@@ -67,7 +72,7 @@ export const StackedBar: React.FC<StackedBarProps> = ({
       <div
         {...cursor.containerProps}
         role="img"
-        aria-label={`${label}：合计 ${formatValue(grandTotal)}，最高一天 ${formatValue(peak)}`}
+        aria-label={`${label}：合计 ${formatValue(grandTotal)}，${STACKED_PEAK_LABEL[bucket]} ${formatValue(peak)}`}
         className={`flex items-end gap-1 ${CHART_FOCUS_RING}`}
         style={{ height }}
       >

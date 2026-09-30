@@ -526,6 +526,7 @@ export const TasksPage: React.FC = () => {
             <div className="min-w-0 flex-1">
               <BarChart
                 data={weeklyDone}
+                bucket="week"
                 label="近 8 周每周完成任务数"
                 formatValue={(value) => `${value} 件`}
                 formatDate={formatShortDate}

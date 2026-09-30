@@ -70,6 +70,18 @@ describe('BarChart', () => {
       screen.getByRole('img', { name: '每日完成任务数：合计 0 个，单日最高 0 个' }),
     ).toBeInTheDocument();
   });
+
+  it('按周聚合时描述改口说「单周最高」，不再假装是单日', () => {
+    const data = [
+      { date: '2026-09-07', value: 2 },
+      { date: '2026-09-14', value: 5 },
+    ];
+    render(<BarChart data={data} label="每周完成任务数" bucket="week" />);
+
+    expect(
+      screen.getByRole('img', { name: '每周完成任务数：合计 7，单周最高 5' }),
+    ).toBeInTheDocument();
+  });
 });
 
 describe('LineChart', () => {
@@ -313,6 +325,19 @@ describe('StackedBar', () => {
     expect(dotOf('C')).toHaveClass('bg-chart-3');
     expect(seriesAt(8)).toBe(1);
     expect(seriesAt(9)).toBe(2);
+  });
+
+  it('按月聚合时堆叠柱改口说「最高一月」', () => {
+    render(
+      <StackedBar
+        dates={['2026-08-01', '2026-09-01']}
+        series={[{ name: '任务', values: [1, 3] }]}
+        label="活动构成"
+        bucket="month"
+      />,
+    );
+
+    expect(screen.getByRole('img', { name: '活动构成：合计 4，最高一月 3' })).toBeInTheDocument();
   });
 
   it('每一天都是 0 时，「最高一天」报 0，而不是缩放用的 1', () => {
