@@ -445,3 +445,40 @@ describe('WritingPage 正文 Markdown', () => {
     expect(projectOf('新文章').wordCount).toBe(5);
   });
 });
+
+describe('WritingPage 专注模式', () => {
+  it('「专注模式」把正文弹窗铺满视口，重开时复位', async () => {
+    useWritingStore.getState().addProject('新文章', 'article');
+    render(<WritingPage />);
+
+    await userEvent.click(screen.getByRole('button', { name: '编辑正文' }));
+    const dialog = screen.getByRole('dialog', { name: /编辑正文/ });
+    expect(dialog).toHaveAttribute('data-size', 'lg');
+
+    const focusButton = within(dialog).getByRole('button', { name: '专注模式' });
+    await userEvent.click(focusButton);
+
+    expect(dialog).toHaveAttribute('data-size', 'full');
+    expect(focusButton).toHaveAttribute('aria-pressed', 'true');
+
+    await userEvent.click(within(dialog).getByRole('button', { name: '取消' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: '编辑正文' }));
+    expect(screen.getByRole('dialog', { name: /编辑正文/ })).toHaveAttribute('data-size', 'lg');
+  });
+
+  it('专注模式下正文照常能写能存', async () => {
+    useWritingStore.getState().addProject('新文章', 'article');
+    render(<WritingPage />);
+
+    await userEvent.click(screen.getByRole('button', { name: '编辑正文' }));
+    const dialog = screen.getByRole('dialog', { name: /编辑正文/ });
+    await userEvent.click(within(dialog).getByRole('button', { name: '专注模式' }));
+
+    await userEvent.type(within(dialog).getByLabelText('正文'), '专注写下的字');
+    await userEvent.click(within(dialog).getByRole('button', { name: '保存' }));
+
+    expect(projectOf('新文章').content).toBe('专注写下的字');
+  });
+});

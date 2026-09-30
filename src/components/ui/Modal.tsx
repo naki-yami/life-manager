@@ -5,12 +5,14 @@ import { useFocusTrap } from '../../hooks/useFocusTrap';
 import { IconButton } from './Button';
 import { Input } from './Input';
 
-export type ModalSize = 'sm' | 'md' | 'lg';
+export type ModalSize = 'sm' | 'md' | 'lg' | 'full';
 
 const SIZES: Record<ModalSize, string> = {
   sm: 'max-w-sm',
   md: 'max-w-lg',
   lg: 'max-w-2xl',
+  // 铺满视口（写作专注模式）：不限宽、不留外边距，背景的侧栏会被整块盖住
+  full: 'max-w-none',
 };
 
 export interface ModalProps {
@@ -40,9 +42,12 @@ const ModalInner: React.FC<ModalInnerProps> = ({
   // 焦点移入／归还、背景滚动锁、Esc 关闭、Tab 循环，全部由 useFocusTrap 统一处理
   const handleKeyDown = useFocusTrap(dialogRef, { onClose });
 
-  // 窄屏用固定的 16px 外边距，回到 sm 后再跟随密度令牌
+  // 窄屏用固定的 16px 外边距，回到 sm 后再跟随密度令牌；全屏态不留边距，直接铺满
+  const fullscreen = size === 'full';
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-page">
+    <div
+      className={`fixed inset-0 z-50 flex items-center justify-center ${fullscreen ? 'p-0' : 'p-4 sm:p-page'}`}
+    >
       <div
         aria-hidden
         onClick={onClose}
@@ -58,7 +63,12 @@ const ModalInner: React.FC<ModalInnerProps> = ({
         aria-describedby={description ? descId : undefined}
         tabIndex={-1}
         onKeyDown={handleKeyDown}
-        className={`relative z-10 flex max-h-[90vh] w-full flex-col rounded-xl border border-line-subtle bg-elevated shadow-overlay outline-none animate-scale-in motion-reduce:animate-none ${SIZES[size]}`}
+        data-size={size}
+        className={`relative z-10 flex w-full flex-col bg-elevated shadow-overlay outline-none animate-scale-in motion-reduce:animate-none ${
+          fullscreen
+            ? 'h-full max-h-none rounded-none'
+            : 'max-h-[90vh] rounded-xl border border-line-subtle'
+        } ${SIZES[size]}`}
       >
         <div className="flex items-start justify-between gap-4 px-5 pt-5">
           <div className="min-w-0">

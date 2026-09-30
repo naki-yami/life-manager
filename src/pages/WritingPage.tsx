@@ -112,6 +112,7 @@ export const WritingPage: React.FC = () => {
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [noteInput, setNoteInput] = useState('');
   const [editorId, setEditorId] = useState<string | null>(null);
+  const [focusMode, setFocusMode] = useState(false);
   const [contentDraft, setContentDraft] = useState('');
 
   const [form, setForm] = useState<{ title: string; type: WritingType; tags: string[] }>({
@@ -163,6 +164,13 @@ export const WritingPage: React.FC = () => {
     if (!project) return;
     setContentDraft(project.content);
     setEditorId(id);
+    setFocusMode(false);
+  };
+
+  /** 关掉正文编辑器时，专注模式也要跟着复位 */
+  const closeEditor = (): void => {
+    setEditorId(null);
+    setFocusMode(false);
   };
 
   // 命令面板搜到本页的稿件时，直接打开编辑器
@@ -185,7 +193,7 @@ export const WritingPage: React.FC = () => {
         description: `正文达到 ${contentDraft.length} 字，完成了 ${project.targetWords} 字的目标。`,
       });
     }
-    setEditorId(null);
+    closeEditor();
   };
 
   const handleExport = (id: string): void => {
@@ -518,12 +526,12 @@ export const WritingPage: React.FC = () => {
 
       <Modal
         isOpen={editorProject !== null}
-        onClose={() => setEditorId(null)}
+        onClose={closeEditor}
         title={editorProject ? `《${editorProject.title}》编辑正文` : '编辑正文'}
-        size="lg"
+        size={focusMode ? 'full' : 'lg'}
         footer={
           <>
-            <Button variant="secondary" onClick={() => setEditorId(null)}>
+            <Button variant="secondary" onClick={closeEditor}>
               取消
             </Button>
             <Button onClick={handleSaveContent}>保存</Button>
@@ -535,8 +543,10 @@ export const WritingPage: React.FC = () => {
             label="正文"
             value={contentDraft}
             onChange={setContentDraft}
-            rows={14}
+            rows={focusMode ? 22 : 14}
             placeholder="从这里开始写……"
+            focus={focusMode}
+            onToggleFocus={() => setFocusMode((on) => !on)}
           />
           <div className="flex flex-wrap gap-2 text-xs text-content-tertiary">
             <Badge tone="info">字数 {formatNumber(draftWords)}</Badge>

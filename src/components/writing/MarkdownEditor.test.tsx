@@ -1,7 +1,7 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { MarkdownEditor } from './MarkdownEditor';
 
 /** 受控组件：外面套一个持有状态的壳，模拟写作页里的用法 */
@@ -16,6 +16,9 @@ const setup = (initial = ''): HTMLTextAreaElement => {
 
 const toolbarButtons = (): HTMLElement[] =>
   Array.from(screen.getByRole('toolbar', { name: 'Markdown 快捷插入' }).querySelectorAll('button'));
+
+/** 40 行正文，用来验证打字机滚动的落点 */
+const LONG_DOC = Array.from({ length: 40 }, (_, i) => `第${i}行`).join('\n');
 
 describe('MarkdownEditor', () => {
   it('有选区时按「加粗」包住选中文字，焦点与选区都留在正文里', async () => {
@@ -110,5 +113,91 @@ describe('MarkdownEditor', () => {
       '链接',
       '代码块',
     ]);
+  });
+
+  it('打开「打字机滚动」会把光标行滚到可视区中线附近', async () => {
+    const textarea = setup(LONG_DOC);
+    // jsdom 没有排版，可视区高度与滚动位置都得自己造出来
+    Object.defineProperty(textarea, 'clientHeight', { value: 240, configurable: true });
+    Object.defineProperty(textarea, 'scrollTop', { value: 0, writable: true, configurable: true });
+    const caret = LONG_DOC.split('\n').slice(0, 30).join('\n').length + 1;
+    textarea.setSelectionRange(caret, caret);
+
+    const toggle = screen.getByRole('button', { name: '打字机滚动' });
+    expect(toggle).toHaveAttribute('aria-pressed', 'false');
+
+    await userEvent.click(toggle);
+
+    expect(toggle).toHaveAttribute('aria-pressed', 'true');
+    expect(textarea.scrollTop).toBeGreaterThan(0);
+  });
+
+  it('开着时方向键移动光标也会把光标行带回中线（不只靠开开关那一下）', async () => {
+    const textarea = setup(LONG_DOC);
+    Object.defineProperty(textarea, 'clientHeight', { value: 240, configurable: true });
+    Object.defineProperty(textarea, 'scrollTop', { value: 0, writable: true, configurable: true });
+
+    await userEvent.click(screen.getByRole('button', { name: '打字机滚动' }));
+
+    textarea.scrollTop = 0;
+    const caret = LONG_DOC.split('\n').slice(0, 30).join('\n').length + 1;
+    textarea.setSelectionRange(caret, caret);
+    fireEvent.keyUp(textarea);
+
+    expect(textarea.scrollTop).toBeGreaterThan(0);
+  });
+
+  it('关掉「打字机滚动」后光标移动不再自动滚', async () => {
+    const textarea = setup(LONG_DOC);
+    Object.defineProperty(textarea, 'clientHeight', { value: 240, configurable: true });
+    Object.defineProperty(textarea, 'scrollTop', { value: 0, writable: true, configurable: true });
+
+    const toggle = screen.getByRole('button', { name: '打字机滚动' });
+    await userEvent.click(toggle);
+    await userEvent.click(toggle);
+
+    textarea.scrollTop = 7;
+    fireEvent.keyUp(textarea);
+
+    expect(textarea.scrollTop).toBe(7);
+  });
+
+  it('没传 onToggleFocus 时不渲染「专注模式」按钮', () => {
+    setup();
+    expect(screen.queryByRole('button', { name: '专注模式' })).not.toBeInTheDocument();
+  });
+
+  it('传了 onToggleFocus 才有「专注模式」按钮，按下态跟着 focus 走', async () => {
+    const onToggle = vi.fn();
+    const Holder: React.FC = () => {
+      const [value, setValue] = React.useState('');
+      const [focus, setFocus] = React.useState(false);
+      return (
+        <MarkdownEditor
+          label="正文"
+          value={value}
+          onChange={setValue}
+          focus={focus}
+          onToggleFocus={() => {
+            onToggle();
+            setFocus((on) => !on);
+          }}
+        />
+      );
+    };
+    render(<Holder />);
+
+    expect(screen.getByRole('button', { name: '专注模式' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: '专注模式' }));
+
+    expect(onToggle).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('button', { name: '专注模式' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
   });
 });

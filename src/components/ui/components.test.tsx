@@ -157,6 +157,22 @@ describe('Modal', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
+  it('size 为 full 时铺满视口，留给写作专注模式', () => {
+    render(
+      <Modal isOpen onClose={() => {}} title="专注写作" size="full">
+        <p>正文</p>
+      </Modal>,
+    );
+
+    const dialog = screen.getByRole('dialog');
+    expect(dialog).toHaveAttribute('data-size', 'full');
+    expect(dialog.className).toContain('h-full');
+    expect(dialog.className).not.toContain('max-w-2xl');
+    // 全屏态不留外边距，背景的侧栏才被整块盖住
+    expect((dialog.parentElement as HTMLElement).className).toContain('p-0');
+    expect((dialog.parentElement as HTMLElement).className).not.toContain('sm:p-page');
+  });
+
   it('关闭时不渲染任何内容', () => {
     render(
       <Modal isOpen={false} onClose={() => {}} title="隐藏的弹层">

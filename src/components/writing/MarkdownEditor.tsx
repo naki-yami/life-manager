@@ -1,5 +1,6 @@
-import React, { useLayoutEffect, useRef, useState } from 'react';
+import React, { useCallback, useLayoutEffect, useRef, useState } from 'react';
 import {
+  AlignVerticalJustifyCenter,
   Bold,
   Code,
   Columns2,
@@ -9,6 +10,8 @@ import {
   Link as LinkIcon,
   List,
   ListOrdered,
+  Maximize2,
+  Minimize2,
   Pencil,
   Quote,
   SquareCode,
@@ -17,6 +20,7 @@ import {
 import { IconButton, SegmentedControl, Textarea } from '../ui';
 import { MarkdownPreview } from './MarkdownPreview';
 import { applyMarkdownAction, type MarkdownAction } from '../../utils/markdownActions';
+import { typewriterScrollTop } from '../../utils/typewriter';
 
 export type MarkdownView = 'edit' | 'preview' | 'split';
 
@@ -53,6 +57,10 @@ export interface MarkdownEditorProps {
   label: string;
   rows?: number;
   placeholder?: string;
+  /** 专注模式是否开着；这里只管按钮的按下态，弹窗尺寸由外层接管 */
+  focus?: boolean;
+  /** 传了才渲染「专注模式」按钮 */
+  onToggleFocus?: () => void;
 }
 
 /**
@@ -61,6 +69,9 @@ export interface MarkdownEditorProps {
  * 工具按钮按下时先 preventDefault 挡住失焦 —— 一旦 textarea 失焦，
  * selectionStart / selectionEnd 就归零了，插入位置也就丢了。
  * 插入完把新选区写进 pendingSelection，等 onChange 引发的这次重渲染落地后再写回 DOM。
+ *
+ * 另外带两个写作开关：打字机滚动（把光标行钉在可视区中线上）与专注模式
+ * （这里只负责按钮的按下态，铺满视口的活由外层弹窗接手）。
  */
 export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
   value,
@@ -68,20 +79,42 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
   label,
   rows = 14,
   placeholder = '',
+  focus = false,
+  onToggleFocus,
 }) => {
   const [view, setView] = useState<MarkdownView>('edit');
+  const [typewriter, setTypewriter] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const pendingSelection = useRef<{ start: number; end: number } | null>(null);
 
-  useLayoutEffect(() => {
-    const selection = pendingSelection.current;
-    if (!selection) return;
-    pendingSelection.current = null;
+  /** 打字机滚动：把光标所在的那一行钉在可视区中线上 */
+  const keepCaretCentered = useCallback((): void => {
     const textarea = textareaRef.current;
     if (!textarea) return;
-    textarea.focus();
-    textarea.setSelectionRange(selection.start, selection.end);
-  }, [value]);
+    const style = window.getComputedStyle(textarea);
+    textarea.scrollTop = typewriterScrollTop({
+      caret: textarea.selectionStart,
+      value: textarea.value,
+      // 样式表里量不到行高就退回 24px，与正文默认行高一致
+      lineHeight: Number.parseFloat(style.lineHeight) || 24,
+      viewportHeight: textarea.clientHeight,
+      paddingTop: Number.parseFloat(style.paddingTop) || 0,
+    });
+  }, []);
+
+  useLayoutEffect(() => {
+    const selection = pendingSelection.current;
+    if (selection) {
+      pendingSelection.current = null;
+      const textarea = textareaRef.current;
+      if (textarea) {
+        textarea.focus();
+        textarea.setSelectionRange(selection.start, selection.end);
+      }
+    }
+    // 插入 / 清空之后行号会变，打开开关时也要立刻对上中线
+    if (typewriter) keepCaretCentered();
+  }, [value, typewriter, keepCaretCentered]);
 
   const runAction = (action: MarkdownAction): void => {
     const textarea = textareaRef.current;
@@ -93,6 +126,16 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
     onChange(result.value);
   };
 
+  // 光标一动就重新对中线。三种事件都得接：键盘走 keyup、鼠标走 click，
+  // 拖选文字时浏览器原生的 select 事件最可靠（只接 select 会漏掉方向键）。
+  const caretHandlers = typewriter
+    ? {
+        onSelect: keepCaretCentered,
+        onKeyUp: keepCaretCentered,
+        onClick: keepCaretCentered,
+      }
+    : {};
+
   const editor = (
     <Textarea
       ref={textareaRef}
@@ -102,6 +145,7 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
       rows={rows}
       placeholder={placeholder}
       hint="支持 Markdown：## 标题、**粗体**、*斜体*、- 列表、> 引用、[]() 链接"
+      {...caretHandlers}
     />
   );
 
@@ -132,7 +176,25 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
             ))}
           </div>
         )}
-        <div className="ml-auto">
+        <div className="ml-auto flex flex-wrap items-center gap-1">
+          <IconButton
+            size="sm"
+            label="打字机滚动"
+            aria-pressed={typewriter}
+            icon={<AlignVerticalJustifyCenter size={15} aria-hidden />}
+            onClick={() => setTypewriter((on) => !on)}
+          />
+          {onToggleFocus && (
+            <IconButton
+              size="sm"
+              label="专注模式"
+              aria-pressed={focus}
+              icon={
+                focus ? <Minimize2 size={15} aria-hidden /> : <Maximize2 size={15} aria-hidden />
+              }
+              onClick={onToggleFocus}
+            />
+          )}
           <SegmentedControl
             size="sm"
             label="正文视图"
