@@ -4,6 +4,8 @@ import { CHART_FILL, CHART_STROKE } from './tones';
 import type { ChartTone } from './tones';
 import { formatShortDate } from '../../utils/date';
 import { CHART_FOCUS_RING, useChartCursor } from './useChartCursor';
+import { LINE_POINT_LABEL } from './buckets';
+import type { ChartBucket } from './buckets';
 
 export interface LineChartProps {
   /** 按时间升序的数据点；折线按给定顺序连线，不会自己排序 */
@@ -15,6 +17,8 @@ export interface LineChartProps {
   formatValue?: (value: number) => string;
   /** 底部首尾刻度的格式化 */
   formatDate?: (key: string) => string;
+  /** 聚合粒度：描述里说「次记录」还是「周 / 个月」跟着它走 */
+  bucket?: ChartBucket;
   className?: string;
 }
 
@@ -38,6 +42,7 @@ export const LineChart: React.FC<LineChartProps> = ({
   height = 140,
   formatValue = (value) => String(value),
   formatDate = formatShortDate,
+  bucket = 'day',
   className = '',
 }) => {
   // 钩子必须在提前 return 之前调用，否则空数据与非空数据走的是两套 Hook 顺序
@@ -79,7 +84,7 @@ export const LineChart: React.FC<LineChartProps> = ({
       <div
         {...cursor.containerProps}
         role="img"
-        aria-label={`${label}：共 ${data.length} 次记录，最新 ${formatValue(latest.value)}，最低 ${formatValue(min)}，最高 ${formatValue(max)}`}
+        aria-label={`${label}：共 ${data.length} ${LINE_POINT_LABEL[bucket]}，最新 ${formatValue(latest.value)}，最低 ${formatValue(min)}，最高 ${formatValue(max)}`}
         className={`relative ${CHART_FOCUS_RING}`}
         style={{ height }}
       >

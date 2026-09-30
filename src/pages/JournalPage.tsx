@@ -390,6 +390,7 @@ export const JournalPage: React.FC = () => {
             <LineChart
               data={buckets}
               label="心情趋势"
+              bucket={trendMode === 'month' ? 'month' : 'week'}
               formatValue={(value) => `${value} 分`}
               formatDate={trendMode === 'month' ? formatMonthLabel : formatShortDate}
             />

@@ -149,6 +149,37 @@ describe('LineChart', () => {
     expect(items[1]).toHaveTextContent('2026-09-03：69 kg');
   });
 
+  it('按周 / 按月聚合时改口说「周 / 个月」，不把聚合点念成「次记录」', () => {
+    const data = [
+      { date: '2026-09-21', value: 2.5 },
+      { date: '2026-09-28', value: 3.5 },
+    ];
+    const { unmount } = render(
+      <LineChart data={data} label="心情趋势" bucket="week" formatValue={(v) => `${v} 分`} />,
+    );
+
+    expect(
+      screen.getByRole('img', {
+        name: '心情趋势：共 2 周，最新 3.5 分，最低 2.5 分，最高 3.5 分',
+      }),
+    ).toBeInTheDocument();
+    unmount();
+
+    render(
+      <LineChart
+        data={[{ date: '2026-09-01', value: 3.5 }]}
+        label="心情趋势"
+        bucket="month"
+        formatValue={(v) => `${v} 分`}
+      />,
+    );
+    expect(
+      screen.getByRole('img', {
+        name: '心情趋势：共 1 个月，最新 3.5 分，最低 3.5 分，最高 3.5 分',
+      }),
+    ).toBeInTheDocument();
+  });
+
   it('只有一个点时画在中间，不除以零', () => {
     const { container } = render(
       <LineChart data={[{ date: '2026-09-01', value: 70 }]} label="体重趋势" />,

@@ -18,3 +18,15 @@ export const STACKED_PEAK_LABEL: Record<ChartBucket, string> = {
   week: '最高一周',
   month: '最高一月',
 };
+
+/**
+ * 折线图的点位口径。
+ *
+ * 折线上的一个点，按天是「一次记录」，按周 / 按月却是「一个聚合点」——
+ * 把「共 2 周」念成「共 2 次记录」会让读屏用户以为只记了两笔。
+ */
+export const LINE_POINT_LABEL: Record<ChartBucket, string> = {
+  day: '次记录',
+  week: '周',
+  month: '个月',
+};

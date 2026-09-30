@@ -248,6 +248,20 @@ describe('JournalPage 趋势', () => {
     expect(weekly).toHaveAttribute('aria-pressed', 'false');
   });
 
+  it('读屏描述按聚合粒度改口，不把「两周」念成「两次记录」', async () => {
+    useJournalStore.setState({
+      entries: [entry({ date: TODAY, mood: 5 }), entry({ date: YESTERDAY, mood: 2 })],
+    });
+    renderPage();
+
+    expect(screen.getByRole('img', { name: /心情趋势：共 \d+ 周/ })).toBeInTheDocument();
+    expect(screen.queryByRole('img', { name: /次记录/ })).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: '按月' }));
+
+    expect(screen.getByRole('img', { name: /心情趋势：共 \d+ 个月/ })).toBeInTheDocument();
+  });
+
   it('没有数据时趋势图给空态占位，不抛错', () => {
     renderPage();
     expect(screen.getByRole('img', { name: '心情趋势（暂无数据）' })).toBeInTheDocument();
