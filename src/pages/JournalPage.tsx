@@ -1,5 +1,14 @@
 import React, { useMemo, useState } from 'react';
-import { BookHeart, ChevronLeft, ChevronRight, Save, Smile, Trash2, X } from 'lucide-react';
+import {
+  BookHeart,
+  CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
+  Save,
+  Smile,
+  Trash2,
+  X,
+} from 'lucide-react';
 import {
   Badge,
   Button,
@@ -17,6 +26,7 @@ import {
 import { MasterDetail, PageHeader } from '../components/layout';
 import { LineChart } from '../components/charts';
 import { useJournalStore } from '../store/journalStore';
+import { useHabitStore } from '../store/habitStore';
 import { useUndoableRemove } from '../hooks/useUndoableRemove';
 import { useOptionalToast } from '../components/ui/toastContext';
 import {
@@ -35,6 +45,7 @@ import {
   summarizeJournal,
 } from '../utils/journal';
 import type { MoodTone } from '../utils/journal';
+import { habitAmountOn, habitTarget, isHabitDoneOn } from '../utils/habits';
 import {
   addDays,
   formatDayLabel,
@@ -98,6 +109,8 @@ export const JournalPage: React.FC = () => {
   const deleteEntry = useJournalStore((state) => state.deleteEntry);
   const replaceEntries = useJournalStore((state) => state.replaceEntries);
 
+  const habitList = useHabitStore((state) => state.habits);
+
   const toast = useOptionalToast();
   const undoableRemove = useUndoableRemove();
 
@@ -117,6 +130,17 @@ export const JournalPage: React.FC = () => {
   const suggestions = useMemo(
     () => [...new Set(entries.flatMap((entry) => entry.tags))],
     [entries],
+  );
+
+  /** 这一天打过卡的习惯：写日记时顺手看一眼自己做了什么（与习惯模块联动） */
+  const checkedHabits = useMemo(
+    () =>
+      selectedDate === null
+        ? []
+        : habitList
+            .map((habit) => ({ habit, amount: habitAmountOn(habit, selectedDate) }))
+            .filter((row) => row.amount > 0),
+    [habitList, selectedDate],
   );
 
   const stored = selectedDate ? journalEntryOn(entries, selectedDate) : undefined;
@@ -269,6 +293,29 @@ export const JournalPage: React.FC = () => {
           placeholder="写具体的事比写「还行」有用得多"
           onChange={(event) => updateDraft({ text: event.target.value })}
         />
+
+        {checkedHabits.length > 0 && (
+          <div className="rounded border border-line-subtle bg-inset px-3 py-2">
+            <p className="text-xs font-medium text-content-secondary">这一天的打卡</p>
+            <ul className="mt-1.5 space-y-1">
+              {checkedHabits.map(({ habit, amount }) => (
+                <li key={habit.id} className="flex items-center justify-between gap-2 text-xs">
+                  <span className="inline-flex min-w-0 items-center gap-1.5">
+                    <CheckCircle2
+                      size={12}
+                      aria-hidden
+                      className={`shrink-0 ${isHabitDoneOn(habit, selectedDate) ? 'text-success' : 'text-content-tertiary'}`}
+                    />
+                    <span className="truncate text-content-secondary">{habit.name}</span>
+                  </span>
+                  <span className="shrink-0 tabular text-content-tertiary">
+                    {habit.kind === 'count' ? `${amount}/${habitTarget(habit)}` : '已完成'}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         <div className="flex flex-wrap items-center justify-between gap-2">
           <span className="text-xs tabular text-content-tertiary">

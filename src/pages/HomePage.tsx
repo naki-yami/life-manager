@@ -52,6 +52,7 @@ import { useBodyStore } from '../store/bodyStore';
 import { useFocusStore } from '../store/focusStore';
 import { useUiStore } from '../store/uiStore';
 import { useGoalStore } from '../store/goalStore';
+import { useJournalStore } from '../store/journalStore';
 import {
   dayKeyOf,
   daysBetween,
@@ -69,6 +70,7 @@ import {
   sumSeries,
 } from '../utils/stats';
 import { habitAmountOn, habitTarget, pendingHabits, scheduleLabel } from '../utils/habits';
+import { clampMood, formatMood, journalEntryOn, moodTone } from '../utils/journal';
 import {
   bodyFatOf,
   bodyPoints,
@@ -160,6 +162,7 @@ export const HomePage: React.FC = () => {
   const mealRecords = useDietStore((state) => state.records);
   const games = useGameStore((state) => state.games);
   const habits = useHabitStore((state) => state.habits);
+  const journalEntries = useJournalStore((state) => state.entries);
   const toggleHabitLog = useHabitStore((state) => state.toggleHabitLog);
   const bodyRecords = useBodyStore((state) => state.records);
   const readingSessions = useBookStore((state) => state.sessions);
@@ -195,7 +198,16 @@ export const HomePage: React.FC = () => {
   const weightChange = useMemo(() => changeFromPrevious(bodyRecords, weightOf), [bodyRecords]);
   const weightPoints = useMemo(() => bodyPoints(bodyRecords, weightOf, 14), [bodyRecords]);
 
-  /** 完成任务 / 训练 / 饮食任意一条都算一次活动，用来喂热力图与环比 */
+  /** 写过日记的日子：既是活动量的一部分，也用来算日记的连续记录天数 */
+  const journalSeries = useMemo(
+    () => seriesByDay(journalEntries, ACTIVITY_DAYS, today, (entry) => entry.date),
+    [journalEntries, today],
+  );
+
+  /**
+   * 完成任务 / 训练 / 饮食 / 日记任意一条都算一次活动，用来喂热力图与环比。
+   * 写日记也算「这一天有在记录自己」—— 它和训练、饮食一样是主动留下的一条数据。
+   */
   const activitySeries = useMemo(
     () =>
       sumSeries(
@@ -207,8 +219,9 @@ export const HomePage: React.FC = () => {
         ),
         seriesByDay(workoutRecords, ACTIVITY_DAYS, today, (record) => record.date),
         seriesByDay(mealRecords, ACTIVITY_DAYS, today, (record) => record.date),
+        journalSeries,
       ),
-    [tasks, workoutRecords, mealRecords, today],
+    [tasks, workoutRecords, mealRecords, journalSeries, today],
   );
 
   const completionSeries = useMemo(
@@ -242,6 +255,10 @@ export const HomePage: React.FC = () => {
   ).length;
 
   const streak = currentStreak(activitySeries, today);
+
+  /** 今日心情卡：只读今天这一条，没有就提示去写 */
+  const todayJournal = journalEntryOn(journalEntries, today);
+  const journalStreak = currentStreak(journalSeries, today);
 
   /** 目标达成：数字全走 metrics registry，与复盘页共用同一段取数 */
   const goalProgressList = useMemo(() => {
@@ -895,6 +912,45 @@ export const HomePage: React.FC = () => {
           </CardBody>
         </Card>
       ) : null,
+    },
+    {
+      id: 'journal',
+      title: '今日心情',
+      content: (
+        <Card>
+          <CardHeader
+            title="今日心情"
+            subtitle={todayJournal ? `已连续记录 ${journalStreak} 天` : '今天还没写'}
+            action={
+              <Button variant="ghost" size="sm" onClick={() => navigate('/journal')}>
+                {todayJournal ? '去写日记' : '写今天的日记'}
+              </Button>
+            }
+          />
+          <CardBody>
+            {todayJournal ? (
+              <div className="space-y-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  {clampMood(todayJournal.mood) === 0 ? (
+                    <Badge tone="default">未记心情</Badge>
+                  ) : (
+                    <Badge tone={moodTone(todayJournal.mood)}>
+                      {formatMood(clampMood(todayJournal.mood))}
+                    </Badge>
+                  )}
+                </div>
+                {todayJournal.text && (
+                  <p className="line-clamp-2 text-sm text-content-secondary">{todayJournal.text}</p>
+                )}
+              </div>
+            ) : (
+              <p className="text-sm text-content-secondary">
+                写几句，再挑一个心情档位就行 —— 攒起来是一条能回看的曲线。
+              </p>
+            )}
+          </CardBody>
+        </Card>
+      ),
     },
     {
       id: 'goals',

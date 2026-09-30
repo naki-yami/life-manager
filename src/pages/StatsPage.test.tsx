@@ -12,6 +12,7 @@ import { useFitnessStore } from '../store/fitnessStore';
 import { useDietStore } from '../store/dietStore';
 import { useGameStore } from '../store/gameStore';
 import { useGoalStore } from '../store/goalStore';
+import { useJournalStore } from '../store/journalStore';
 import { addDays, todayKey } from '../utils/date';
 
 const renderStats = () =>
@@ -43,6 +44,7 @@ beforeEach(() => {
   useDietStore.setState({ records: [] });
   useGameStore.setState({ games: [], sessions: [] });
   useGoalStore.setState({ goals: [] });
+  useJournalStore.setState({ entries: [] });
 });
 
 describe('StatsPage', () => {
@@ -104,6 +106,18 @@ describe('StatsPage', () => {
     ).toBeInTheDocument();
     expect(screen.getByRole('img', { name: '最近 30 天每日完成任务数趋势' })).toBeInTheDocument();
     expect(screen.getByRole('img', { name: /最近 30 天活动构成：合计 1 次/ })).toBeInTheDocument();
+  });
+
+  it('写日记也算一天的活动：热力图与活动构成都跟着涨，与首页同口径', () => {
+    useJournalStore.getState().saveEntry(todayKey(), { mood: 3, tags: [], text: '写了几笔' });
+
+    renderStats();
+
+    expect(
+      screen.getByRole('img', { name: '最近 30 天活动热力图：30 天里有 1 天有记录，合计 1' }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: /最近 30 天活动构成：合计 1 次/ })).toBeInTheDocument();
+    expect(screen.getByText('连续记录 1 天')).toBeInTheDocument();
   });
 
   it('日均热量只按有记录的天数计算', () => {

@@ -15,6 +15,7 @@ import { useHabitStore } from '../store/habitStore';
 import { useBodyStore } from '../store/bodyStore';
 import { useFocusStore } from '../store/focusStore';
 import { useGoalStore } from '../store/goalStore';
+import { useJournalStore } from '../store/journalStore';
 import { DASHBOARD_WIDGET_IDS, DEFAULT_DASHBOARD, useUiStore } from '../store/uiStore';
 import { ToastProvider } from '../components/ui';
 import { STORAGE_KEYS } from '../utils/storageKeys';
@@ -42,6 +43,7 @@ beforeEach(() => {
   useBodyStore.setState({ records: [] });
   useFocusStore.setState({ sessions: [], active: null });
   useGoalStore.setState({ goals: [] });
+  useJournalStore.setState({ entries: [] });
   useUiStore.setState({ dashboard: DEFAULT_DASHBOARD.map((widget) => ({ ...widget })) });
 });
 
@@ -229,6 +231,33 @@ describe('HomePage', () => {
     ).toBeInTheDocument();
     expect(screen.getByText('近 7 天 2 次，上一周 0 次')).toBeInTheDocument();
     expect(screen.getByText(/环比/, { selector: 'span' }).textContent).toContain('+100%');
+  });
+
+  it('写一篇日记也算一天的活动，热力图跟着亮起来', () => {
+    useJournalStore.getState().saveEntry(todayKey(), { mood: 4, tags: [], text: '今天过得不错' });
+
+    renderHome();
+
+    expect(
+      screen.getByRole('img', { name: '近 30 天活动热力图：30 天里有 1 天有记录，合计 1' }),
+    ).toBeInTheDocument();
+  });
+
+  it('今日心情卡读今天那一条，并带上连续记录天数', () => {
+    useJournalStore.getState().saveEntry(todayKey(), { mood: 4, tags: [], text: '今天过得不错' });
+
+    renderHome();
+
+    expect(screen.getByText('4（不错）')).toBeInTheDocument();
+    expect(screen.getByText('今天过得不错')).toBeInTheDocument();
+    expect(screen.getByText('已连续记录 1 天')).toBeInTheDocument();
+  });
+
+  it('今天还没写时，今日心情卡给一句引导而不是空白', () => {
+    renderHome();
+
+    expect(screen.getByText('今天还没写')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '写今天的日记' })).toBeInTheDocument();
   });
 
   it('近 7 天完成卡片带环比与迷你趋势，备忘数量挪到列表标题', () => {

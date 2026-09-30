@@ -7,6 +7,7 @@ import { JournalPage } from './JournalPage';
 import { ToastProvider } from '../components/ui';
 import { MASTER_DETAIL_QUERY } from '../components/layout';
 import { useJournalStore } from '../store/journalStore';
+import { useHabitStore } from '../store/habitStore';
 import { mockMediaQueries } from '../test/matchMedia';
 import { addDays, todayKey } from '../utils/date';
 import type { JournalEntry } from '../types';
@@ -40,6 +41,7 @@ const wide = (): void => mockMediaQueries({ [MASTER_DETAIL_QUERY]: true });
 beforeEach(() => {
   localStorage.clear();
   useJournalStore.setState({ entries: [] });
+  useHabitStore.setState({ habits: [] });
 });
 
 describe('JournalPage 概览', () => {
@@ -193,6 +195,38 @@ describe('JournalPage 写日记', () => {
     // 草稿按日期留在内存里：只是想翻回昨天看一眼，不该把今天写的字弄丢
     expect(screen.getByLabelText('今天发生了什么')).toHaveValue('今天的内容');
     expect(store().entries).toEqual([]);
+  });
+});
+
+describe('JournalPage 与习惯联动', () => {
+  beforeEach(wide);
+
+  it('编辑器里列出这一天打过的卡，量化习惯带上进度', async () => {
+    const habits = useHabitStore.getState();
+    habits.addHabit({ name: '晨跑' });
+    habits.addHabit({ name: '喝水', kind: 'count', target: 8, unit: '杯' });
+    const [run, water] = useHabitStore.getState().habits;
+
+    useHabitStore.getState().toggleHabitLog(run!.id, TODAY);
+    useHabitStore.getState().toggleHabitLog(water!.id, TODAY);
+    useHabitStore.getState().toggleHabitLog(water!.id, TODAY);
+
+    renderPage();
+    await userEvent.click(screen.getByRole('button', { name: '写今天' }));
+
+    expect(screen.getByText('这一天的打卡')).toBeInTheDocument();
+    expect(screen.getByText('晨跑')).toBeInTheDocument();
+    expect(screen.getByText('已完成')).toBeInTheDocument();
+    expect(screen.getByText('2/8')).toBeInTheDocument();
+  });
+
+  it('这一天没有打卡记录时不占位置', async () => {
+    useHabitStore.getState().addHabit({ name: '晨跑' });
+
+    renderPage();
+    await userEvent.click(screen.getByRole('button', { name: '写今天' }));
+
+    expect(screen.queryByText('这一天的打卡')).not.toBeInTheDocument();
   });
 });
 

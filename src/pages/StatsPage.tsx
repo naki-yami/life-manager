@@ -28,6 +28,7 @@ import { useDietStore } from '../store/dietStore';
 import { useGameStore } from '../store/gameStore';
 import { useFocusStore } from '../store/focusStore';
 import { useHabitStore } from '../store/habitStore';
+import { useJournalStore } from '../store/journalStore';
 import { useGoalStore } from '../store/goalStore';
 import {
   activeDays,
@@ -117,6 +118,7 @@ export const StatsPage: React.FC = () => {
   const gameSessions = useGameStore((state) => state.sessions);
   const focusSessions = useFocusStore((state) => state.sessions);
   const habits = useHabitStore((state) => state.habits);
+  const journalEntries = useJournalStore((state) => state.entries);
   const goals = useGoalStore((state) => state.goals);
 
   const today = todayKey();
@@ -239,9 +241,20 @@ export const StatsPage: React.FC = () => {
     [dietRecords, anchor, rangeDays],
   );
 
+  /** 写日记也算一天的活动：与首页热力图同一口径，两处不能各算各的 */
+  const journalSeries = useMemo(
+    () => seriesByDay(journalEntries, rangeDays, anchor, (entry) => entry.date),
+    [journalEntries, anchor, rangeDays],
+  );
+
   const activitySeries = useMemo(
-    () => sumSeries(taskSeries, fitnessSeries, dietCountSeries),
-    [taskSeries, fitnessSeries, dietCountSeries],
+    () => sumSeries(taskSeries, fitnessSeries, dietCountSeries, journalSeries),
+    [taskSeries, fitnessSeries, dietCountSeries, journalSeries],
+  );
+  /** 「活动构成」要跟热力图同口径，所以日记也得进这张堆叠图 */
+  const journalChart = useMemo(
+    () => bucketize(journalSeries, bucketMode),
+    [journalSeries, bucketMode],
   );
 
   /** 图表用聚合后的序列；总量 / 连续天数仍用逐日序列，与热力图保持同源 */
@@ -312,7 +325,8 @@ export const StatsPage: React.FC = () => {
     writingProjects.length > 0 ||
     fitnessRecords.length > 0 ||
     dietRecords.length > 0 ||
-    games.length > 0;
+    games.length > 0 ||
+    journalEntries.length > 0;
 
   /**
    * 每模块独立分析：同一个区间、同一套聚合粒度，每个模块看**自己的那个指标**。
@@ -560,7 +574,7 @@ export const StatsPage: React.FC = () => {
           value={streak}
           unit="天"
           icon={<TrendingUp size={16} aria-hidden />}
-          footer="任务 / 训练 / 饮食任意一天有记录即算"
+          footer="任务 / 训练 / 饮食 / 日记任意一天有记录即算"
         />
       </div>
 
@@ -569,7 +583,7 @@ export const StatsPage: React.FC = () => {
           <EmptyState
             icon={<BarChart3 size={22} aria-hidden />}
             title="还没有可统计的数据"
-            description="先去「今日计划」「健身」「饮食」里记几笔，这里会自动长出趋势图。"
+            description="先去「今日计划」「健身」「饮食」或「日记」里记几笔，这里会自动长出趋势图。"
             action={<Button onClick={() => navigate('/tasks')}>去记一件事</Button>}
           />
         </Card>
@@ -577,7 +591,7 @@ export const StatsPage: React.FC = () => {
         <>
           <ExportableCard
             title="活动热力图"
-            subtitle={`${rangeLabel}，每天的任务完成、训练与饮食记录合起来算一次活动`}
+            subtitle={`${rangeLabel}，每天的任务完成、训练、饮食与日记合起来算一次活动`}
           >
             <Heatmap data={activitySeries} label={`${rangeLabel}活动热力图`} />
           </ExportableCard>
@@ -599,7 +613,7 @@ export const StatsPage: React.FC = () => {
 
           <ExportableCard
             title="活动构成"
-            subtitle={`${rangeLabel}的任务完成、训练与饮食记录叠加，看活动量由哪几部分组成`}
+            subtitle={`${rangeLabel}的任务完成、训练、饮食与日记叠加，看活动量由哪几部分组成`}
           >
             <StackedBar
               dates={activityDates}
@@ -608,6 +622,7 @@ export const StatsPage: React.FC = () => {
                 { name: '任务', values: taskChart.map((point) => point.value) },
                 { name: '训练', values: fitnessChart.map((point) => point.value) },
                 { name: '饮食', values: dietCountChart.map((point) => point.value) },
+                { name: '日记', values: journalChart.map((point) => point.value) },
               ]}
               label={`${rangeLabel}活动构成`}
               formatValue={(value) => `${value} 次`}
