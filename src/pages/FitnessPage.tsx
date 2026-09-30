@@ -30,12 +30,13 @@ import {
   Select,
   StatCard,
 } from '../components/ui';
-import { PageHeader, Toolbar } from '../components/layout';
+import { ListEmptyState, PageHeader, Toolbar } from '../components/layout';
 import { BarChart, Heatmap, LineChart } from '../components/charts';
 import { useFitnessStore } from '../store/fitnessStore';
 import { useBodyStore } from '../store/bodyStore';
 import { useUndoableRemove } from '../hooks/useUndoableRemove';
 import { filterByKeyword } from '../utils/search';
+import { useEntityList } from '../hooks/useEntityList';
 import { formatNumber, todayKey } from '../utils/date';
 import { activeDays, seriesByDay, seriesByWeek } from '../utils/stats';
 import { epley1RM, personalBests } from '../utils/fitness';
@@ -58,7 +59,7 @@ import {
   weightOf,
   type BodyFieldMeta,
 } from '../utils/body';
-import type { BodyMetric } from '../types';
+import type { BodyMetric, WorkoutRecord } from '../types';
 import { ToastContext } from '../components/ui/toastContext';
 import { useNewEntryShortcut } from '../hooks/useShortcuts';
 import { MonthCalendar, type CalendarMark } from '../components/ui';
@@ -127,6 +128,13 @@ const filledMeasurements = (form: BodyFormState): Record<string, number> => {
 const volumeOf = (exercises: Array<{ sets: number; reps: number; weight: number }>): number =>
   exercises.reduce((sum, ex) => sum + ex.sets * ex.reps * ex.weight, 0);
 
+/** 记录列表的搜索字段：模块级常量，引用稳定 */
+const recordSearchFields = (record: WorkoutRecord) => [
+  record.planName,
+  record.notes,
+  ...record.exercises.map((exercise) => exercise.name),
+];
+
 /** 本周一（含）之后的日期键，用于统计本周训练次数 */
 const weekStartKey = (): string => {
   const now = new Date();
@@ -153,7 +161,7 @@ export const FitnessPage: React.FC = () => {
   const undoableRemove = useUndoableRemove();
 
   const [view, setView] = useState<View>('plans');
-  const [keyword, setKeyword] = useState('');
+
   const [showPlanModal, setShowPlanModal] = useState(false);
   const [showWorkoutModal, setShowWorkoutModal] = useState(false);
   const [pendingPlanId, setPendingPlanId] = useState<string | null>(null);
@@ -240,20 +248,24 @@ export const FitnessPage: React.FC = () => {
     return deltas;
   }, [bodyRecords]);
 
+  // 记录列表（主列表）走列表页共用件；计划列表量小，仍按关键词手筛
+  const {
+    keyword,
+    setKeyword,
+    visible: visibleRecords,
+    filteredOut,
+    clearFilters,
+  } = useEntityList<WorkoutRecord, string>({
+    items: records,
+    searchFields: recordSearchFields,
+  });
+
   const visiblePlans = useMemo(
     () => filterByKeyword(plans, keyword, (plan) => [plan.name, plan.description]),
     [plans, keyword],
   );
 
-  const visibleRecords = useMemo(
-    () =>
-      filterByKeyword(records, keyword, (record) => [
-        record.planName,
-        record.notes,
-        ...record.exercises.map((exercise) => exercise.name),
-      ]),
-    [records, keyword],
-  );
+
 
   const groupedRecords = useMemo(() => {
     const sorted = [...visibleRecords].sort((a, b) => b.date.localeCompare(a.date));
@@ -808,28 +820,23 @@ export const FitnessPage: React.FC = () => {
           </ul>
         )
       ) : filteredGroupedRecords.length === 0 ? (
-        <Card>
-          <EmptyState
-            icon={<Dumbbell size={22} aria-hidden />}
-            title={records.length === 0 ? '还没有训练记录' : '没有符合条件的记录'}
-            description={
-              records.length === 0
-                ? '练完随手记一笔，动作、组次和重量都留着，方便下次对照。'
-                : '换个关键词试试。'
-            }
-            action={
-              records.length === 0 ? (
-                <Button icon={<Plus size={16} aria-hidden />} onClick={() => openWorkoutModal()}>
-                  记录训练
-                </Button>
-              ) : (
-                <Button variant="secondary" onClick={() => setKeyword('')}>
-                  清除搜索
-                </Button>
-              )
-            }
-          />
-        </Card>
+        <ListEmptyState
+          icon={<Dumbbell size={22} aria-hidden />}
+          filtered={filteredOut || recordDateFilter !== null}
+          emptyTitle="还没有训练记录"
+          emptyDescription="练完随手记一笔，动作、组次和重量都留着，方便下次对照。"
+          emptyAction={
+            <Button icon={<Plus size={16} aria-hidden />} onClick={() => openWorkoutModal()}>
+              记录训练
+            </Button>
+          }
+          filteredTitle="没有符合条件的记录"
+          filteredDescription="换个关键词，或者清掉日期与搜索条件。"
+          onClearFilters={() => {
+            clearFilters();
+            setRecordDateFilter(null);
+          }}
+        />
       ) : (
         <div className="space-y-section">
           {filteredGroupedRecords.map((group) => (

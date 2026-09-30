@@ -39,7 +39,10 @@ const NotFoundPage = lazy(() =>
 
 const App: React.FC = () => {
   return (
-    <BrowserRouter>
+    <BrowserRouter
+      // 提前开启 v7 行为，消掉控制台的 future flag 警告（真机验证记录里的待办）
+      future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+    >
       <Layout>
         <Suspense fallback={<PageSkeleton />}>
           <Routes>

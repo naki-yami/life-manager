@@ -29,19 +29,18 @@ import {
   type KanbanColumnData,
   type KanbanMoveResult,
 } from '../components/ui';
-import { MasterDetail, PageHeader, Toolbar } from '../components/layout';
+import { ListEmptyState, MasterDetail, PageHeader, Toolbar } from '../components/layout';
 import { BarChart } from '../components/charts';
 import { useTaskStore } from '../store/taskStore';
 import { useUndoableRemove } from '../hooks/useUndoableRemove';
 import { dayKeyOf, daysBetween, formatShortDate, todayKey } from '../utils/date';
 import { seriesByWeek } from '../utils/stats';
-import { matchesKeyword } from '../utils/search';
+import { useEntityList } from '../hooks/useEntityList';
 import { Priority, RepeatKind, RepeatRule, Task, TaskStatus } from '../types';
 import { useNewEntryShortcut } from '../hooks/useShortcuts';
 import { usePaletteFocus } from '../hooks/usePaletteFocus';
 import { useTagSuggestions } from '../hooks/useTagSuggestions';
 
-type Filter = 'all' | TaskStatus;
 type ViewMode = 'list' | 'kanban' | 'quadrant';
 
 const VIEW_OPTIONS: Array<{ value: ViewMode; label: string }> = [
@@ -69,6 +68,10 @@ const PRIORITY_BADGE: Record<Priority, { tone: 'danger' | 'warning' | 'default';
   };
 
 const PRIORITY_ORDER: Record<Priority, number> = { high: 0, medium: 1, low: 2 };
+
+/** 搜索字段与状态取值：模块级常量，引用稳定，useEntityList 的缓存才不会白费 */
+const taskSearchFields = (task: Task) => [task.title, task.description, ...task.tags];
+const taskStatusOf = (task: Task) => task.status;
 
 /** 四象限的两根轴：重要 = 紧急优先级；紧急 = 有截止且不晚于今天 */
 const QUADRANTS: Array<{
@@ -298,18 +301,28 @@ export const TasksPage: React.FC = () => {
 
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
-  const [filter, setFilter] = useState<Filter>('all');
   const [priorityFilter, setPriorityFilter] = useState<'all' | Priority>('all');
   const [view, setView] = useState<ViewMode>('list');
-  const [keyword, setKeyword] = useState('');
+  // 关键词 + 状态筛选 + 计数 + 「是空库还是没筛出来」走列表页共用件
+  const {
+    keyword,
+    setKeyword,
+    filter,
+    setFilter,
+    visible: statusFilteredTasks,
+    countOf,
+    filteredOut,
+    clearFilters,
+  } = useEntityList<Task, TaskStatus>({
+    items: tasks,
+    searchFields: taskSearchFields,
+    statusOf: taskStatusOf,
+  });
   const [form, setForm] = useState<TaskForm>(EMPTY_FORM);
   const [expandedSubtasks, setExpandedSubtasks] = useState<Set<string>>(new Set());
   const [subtaskDraft, setSubtaskDraft] = useState<Record<string, string>>({});
 
   const today = todayKey();
-  const pendingCount = tasks.filter((task) => task.status === 'pending').length;
-  const completedCount = tasks.length - pendingCount;
-
   const todayTasks = tasks.filter((task) => task.dueDate === today);
   const todayDone = todayTasks.filter((task) => task.status === 'completed').length;
 
@@ -326,18 +339,16 @@ export const TasksPage: React.FC = () => {
   );
 
   const visibleTasks = useMemo(() => {
-    return tasks
-      .filter((task) => filter === 'all' || task.status === filter)
+    // 优先级筛选是任务页特有的维度，叠加在共用件的「关键词 + 状态」结果之上
+    return statusFilteredTasks
       .filter((task) => priorityFilter === 'all' || task.priority === priorityFilter)
-      // 标题、描述与标签都参与匹配；`#标签` 这种写法也能直接筛
-      .filter((task) => matchesKeyword(keyword, task.title, task.description, ...task.tags))
       .sort((a, b) => {
         if (a.status !== b.status) return a.status === 'pending' ? -1 : 1;
         const byPriority = PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority];
         if (byPriority !== 0) return byPriority;
         return a.dueDate.localeCompare(b.dueDate);
       });
-  }, [tasks, filter, priorityFilter, keyword]);
+  }, [statusFilteredTasks, priorityFilter]);
 
   const editingTask = tasks.find((task) => task.id === editingTaskId) ?? null;
   const deletingTask = tasks.find((task) => task.id === pendingDeleteId) ?? null;
@@ -587,8 +598,8 @@ export const TasksPage: React.FC = () => {
                 onChange={setFilter}
                 options={[
                   { value: 'all', label: '全部', count: tasks.length },
-                  { value: 'pending', label: '待办', count: pendingCount },
-                  { value: 'completed', label: '已完成', count: completedCount },
+                  { value: 'pending', label: '待办', count: countOf('pending') },
+                  { value: 'completed', label: '已完成', count: countOf('completed') },
                 ]}
               />
             </div>
@@ -596,41 +607,29 @@ export const TasksPage: React.FC = () => {
         />
 
         {visibleTasks.length === 0 ? (
-          <Card>
-            <EmptyState
-              icon={<ListTodo size={22} aria-hidden />}
-              title={tasks.length === 0 ? '还没有任务' : '没有符合条件的任务'}
-              description={
-                tasks.length === 0
-                  ? '从「添加任务」开始，把今天要做的事记下来。'
-                  : '换个关键词，或者切换上面的筛选条件。'
-              }
-              action={
-                tasks.length === 0 ? (
-                  <Button
-                    icon={<Plus size={16} aria-hidden />}
-                    onClick={() => {
-                      setForm(EMPTY_FORM);
-                      setShowAddModal(true);
-                    }}
-                  >
-                    添加任务
-                  </Button>
-                ) : (
-                  <Button
-                    variant="secondary"
-                    onClick={() => {
-                      setKeyword('');
-                      setFilter('all');
-                      setPriorityFilter('all');
-                    }}
-                  >
-                    清除筛选
-                  </Button>
-                )
-              }
-            />
-          </Card>
+          <ListEmptyState
+            icon={<ListTodo size={22} aria-hidden />}
+            filtered={filteredOut || (priorityFilter !== 'all' && tasks.length > 0)}
+            emptyTitle="还没有任务"
+            emptyDescription="从「添加任务」开始，把今天要做的事记下来。"
+            emptyAction={
+              <Button
+                icon={<Plus size={16} aria-hidden />}
+                onClick={() => {
+                  setForm(EMPTY_FORM);
+                  setShowAddModal(true);
+                }}
+              >
+                添加任务
+              </Button>
+            }
+            filteredTitle="没有符合条件的任务"
+            filteredDescription="换个关键词，或者切换上面的筛选条件。"
+            onClearFilters={() => {
+              clearFilters();
+              setPriorityFilter('all');
+            }}
+          />
         ) : view === 'kanban' ? (
           <KanbanBoard
             label="任务看板"

@@ -36,12 +36,13 @@ import {
   Select,
   StatCard,
 } from '../components/ui';
-import { PageHeader, Toolbar } from '../components/layout';
+import { ListEmptyState, PageHeader, Toolbar } from '../components/layout';
 import { BarChart, Sparkline } from '../components/charts';
 import { MonthCalendar, type CalendarMark } from '../components/ui';
 import { useDietStore } from '../store/dietStore';
 import { useUndoableRemove } from '../hooks/useUndoableRemove';
-import { filterByKeyword, matchesKeyword } from '../utils/search';
+import { matchesKeyword } from '../utils/search';
+import { useEntityList } from '../hooks/useEntityList';
 import {
   addDays,
   formatDayLabel,
@@ -97,6 +98,13 @@ const CATEGORY_OPTIONS = FOOD_CATEGORIES.map((category) => ({
 
 const MEAL_OPTIONS = MEAL_ORDER.map((type) => ({ value: type, label: MEAL_LABEL[type] }));
 
+/** 全部记录列表的搜索字段：模块级常量，引用稳定 */
+const recordSearchFields = (record: MealRecord) => [
+  record.date,
+  ...record.items.map((item) => item.name),
+  ...record.items.map((item) => item.category),
+];
+
 const emptyItem = (): FoodDraft => ({
   name: '',
   category: '主食',
@@ -113,7 +121,6 @@ export const DietPage: React.FC = () => {
 
   const [view, setView] = useState<View>('day');
   const [trendRange, setTrendRange] = useState<TrendRange>('day');
-  const [keyword, setKeyword] = useState('');
   const [selectedDate, setSelectedDate] = useState(todayKey());
   const [showAddModal, setShowAddModal] = useState(false);
   useNewEntryShortcut(() => setShowAddModal(true));
@@ -127,6 +134,19 @@ export const DietPage: React.FC = () => {
 
   const today = todayKey();
 
+  // 「全部」视图的记录列表走列表页共用件；day 视图的当天过滤是页面特有的，仍归页面
+  const {
+    keyword,
+    setKeyword,
+    visible: visibleAllRecords,
+    filteredOut,
+    clearFilters,
+  } = useEntityList<MealRecord, string>({
+    items: records,
+    searchFields: recordSearchFields,
+  });
+
+
   const dayRecords = useMemo(() => {
     const forDay = records.filter((record) => record.date === selectedDate);
     if (keyword.trim() === '') return forDay;
@@ -134,16 +154,6 @@ export const DietPage: React.FC = () => {
       record.items.some((item) => matchesKeyword(keyword, item.name, item.category)),
     );
   }, [records, selectedDate, keyword]);
-
-  const visibleAllRecords = useMemo(
-    () =>
-      filterByKeyword(records, keyword, (record) => [
-        record.date,
-        ...record.items.map((item) => item.name),
-        ...record.items.map((item) => item.category),
-      ]),
-    [records, keyword],
-  );
 
   const groupedAllRecords = useMemo(() => {
     const sorted = [...visibleAllRecords].sort((a, b) => b.date.localeCompare(a.date));
@@ -606,31 +616,23 @@ export const DietPage: React.FC = () => {
           </>
         )
       ) : groupedAllRecords.length === 0 ? (
-        <Card>
-          <EmptyState
-            icon={<CalendarDays size={22} aria-hidden />}
-            title={records.length === 0 ? '还没有任何饮食记录' : '没有符合条件的记录'}
-            description={
-              records.length === 0
-                ? '记录第一条饮食后，这里会按日期汇总。'
-                : '换个关键词试试，比如食物名或分类。'
+        <ListEmptyState
+          icon={<CalendarDays size={22} aria-hidden />}
+          filtered={filteredOut}
+            emptyTitle="还没有任何饮食记录"
+            emptyDescription="记录第一条饮食后，这里会按日期汇总。"
+            emptyAction={
+              <Button
+                icon={<Plus size={16} aria-hidden />}
+                onClick={() => openAddModal('breakfast')}
+              >
+                记录饮食
+              </Button>
             }
-            action={
-              records.length === 0 ? (
-                <Button
-                  icon={<Plus size={16} aria-hidden />}
-                  onClick={() => openAddModal('breakfast')}
-                >
-                  记录饮食
-                </Button>
-              ) : (
-                <Button variant="secondary" onClick={() => setKeyword('')}>
-                  清除搜索
-                </Button>
-              )
-            }
-          />
-        </Card>
+            filteredTitle="没有符合条件的记录"
+            filteredDescription="换个关键词试试，比如食物名或分类。"
+          onClearFilters={clearFilters}
+        />
       ) : (
         <div className="space-y-section">
           {groupedAllRecords.map((group) => {
