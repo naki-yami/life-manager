@@ -66,6 +66,14 @@ describe('ModuleTabs', () => {
     expect(screen.getByRole('button', { name: '写作' })).toHaveAttribute('aria-pressed', 'false');
   });
 
+  it('签条用导航皮肤（下划线），不是页内筛选那种胶囊', () => {
+    renderTabs('/study/books');
+
+    const strip = screen.getByRole('group', { name: '书房内的页面' });
+    expect(strip.className).toContain('border-b');
+    expect(strip.className).not.toContain('bg-inset');
+  });
+
   it('点另一个子页就换过去，按下态跟着走', async () => {
     renderTabs('/study/books');
 

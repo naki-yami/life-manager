@@ -310,6 +310,18 @@ export const UiPage: React.FC = () => {
             ]}
           />
         </Row>
+        <Row label="子页签条（underline：导航用，和上面的筛选区分开）">
+          <SegmentedControl
+            label="示例子页签条"
+            variant="underline"
+            value={view}
+            onChange={setView}
+            options={[
+              { value: 'list', label: '读书' },
+              { value: 'board', label: '写作' },
+            ]}
+          />
+        </Row>
         <Row label="标签">
           {BADGE_TONES.map((tone) => (
             <Badge key={tone} tone={tone} dot={tone !== 'default'}>

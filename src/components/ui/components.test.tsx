@@ -138,6 +138,49 @@ describe('SegmentedControl', () => {
     await userEvent.click(screen.getByRole('button', { name: '看板' }));
     expect(onChange).toHaveBeenCalledWith('board');
   });
+
+  it('默认是胶囊皮肤：页内筛选还是老样子', () => {
+    render(
+      <SegmentedControl
+        label="切换视图"
+        value="list"
+        onChange={() => {}}
+        options={[{ value: 'list', label: '列表' }]}
+      />,
+    );
+
+    const group = screen.getByRole('group', { name: '切换视图' });
+    expect(group.className).toContain('bg-inset');
+    expect(group.className).not.toContain('border-b ');
+  });
+
+  it('underline 皮肤：同样一组 aria-pressed 按钮，但换成「文字 + 下方指示线」', async () => {
+    const onChange = vi.fn();
+    render(
+      <SegmentedControl
+        label="书房内的页面"
+        variant="underline"
+        value="books"
+        onChange={onChange}
+        options={[
+          { value: 'books', label: '读书' },
+          { value: 'writing', label: '写作' },
+        ]}
+      />,
+    );
+
+    // 语义没变：还是一组切换按钮，不是 tab
+    const group = screen.getByRole('group', { name: '书房内的页面' });
+    expect(group).toHaveClass('border-b');
+    // 但不再是胶囊底 —— 那正是页内筛选的样子，导航要能一眼分清
+    expect(group.className).not.toContain('bg-inset');
+
+    expect(screen.getByRole('button', { name: '读书' }).className).toContain('border-accent');
+    expect(screen.getByRole('button', { name: '写作' }).className).toContain('border-transparent');
+
+    await userEvent.click(screen.getByRole('button', { name: '写作' }));
+    expect(onChange).toHaveBeenCalledWith('writing');
+  });
 });
 
 describe('Modal', () => {
