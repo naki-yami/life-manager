@@ -110,6 +110,7 @@ await session.clickByLabel('完成「写周报」'); // 按 aria-label 点（最
 await session.clickByText('添加任务'); // 按按钮文本点
 await session.fill('[role="dialog"] input', '值'); // 写受控输入框（自动处理 React 的 setter）
 await session.key('k', { modifiers: 2 }); // Ctrl+K；modifiers 2 = Ctrl, 8 = Meta(⌘)
+await session.key('Enter', { code: 'Enter', windowsVirtualKeyCode: 13, text: '\r' }); // 要 keypress 就得给 text
 await session.count('[role="dialog"] button');
 await session.exists(PANEL);
 

@@ -18,6 +18,8 @@ export const TASK_TITLE = 'E2E 冒烟任务';
 export const LEGACY_TASK_TITLE = 'E2E 迁移任务';
 /** 餐次模板用例的专用食物名，避免与别的用例撞上 */
 export const TEMPLATE_FOOD = 'E2E 模板燕麦';
+/** 回车提交用例的专用食物名 */
+export const ENTER_SUBMIT_FOOD = 'E2E 回车燕麦';
 /** 分模块导出用例的任务标题 */
 export const MODULE_EXPORT_TASK = 'E2E 导出任务';
 /** 与 src/store/persist.ts 的 STORE_VERSION 对应；写回时版本对不上 zustand 会走 migrate */
@@ -378,6 +380,48 @@ export function registerDataCases() {
 
     assert.empty(session.pageErrors, '这条链路里不该有未捕获异常');
   });
+
+  test(
+    'diet-enter-submit',
+    '饮食弹窗里按回车直接存下这一餐（多字段 + 不整除的热量）',
+    async (ctx) => {
+      const { session, baseUrl } = ctx;
+      await session.goto(`${baseUrl}/health/diet`, { waitMs: 1500 });
+      session.clearErrors();
+
+      /*
+       * 这条用例同时锁两件事：
+       *  1. 多字段弹窗「回车即提交」在真浏览器里真的通 —— 单测里 jsdom 不执行隐式提交的那套流程，
+       *     只有真键盘才照得出「表单树里没提交按钮就什么都不发生」；
+       *  2. 表单不吃浏览器的原生校验 —— 热量框是 step=10，人随手填 233（不整除）时
+       *     stepMismatch 会让浏览器静默拦下提交，连 submit 事件都不发。
+       */
+      const opened = await session.clickByText('记录饮食');
+      assert.clicked(opened, '「记录饮食」按钮');
+      await delay(600);
+
+      await session.fill('input[aria-label="第 1 个食物名称"]', ENTER_SUBMIT_FOOD);
+      await session.fill('input[aria-label="第 1 个食物的热量"]', '233');
+
+      // 焦点落在名称框里，敲回车 —— 这一步等价于人填完最后一项顺手回车
+      await session.evaluate(
+        `(() => { const el = document.querySelector('input[aria-label="第 1 个食物名称"]'); el.focus(); return 1; })()`,
+      );
+      await session.key('Enter', { code: 'Enter', windowsVirtualKeyCode: 13, text: '\r' });
+      await delay(900);
+
+      const saved = await readState(session, 'lm:diet');
+      const records = saved?.records ?? [];
+      assert.equal(records.length, 1, `回车之后应当有 1 条记录（实际 ${JSON.stringify(records)}）`);
+      assert.equal(records[0]?.items?.[0]?.name, ENTER_SUBMIT_FOOD, '存下的应当是刚填的那条');
+      assert.equal(records[0]?.items?.[0]?.calories, 233, '不整除 step 的热量也该原样存下');
+
+      const stillOpen = await session.exists('#diet-add-form');
+      assert.equal(stillOpen, false, '提交成功后弹窗应当自动收起');
+
+      assert.empty(session.pageErrors, '这条链路里不该有未捕获异常');
+    },
+  );
 
   test('bulk-delete-undo', '任务批量删除落库，点「撤销」能整体放回', async (ctx) => {
     const { session, baseUrl } = ctx;

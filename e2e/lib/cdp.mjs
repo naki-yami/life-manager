@@ -204,9 +204,15 @@ export async function openSession(endpoint, target) {
       );
     },
 
-    /** 用 CDP 派发键盘事件（比合成 KeyboardEvent 更接近真按键，React 的合成事件能收到） */
-    async key(key, { code, windowsVirtualKeyCode, modifiers = 0 } = {}) {
-      const base = { key, code: code ?? key, modifiers, windowsVirtualKeyCode };
+    /**
+     * 用 CDP 派发键盘事件（比合成 KeyboardEvent 更接近真按键，React 的合成事件能收到）。
+     *
+     * `text` 只在「要产生 keypress」时才传：Chrome 把 keypress 当成字符输入的结果，
+     * 不带 text 的 keyDown 只有 keydown / keyup。回车提交表单这类**默认动作挂在 keypress 上**
+     * 的行为，少了它就不发生 —— 焦点、键码全都对，页面却一动不动。
+     */
+    async key(key, { code, windowsVirtualKeyCode, modifiers = 0, text } = {}) {
+      const base = { key, code: code ?? key, modifiers, windowsVirtualKeyCode, text };
       await send('Input.dispatchKeyEvent', { type: 'keyDown', ...base });
       await send('Input.dispatchKeyEvent', { type: 'keyUp', ...base });
     },
