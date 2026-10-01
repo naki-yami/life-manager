@@ -115,6 +115,29 @@ export function currentStreak(series: readonly DayPoint[], endKey: string): numb
   return streak;
 }
 
+/**
+ * 整段序列里最长的那一段连续有记录天数。
+ *
+ * 和 `currentStreak` 是两个问题：那个问「到今天为止连着多少天」（今天没记就是 0），
+ * 这个问「这一窗口里最长连着过多少天」—— 中断过又重新开始的人，前者会归零，
+ * 后者才留得住「我最长坚持过多久」。
+ *
+ * 口径是**窗口内最长**，不是历史最长：序列是从别处切好的（首页给的是近 30 天），
+ * 越过窗口起点的那段连续会在这里被截断。要历史最长就把整条序列传进来。
+ */
+export function longestStreak(series: readonly DayPoint[]): number {
+  const days = [...new Set(activeDays(series))].sort();
+  let longest = 0;
+  let run = 0;
+  let previous = '';
+  for (const day of days) {
+    run = previous !== '' && addDays(previous, 1) === day ? run + 1 : 1;
+    if (run > longest) longest = run;
+    previous = day;
+  }
+  return longest;
+}
+
 /** 日期键 → 星期几（0 = 周一，6 = 周日）；按 UTC 解析，和日期键的生成口径一致 */
 export function weekdayIndex(key: string): number {
   const date = new Date(`${key}T00:00:00Z`);

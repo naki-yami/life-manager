@@ -4,6 +4,7 @@ import {
   averageOf,
   currentStreak,
   dayRange,
+  longestStreak,
   heatLevel,
   monthBuckets,
   normalizeToUnit,
@@ -121,6 +122,48 @@ describe('activeDays / currentStreak', () => {
   it('从今天往前数连续天数，中间断了就停', () => {
     expect(currentStreak(series, '2026-09-28')).toBe(2);
     expect(currentStreak(series, '2026-09-29')).toBe(0);
+  });
+});
+
+describe('longestStreak', () => {
+  it('取最长的一段连续，而不是「到今天为止」那一段', () => {
+    const series = [
+      { date: '2026-09-22', value: 1 },
+      { date: '2026-09-23', value: 2 },
+      { date: '2026-09-24', value: 1 },
+      { date: '2026-09-25', value: 0 },
+      { date: '2026-09-26', value: 3 },
+      { date: '2026-09-27', value: 0 },
+    ];
+
+    // 到 09-27 为止今天没记，currentStreak 归零；最长的那段是前面 3 天
+    expect(currentStreak(series, '2026-09-27')).toBe(0);
+    expect(longestStreak(series)).toBe(3);
+  });
+
+  it('一天记录都没有时是 0，只有一天时是 1', () => {
+    expect(longestStreak([{ date: '2026-09-27', value: 0 }])).toBe(0);
+    expect(longestStreak([{ date: '2026-09-27', value: 5 }])).toBe(1);
+  });
+
+  it('序列乱序也按日期算连续', () => {
+    expect(
+      longestStreak([
+        { date: '2026-09-27', value: 1 },
+        { date: '2026-09-25', value: 1 },
+        { date: '2026-09-26', value: 1 },
+      ]),
+    ).toBe(3);
+  });
+
+  it('跨月边界算得对（09-30 → 10-01 是连着的）', () => {
+    expect(
+      longestStreak([
+        { date: '2026-09-29', value: 1 },
+        { date: '2026-09-30', value: 1 },
+        { date: '2026-10-01', value: 1 },
+      ]),
+    ).toBe(3);
   });
 });
 
