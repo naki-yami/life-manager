@@ -154,6 +154,36 @@ export const NAV_ITEMS: NavItem[] = [
   },
 ];
 
+/**
+ * 宿主下的子页。
+ *
+ * 它和 NAV_ITEMS 是两种东西：子页只在一个模块内跳转，不进侧栏、底部 Tab、命令面板与 `g+数字`。
+ * 所以另起一份，而不是往 NavItem 上加字段 —— 否则那四处都得加「排除子页」的判断。
+ * 签条渲染、顶栏标题、读屏播报都从这一份取，别再写第二份子页清单。
+ */
+export interface ModuleTab {
+  path: string;
+  label: string;
+  icon: LucideIcon;
+}
+
+/** 宿主路径 → 子页清单 */
+export const MODULE_TABS: Record<string, ModuleTab[]> = {
+  '/study': [
+    { path: '/study/books', label: '读书', icon: BookOpen },
+    { path: '/study/writing', label: '写作', icon: PenTool },
+  ],
+};
+
+/** 当前路径命中的子页。让顶栏与读屏播报念「读书」，而不是笼统的「书房」。 */
+export function findModuleTab(pathname: string): ModuleTab | undefined {
+  for (const tabs of Object.values(MODULE_TABS)) {
+    const hit = tabs.find((tab) => tab.path === pathname);
+    if (hit) return hit;
+  }
+  return undefined;
+}
+
 /** 当前路由命中的导航项（仅用于标题等展示，不参与激活态判断） */
 export function findNavItem(pathname: string): NavItem | undefined {
   return NAV_ITEMS.find((item) => item.path === pathname);
