@@ -55,6 +55,13 @@ describe('MODULE_TABS', () => {
     ]);
   });
 
+  it('统计与复盘的子页是统计与复盘两条，且都在宿主之下', () => {
+    expect(MODULE_TABS['/insight']?.map((tab) => tab.path)).toEqual([
+      '/insight/stats',
+      '/insight/review',
+    ]);
+  });
+
   it('默认子页不重复带搜索词，其余子页自己带 —— 免得搜「写作」落在读书页', () => {
     const tabs = MODULE_TABS['/study'] ?? [];
     const host = NAV_ITEMS.find((item) => item.host === '/study');
@@ -76,6 +83,18 @@ describe('MODULE_TABS', () => {
     expect(host?.keywords).not.toContain('饮食');
   });
 
+  it('统计与复盘：复盘那组词在子页上 —— 宿主名里就带「复盘」二字，词不能再上移', () => {
+    const tabs = MODULE_TABS['/insight'] ?? [];
+    const host = NAV_ITEMS.find((item) => item.host === '/insight');
+
+    expect(tabs[0]?.path).toBe('/insight/stats');
+    expect(tabs[0]?.keywords).toBeUndefined();
+    expect(tabs[1]?.keywords).toContain('复盘');
+    expect(tabs[1]?.keywords).toContain('周报');
+    expect(host?.keywords).not.toContain('复盘');
+    expect(host?.keywords).not.toContain('周报');
+  });
+
   it('findModuleTab 只认子页路径，不认宿主也不认旧路径', () => {
     expect(findModuleTab('/study/books')?.label).toBe('读书');
     expect(findModuleTab('/study/writing')?.label).toBe('写作');
@@ -85,6 +104,10 @@ describe('MODULE_TABS', () => {
     expect(findModuleTab('/health/diet')?.label).toBe('饮食');
     expect(findModuleTab('/health')).toBeUndefined();
     expect(findModuleTab('/diet')).toBeUndefined();
+    expect(findModuleTab('/insight/stats')?.label).toBe('统计');
+    expect(findModuleTab('/insight/review')?.label).toBe('复盘');
+    expect(findModuleTab('/insight')).toBeUndefined();
+    expect(findModuleTab('/review')).toBeUndefined();
   });
 });
 

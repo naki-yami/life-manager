@@ -177,6 +177,8 @@ const HOST_PAGES: Record<string, React.ReactElement> = {
   '/study/writing': <WritingPage />,
   '/health/fitness': <FitnessPage />,
   '/health/diet': <DietPage />,
+  '/insight/stats': <StatsPage />,
+  '/insight/review': <ReviewPage />,
 };
 
 const MODULE_HOSTS = Object.keys(MODULE_TABS);

@@ -24,7 +24,7 @@ const store = () => useReviewStore.getState();
 
 const renderReview = (): ReturnType<typeof render> =>
   render(
-    <MemoryRouter initialEntries={['/review']}>
+    <MemoryRouter initialEntries={['/insight/review']}>
       <ToastProvider>
         <ReviewPage />
       </ToastProvider>

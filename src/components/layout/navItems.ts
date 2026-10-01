@@ -107,11 +107,15 @@ export const NAV_ITEMS: NavItem[] = [
     group: 'main',
   },
   {
-    path: '/stats',
-    label: '统计',
-    description: '活动热力图、趋势与各模块进度',
+    path: '/insight/stats',
+    host: '/insight',
+    label: '统计与复盘',
+    description: '活动热力图、趋势，以及每日 / 每周回顾',
     icon: BarChart3,
-    keywords: ['stats', 'chart', 'tongji', '统计', '图表', '趋势'],
+    // 合并前「统计」那一组词留在宿主上：统计是默认子页，落点和宿主一致，搜「统计」「趋势」
+    // 回车直接进统计页。复盘那组词归 /insight/review 子页（见 MODULE_TABS）——
+    // 宿主名里带着「复盘」二字本来就靠子串命中，词再挂上来就更压不住了。
+    keywords: ['insight', 'stats', 'chart', 'tongji', '统计', '统计与复盘', '图表', '趋势'],
     group: 'main',
   },
   {
@@ -120,14 +124,6 @@ export const NAV_ITEMS: NavItem[] = [
     description: '每日打卡、节奏追踪与强度分数',
     icon: Target,
     keywords: ['habits', 'habit', 'xiguan', '习惯', '打卡'],
-    group: 'main',
-  },
-  {
-    path: '/review',
-    label: '复盘',
-    description: '每日 / 每周回顾：数字自动汇总，判断留给自己写',
-    icon: NotebookPen,
-    keywords: ['review', 'retro', 'fupan', '复盘', '周报', '总结', '回顾'],
     group: 'main',
   },
   {
@@ -203,6 +199,17 @@ export const MODULE_TABS: Record<string, ModuleTab[]> = {
       label: '饮食',
       icon: UtensilsCrossed,
       keywords: ['diet', 'food', 'yinshi', '饮食', '热量'],
+    },
+  ],
+  '/insight': [
+    { path: '/insight/stats', label: '统计', icon: BarChart3 },
+    {
+      path: '/insight/review',
+      label: '复盘',
+      icon: NotebookPen,
+      // 宿主的名字里就带「复盘」，只靠子串也能命中；这组词保证输入正好等于「复盘」时
+      // 它是精确命中排第一（回车直接进复盘页，不落默认子页统计）
+      keywords: ['review', 'retro', 'fupan', '复盘', '周报', '总结', '回顾'],
     },
   ],
 };

@@ -81,7 +81,7 @@ export function registerMobileCases() {
     // 底部 Tab 在，且有 5 项（4 个 Tab + 更多）
     assert.ok(await visible(session, TAB), '窄屏下底部 Tab 应当可见');
     const tabCount = await session.count(`${TAB} button`);
-    assert.equal(tabCount, 5, '底部 Tab 的项数（首页/今日计划/习惯/统计 + 更多）');
+    assert.equal(tabCount, 5, '底部 Tab 的项数（首页/今日计划/习惯/统计与复盘 + 更多）');
 
     // 侧栏在窄屏应当被收起（而不是还占着位置）
     const sidebarAfter = await session.evaluate(
@@ -150,20 +150,25 @@ export function registerMobileCases() {
     const h1 = await session.text('h1');
     assert.nonEmpty(h1, '今日计划页的标题');
 
-    // 再点一次「统计」，确认不是只有第一个能点
+    // 再点一次「统计与复盘」，确认不是只有第一个能点
+    // 标签是宿主名（合并后统计与复盘是一个模块），落点是默认子页 /insight/stats
     const res2 = await session.evaluate(
       `(() => {
         const bar = document.querySelector('${TAB}');
-        const b = [...bar.querySelectorAll('button')].find(n => n.textContent.trim() === '统计');
+        const b = [...bar.querySelectorAll('button')].find(n => n.textContent.trim() === '统计与复盘');
         if (!b) return 'MISS';
         b.click();
         return 'OK';
       })()`,
     );
-    assert.clicked(res2, '点底部「统计」页签');
+    assert.clicked(res2, '点底部「统计与复盘」页签');
     await delay(900);
-    assert.equal(await session.evaluate('location.pathname'), '/stats', '点「统计」之后的地址');
-    assert.equal(await activeTab(session), '统计', '切到统计后高亮的 Tab');
+    assert.equal(
+      await session.evaluate('location.pathname'),
+      '/insight/stats',
+      '点「统计与复盘」之后的地址',
+    );
+    assert.equal(await activeTab(session), '统计与复盘', '切过去之后高亮的 Tab');
 
     // 「更多」打开抽屉，不是直接跳走
     const more = await session.evaluate(
@@ -191,7 +196,7 @@ export function registerMobileCases() {
       })()`,
     );
     assert.equal(drawer.moreExpanded, '更多', '「更多」应当进入展开态');
-    assert.equal(drawer.pathname, '/stats', '点「更多」不该离开当前页');
+    assert.equal(drawer.pathname, '/insight/stats', '点「更多」不该离开当前页');
     assert.ok(drawer.dialogCount > 0, '「更多」应当打开一个抽屉');
 
     assert.empty(session.pageErrors, '这条链路里不该有未捕获异常');

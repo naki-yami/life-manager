@@ -17,9 +17,9 @@ import { addDays, todayKey } from '../utils/date';
 
 const renderStats = () =>
   render(
-    <MemoryRouter initialEntries={['/stats']}>
+    <MemoryRouter initialEntries={['/insight/stats']}>
       <Routes>
-        <Route path="/stats" element={<StatsPage />} />
+        <Route path="/insight/stats" element={<StatsPage />} />
         <Route path="/tasks" element={<div>今日计划页面</div>} />
       </Routes>
     </MemoryRouter>,

@@ -63,6 +63,12 @@ const App: React.FC = () => {
               <Route path="fitness" element={<FitnessPage />} />
               <Route path="diet" element={<DietPage />} />
             </Route>
+            {/* 统计与复盘 */}
+            <Route path="/insight" element={<ModuleHost host="/insight" />}>
+              <Route index element={<Navigate to="stats" replace />} />
+              <Route path="stats" element={<StatsPage />} />
+              <Route path="review" element={<ReviewPage />} />
+            </Route>
             {/* 旧路径永久保留，书签 / 外部链接 / 历史记录都不碎（决策 #3） */}
             <Route path="/books" element={<Navigate to="/study/books" replace />} />
             <Route path="/dev" element={<DevPage />} />
@@ -71,9 +77,9 @@ const App: React.FC = () => {
             <Route path="/fitness" element={<Navigate to="/health/fitness" replace />} />
             <Route path="/diet" element={<Navigate to="/health/diet" replace />} />
             <Route path="/games" element={<GamesPage />} />
-            <Route path="/stats" element={<StatsPage />} />
+            <Route path="/stats" element={<Navigate to="/insight/stats" replace />} />
             <Route path="/habits" element={<HabitsPage />} />
-            <Route path="/review" element={<ReviewPage />} />
+            <Route path="/review" element={<Navigate to="/insight/review" replace />} />
             <Route path="/goals" element={<GoalsPage />} />
             <Route path="/journal" element={<JournalPage />} />
             <Route path="/settings" element={<SettingsPage />} />

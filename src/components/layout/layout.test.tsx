@@ -54,12 +54,16 @@ describe('navItems', () => {
     expect(goals?.keywords).toContain('达成率');
   });
 
-  it('复盘页挂在主导航上，命令面板也能按「复盘 / 周报」搜到', () => {
-    const review = findNavItem('/review');
+  it('复盘不再是独立导航项，命令面板的词挂在 /insight/review 子页上', () => {
+    const host = itemAt('/insight/stats');
+    const review = MODULE_TABS['/insight']?.find((tab) => tab.path === '/insight/review');
 
-    expect(review).toMatchObject({ label: '复盘', group: 'main' });
+    expect(findNavItem('/review')).toBeUndefined();
+    expect(host).toMatchObject({ label: '统计与复盘', host: '/insight', group: 'main' });
     expect(review?.keywords).toContain('复盘');
     expect(review?.keywords).toContain('周报');
+    // 宿主名里已经带「复盘」二字（靠子串就能命中），词再挂上去就更压不住精确命中了
+    expect(host?.keywords).not.toContain('周报');
   });
 
   it('日记页挂在主导航上，命令面板也能按「日记 / 心情」搜到', () => {
@@ -85,8 +89,8 @@ describe('navItems', () => {
     expect(findNavItem('/nope')).toBeUndefined();
   });
 
-  it('收敛节奏：主导航 13 → 12 → 11，阶段二把健身与饮食并成「健康」', () => {
-    expect(NAV_ITEMS.filter((item) => item.group === 'main')).toHaveLength(11);
+  it('收敛节奏：13 → 12 → 11 → 10，阶段三是「统计与复盘」', () => {
+    expect(NAV_ITEMS.filter((item) => item.group === 'main')).toHaveLength(10);
   });
 
   it('读书与写作合成「书房」一条，两个子页都点亮它', () => {
@@ -175,6 +179,33 @@ describe('navItems', () => {
     expect(findLocationLabel('/health/fitness')).toBe('健身');
     expect(findLocationLabel('/health/diet')).toBe('饮食');
     expect(findLocationLabel('/health')).toBe('健康');
+  });
+
+  it('统计与复盘合成一条，两个子页都点亮它', () => {
+    const insight = itemAt('/insight/stats');
+
+    expect(insight).toMatchObject({ label: '统计与复盘', host: '/insight', group: 'main' });
+
+    expect(isNavItemActive('/insight/stats', insight)).toBe(true);
+    expect(isNavItemActive('/insight/review', insight)).toBe(true);
+    expect(isNavItemActive('/insights', insight)).toBe(false);
+  });
+
+  it('统计 / 复盘不再各自占一条导航项，旧路径也归约不到它们', () => {
+    const paths = NAV_ITEMS.map((item) => item.path);
+
+    expect(paths).not.toContain('/stats');
+    expect(paths).not.toContain('/review');
+    expect(findNavItem('/stats')).toBeUndefined();
+    expect(findNavItem('/review')).toBeUndefined();
+  });
+
+  it('统计与复盘宿主也吃嵌套归约与最深子页名', () => {
+    expect(findNavItem('/insight/review')?.label).toBe('统计与复盘');
+    expect(findNavItem('/insight')?.label).toBe('统计与复盘');
+    expect(findLocationLabel('/insight/stats')).toBe('统计');
+    expect(findLocationLabel('/insight/review')).toBe('复盘');
+    expect(findLocationLabel('/insight')).toBe('统计与复盘');
   });
 });
 
@@ -272,6 +303,8 @@ const renderLayout = (path = '/') =>
           <Route path="/study/writing" element={<div>写作内容</div>} />
           <Route path="/health/fitness" element={<div>健身内容</div>} />
           <Route path="/health/diet" element={<div>饮食内容</div>} />
+          <Route path="/insight/stats" element={<div>统计内容</div>} />
+          <Route path="/insight/review" element={<div>复盘内容</div>} />
         </Routes>
       </Layout>
     </MemoryRouter>,
@@ -355,6 +388,23 @@ describe('Layout', () => {
     expect(screen.getByText('饮食内容')).toBeInTheDocument();
   });
 
+  it('宿主名里带子页名也不怕：搜「复盘」第一项仍是复盘，不落统计页', async () => {
+    renderLayout('/');
+
+    fireEvent.keyDown(window, { key: 'k', metaKey: true });
+    const palette = await screen.findByRole('dialog', { name: '命令面板' });
+
+    await userEvent.type(within(palette).getByRole('combobox'), '复盘');
+
+    // 「统计与复盘」这个宿主名里也有「复盘」二字，靠「输入正好等于命令名」那条规则
+    // 压过子串命中 —— 少了子页那条精确项，回车就会落在默认子页统计上
+    expect(within(palette).getAllByRole('option')[0]).toHaveTextContent('统计与复盘 · 复盘');
+
+    await userEvent.keyboard('{Enter}');
+
+    expect(screen.getByText('复盘内容')).toBeInTheDocument();
+  });
+
   it('命令面板里可以切换密度', async () => {
     renderLayout('/');
 
@@ -385,7 +435,7 @@ describe('BottomTabBar', () => {
   it('只放四个高频入口，其余走「更多」抽屉', async () => {
     renderLayout('/');
 
-    for (const label of ['首页总览', '今日计划', '习惯养成', '统计']) {
+    for (const label of ['首页总览', '今日计划', '习惯养成', '统计与复盘']) {
       expect(within(bar()).getByRole('button', { name: label })).toBeInTheDocument();
     }
     // 书房不在 Tab 上，只能从抽屉进
@@ -429,11 +479,26 @@ describe('BottomTabBar', () => {
     const more = within(bar()).getByRole('button', { name: '更多' });
     expect(more).toHaveClass('text-accent');
     expect(more).not.toHaveAttribute('aria-current');
-    for (const label of ['首页总览', '今日计划', '习惯养成', '统计']) {
+    for (const label of ['首页总览', '今日计划', '习惯养成', '统计与复盘']) {
       expect(within(bar()).getByRole('button', { name: label })).toHaveClass(
         'text-content-tertiary',
       );
     }
+  });
+
+  it('合并过的模块：Tab 上写的是宿主落点，停在子页时这一位照样亮', async () => {
+    renderLayout('/insight/review');
+
+    const tab = within(bar()).getByRole('button', { name: '统计与复盘' });
+    // 停在复盘子页，这一位仍然是当前页 —— 高亮范围跟着宿主走
+    expect(tab).toHaveAttribute('aria-current', 'page');
+    // 入口就在这一位里，「更多」不该跟着亮
+    expect(within(bar()).getByRole('button', { name: '更多' })).not.toHaveClass('text-accent');
+
+    await userEvent.click(tab);
+
+    // 点一下直达默认子页，不是先撞 /stats 再重定向
+    expect(screen.getByText('统计内容')).toBeInTheDocument();
   });
 });
 

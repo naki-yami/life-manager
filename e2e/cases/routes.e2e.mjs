@@ -13,7 +13,8 @@ import { delay } from '../lib/cdp.mjs';
 /**
  * 与 src/App.tsx 的路由表逐条对应；`title` 是 <PageHeader> 里真实的标题文案 ——
  * 注意它和侧栏导航标签不完全一致（导航叫「书房」，子页标题是「读书」「写作」；
- * 导航叫「健康」，子页标题是「健身」「饮食」）。这里等的是页面，所以核对页面标题。
+ * 导航叫「健康」，子页标题是「健身」「饮食」；导航叫「统计与复盘」，子页标题是
+ * 「统计」「复盘」）。这里等的是页面，所以核对页面标题。
  */
 export const ROUTES = [
   // 首页的 h1 是问候语（「下午好 👋」），不是固定文案，所以不核对
@@ -26,9 +27,9 @@ export const ROUTES = [
   { path: '/health/fitness', title: '健身' },
   { path: '/health/diet', title: '饮食' },
   { path: '/games', title: '游戏' },
-  { path: '/stats', title: '统计' },
+  { path: '/insight/stats', title: '统计' },
   { path: '/habits', title: '习惯养成' },
-  { path: '/review', title: '复盘' },
+  { path: '/insight/review', title: '复盘' },
   { path: '/goals', title: '目标' },
   { path: '/journal', title: '日记与心情' },
   { path: '/settings', title: '数据与设置' },
@@ -45,6 +46,8 @@ export const REDIRECTS = [
   { from: '/writing', to: '/study/writing', title: '写作' },
   { from: '/fitness', to: '/health/fitness', title: '健身' },
   { from: '/diet', to: '/health/diet', title: '饮食' },
+  { from: '/stats', to: '/insight/stats', title: '统计' },
+  { from: '/review', to: '/insight/review', title: '复盘' },
 ];
 
 /**
@@ -56,6 +59,7 @@ export const REDIRECTS = [
 export const HOST_ENTRIES = [
   { from: '/study', to: '/study/books', title: '读书' },
   { from: '/health', to: '/health/fitness', title: '健身' },
+  { from: '/insight', to: '/insight/stats', title: '统计' },
 ];
 
 /** 用例标题里的路由条数现算，免得又一次和数组实际长度对不上 */
@@ -114,7 +118,7 @@ export function registerRouteCases() {
     }
 
     // 留几张关键页的截图作为人工复核的凭据（单条路由 17 张太多，挑有代表性的）
-    for (const path of ['/tasks', '/stats', '/ui']) {
+    for (const path of ['/tasks', '/insight/stats', '/ui']) {
       await session.goto(`${baseUrl}${path}`, { waitMs: 1100 });
       await shot(`route${path.replace(/\//g, '-')}`);
     }
@@ -182,6 +186,14 @@ export function registerRouteCases() {
       to: '饮食',
       toPath: '/health/diet',
       slug: 'health-diet',
+    },
+    {
+      name: '统计与复盘',
+      entry: '/insight/stats',
+      from: '统计',
+      to: '复盘',
+      toPath: '/insight/review',
+      slug: 'insight-review',
     },
   ];
 
