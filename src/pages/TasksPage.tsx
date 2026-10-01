@@ -26,6 +26,7 @@ import {
   SegmentedControl,
   Select,
   SelectionBar,
+  SubmitForm,
   TagEditor,
   TagInput,
   type KanbanColumnData,
@@ -619,17 +620,17 @@ export const TasksPage: React.FC = () => {
         }
         detail={
           editingTask ? (
-            <div className="space-y-4">
+            <SubmitForm id="task-edit-form" onSubmit={handleEdit} className="space-y-4">
               <TaskFormFields form={form} onChange={setForm} tagSuggestions={tagSuggestions} />
               <div className="flex flex-wrap items-center justify-end gap-2">
                 <Button variant="secondary" onClick={closeEdit}>
                   取消
                 </Button>
-                <Button onClick={handleEdit} disabled={!form.title.trim()}>
+                <Button type="submit" form="task-edit-form" disabled={!form.title.trim()}>
                   保存
                 </Button>
               </div>
-            </div>
+            </SubmitForm>
           ) : null
         }
       >
@@ -1003,16 +1004,9 @@ export const TasksPage: React.FC = () => {
           </>
         }
       >
-        <form
-          id="task-add-form"
-          onSubmit={(event) => {
-            event.preventDefault();
-            handleAdd();
-          }}
-        >
-          <button type="submit" className="sr-only" tabIndex={-1} aria-hidden="true" />
+        <SubmitForm id="task-add-form" onSubmit={handleAdd}>
           <TaskFormFields form={form} onChange={setForm} tagSuggestions={tagSuggestions} />
-        </form>
+        </SubmitForm>
       </Modal>
 
       <ConfirmDialog

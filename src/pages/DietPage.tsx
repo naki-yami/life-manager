@@ -35,6 +35,7 @@ import {
   SegmentedControl,
   Select,
   StatCard,
+  SubmitForm,
 } from '../components/ui';
 import { ListEmptyState, PageHeader, Toolbar } from '../components/layout';
 import { BarChart, Sparkline } from '../components/charts';
@@ -820,13 +821,13 @@ export const DietPage: React.FC = () => {
             <Button variant="secondary" onClick={() => setShowAddModal(false)}>
               取消
             </Button>
-            <Button onClick={handleAdd} disabled={!canSave}>
+            <Button type="submit" form="diet-add-form" disabled={!canSave}>
               保存
             </Button>
           </>
         }
       >
-        <div className="space-y-4">
+        <SubmitForm id="diet-add-form" onSubmit={handleAdd} className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
             <Input
               label="日期"
@@ -941,7 +942,7 @@ export const DietPage: React.FC = () => {
             <span className="font-semibold text-content tabular">{formatNumber(formCalories)}</span>{' '}
             kcal
           </p>
-        </div>
+        </SubmitForm>
       </Modal>
 
       <Modal

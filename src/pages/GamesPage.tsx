@@ -18,6 +18,7 @@ import {
   SelectionBar,
   Slider,
   StatCard,
+  SubmitForm,
   TagEditor,
   TagInput,
   Textarea,
@@ -624,7 +625,7 @@ export const GamesPage: React.FC = () => {
               )}
             </div>
           ) : (
-            <div className="space-y-4">
+            <SubmitForm id="game-detail-form" onSubmit={handleSaveNotes} className="space-y-4">
               {detailGame && (
                 <>
                   <div>
@@ -701,9 +702,11 @@ export const GamesPage: React.FC = () => {
                 <Button variant="secondary" onClick={closeDetail}>
                   取消
                 </Button>
-                <Button onClick={handleSaveNotes}>保存</Button>
+                <Button type="submit" form="game-detail-form">
+                  保存
+                </Button>
               </div>
-            </div>
+            </SubmitForm>
           )
         }
       >
@@ -1041,13 +1044,13 @@ export const GamesPage: React.FC = () => {
             <Button variant="secondary" onClick={() => setShowSessionModal(false)}>
               取消
             </Button>
-            <Button onClick={handleAddSession} disabled={!canSaveSession}>
+            <Button type="submit" form="game-session-form" disabled={!canSaveSession}>
               保存
             </Button>
           </>
         }
       >
-        <div className="space-y-4">
+        <SubmitForm id="game-session-form" onSubmit={handleAddSession} className="space-y-4">
           <Select
             label="游戏"
             value={sessionForm.gameId}
@@ -1077,7 +1080,7 @@ export const GamesPage: React.FC = () => {
             rows={3}
             placeholder="打到哪一章、和谁一起玩…（可选）"
           />
-        </div>
+        </SubmitForm>
       </Modal>
 
       <Modal
@@ -1096,14 +1099,7 @@ export const GamesPage: React.FC = () => {
           </>
         }
       >
-        <form
-          id="game-add-form"
-          onSubmit={(event) => {
-            event.preventDefault();
-            handleAddGame();
-          }}
-        >
-          <button type="submit" className="sr-only" tabIndex={-1} aria-hidden="true" />
+        <SubmitForm id="game-add-form" onSubmit={handleAddGame}>
           <div className="space-y-4">
             <Input
               label="游戏名称"
@@ -1126,7 +1122,7 @@ export const GamesPage: React.FC = () => {
               onChange={(tags) => setForm({ ...form, tags })}
             />
           </div>
-        </form>
+        </SubmitForm>
       </Modal>
 
       <ConfirmDialog

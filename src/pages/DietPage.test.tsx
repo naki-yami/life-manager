@@ -76,6 +76,18 @@ describe('DietPage', () => {
     expect(statText('当日摄入')).toContain('200');
   });
 
+  it('记录饮食弹窗里在食物名称按回车直接保存（U7 尾巴）', async () => {
+    render(<DietPage />);
+    const dialog = await openAddModal();
+
+    await userEvent.type(within(dialog).getByLabelText('第 1 个食物名称'), '鸡胸肉{Enter}');
+
+    const records = useDietStore.getState().records;
+    expect(records).toHaveLength(1);
+    expect(records[0]!.items[0]!.name).toBe('鸡胸肉');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
   it('食物名为空时不能保存，添加多个食物会累加热量', async () => {
     render(<DietPage />);
     const dialog = await openAddModal();

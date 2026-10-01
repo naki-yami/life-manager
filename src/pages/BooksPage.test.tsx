@@ -436,6 +436,20 @@ describe('BooksPage F11 条目化媒体库', () => {
     expect(bookOf('人类简史').review).toBe('值得一读再读');
   });
 
+  it('评分 / 短评面板里在短评框按回车也保存（U7 尾巴）', async () => {
+    useBookStore.getState().addBook('人类简史', 'Harari', '历史');
+    expectWideLayout();
+
+    render(<BooksPage />);
+    await userEvent.click(screen.getByRole('button', { name: /笔记（0）/ }));
+    const panel = panelOf('人类简史');
+    await userEvent.click(within(panel).getByRole('button', { name: '8' }));
+    await userEvent.type(within(panel).getByLabelText('短评'), '回车保存的短评{Enter}');
+
+    expect(bookOf('人类简史').rating).toBe(8);
+    expect(bookOf('人类简史').review).toBe('回车保存的短评');
+  });
+
   it('状态时间线记录每次变更，重复设同一状态不重复记', async () => {
     useBookStore.getState().addBook('人类简史', 'Harari', '历史');
     const id = bookId('人类简史');

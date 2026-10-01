@@ -74,6 +74,18 @@ describe('WritingPage', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
+  it('新建项目弹窗里在标题框按回车直接提交（U7）', async () => {
+    render(<WritingPage />);
+
+    await userEvent.click(screen.getAllByRole('button', { name: '新建项目' })[0]!);
+    const dialog = screen.getByRole('dialog', { name: '新建写作项目' });
+
+    await userEvent.type(within(dialog).getByLabelText(/^标题/), '回车建的书{Enter}');
+
+    expect(useWritingStore.getState().projects[0]!.title).toBe('回车建的书');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
   it('新建项目时标题为空则不能提交', () => {
     render(<WritingPage />);
 

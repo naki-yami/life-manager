@@ -30,6 +30,7 @@ import {
   Select,
   SelectionBar,
   Slider,
+  SubmitForm,
   TagEditor,
   TagInput,
 } from '../components/ui';
@@ -375,7 +376,7 @@ export const BooksPage: React.FC = () => {
     <div className="space-y-4">
       {/* F11 条目化：评分 / 短评 / 状态时间线属于「这本书」，随「保存」写入；
           下面的笔记列表仍保持「回车即存」的老流程，两者互不干扰 */}
-      <div className="space-y-3">
+      <SubmitForm id="book-entry-form" onSubmit={handleSaveEntry} className="space-y-3">
         <div>
           <p className="mb-1.5 text-sm font-medium text-content-secondary">评分</p>
           <div
@@ -431,11 +432,11 @@ export const BooksPage: React.FC = () => {
           <Button variant="secondary" size="sm" onClick={closeNotes}>
             取消
           </Button>
-          <Button size="sm" onClick={handleSaveEntry}>
+          <Button size="sm" type="submit" form="book-entry-form">
             保存
           </Button>
         </div>
-      </div>
+      </SubmitForm>
 
       <hr className="border-line-subtle" />
 
@@ -956,14 +957,7 @@ export const BooksPage: React.FC = () => {
           </>
         }
       >
-        <form
-          id="book-add-form"
-          onSubmit={(event) => {
-            event.preventDefault();
-            handleAdd();
-          }}
-        >
-          <button type="submit" className="sr-only" tabIndex={-1} aria-hidden="true" />
+        <SubmitForm id="book-add-form" onSubmit={handleAdd}>
           <div className="space-y-4">
             <Input
               label="书名"
@@ -992,7 +986,7 @@ export const BooksPage: React.FC = () => {
               onChange={(tags) => setForm({ ...form, tags })}
             />
           </div>
-        </form>
+        </SubmitForm>
       </Modal>
 
       <Modal
@@ -1005,13 +999,13 @@ export const BooksPage: React.FC = () => {
             <Button variant="secondary" onClick={() => setShowSessionModal(false)}>
               取消
             </Button>
-            <Button onClick={handleAddSession} disabled={!canSaveSession}>
+            <Button type="submit" form="reading-session-form" disabled={!canSaveSession}>
               保存
             </Button>
           </>
         }
       >
-        <div className="space-y-4">
+        <SubmitForm id="reading-session-form" onSubmit={handleAddSession} className="space-y-4">
           <Select
             label="书籍"
             value={sessionForm.bookId}
@@ -1040,7 +1034,7 @@ export const BooksPage: React.FC = () => {
             onChange={(event) => setSessionForm({ ...sessionForm, note: event.target.value })}
             placeholder="读到哪一章…（可选）"
           />
-        </div>
+        </SubmitForm>
       </Modal>
 
       <ConfirmDialog

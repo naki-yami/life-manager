@@ -24,6 +24,7 @@ import {
   SegmentedControl,
   Select,
   StatCard,
+  SubmitForm,
   TagEditor,
   TagInput,
   Textarea,
@@ -294,7 +295,7 @@ export const WritingPage: React.FC = () => {
         }
         detail={
           noteProject ? (
-            <div className="space-y-4">
+            <SubmitForm id="writing-notes-form" onSubmit={handleSaveNotes} className="space-y-4">
               <p className="text-xs text-content-tertiary">留空并保存即可清空笔记</p>
               <Textarea
                 label="创作笔记"
@@ -307,9 +308,11 @@ export const WritingPage: React.FC = () => {
                 <Button variant="secondary" onClick={closeNotes}>
                   取消
                 </Button>
-                <Button onClick={handleSaveNotes}>保存</Button>
+                <Button type="submit" form="writing-notes-form">
+                  保存
+                </Button>
               </div>
-            </div>
+            </SubmitForm>
           ) : null
         }
       >
@@ -515,14 +518,7 @@ export const WritingPage: React.FC = () => {
           </>
         }
       >
-        <form
-          id="writing-add-form"
-          onSubmit={(event) => {
-            event.preventDefault();
-            handleAdd();
-          }}
-        >
-          <button type="submit" className="sr-only" tabIndex={-1} aria-hidden="true" />
+        <SubmitForm id="writing-add-form" onSubmit={handleAdd}>
           <div className="space-y-4">
             <Input
               label="标题"
@@ -545,7 +541,7 @@ export const WritingPage: React.FC = () => {
               onChange={(tags) => setForm({ ...form, tags })}
             />
           </div>
-        </form>
+        </SubmitForm>
       </Modal>
 
       <Modal
@@ -558,11 +554,13 @@ export const WritingPage: React.FC = () => {
             <Button variant="secondary" onClick={closeEditor}>
               取消
             </Button>
-            <Button onClick={handleSaveContent}>保存</Button>
+            <Button type="submit" form="writing-content-form">
+              保存
+            </Button>
           </>
         }
       >
-        <div className="space-y-4">
+        <SubmitForm id="writing-content-form" onSubmit={handleSaveContent} className="space-y-4">
           <MarkdownEditor
             label="正文"
             value={contentDraft}
@@ -616,7 +614,7 @@ export const WritingPage: React.FC = () => {
               </p>
             </div>
           )}
-        </div>
+        </SubmitForm>
       </Modal>
       <ConfirmDialog
         isOpen={deletingProject !== null}

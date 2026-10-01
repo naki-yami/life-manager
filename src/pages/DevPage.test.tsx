@@ -39,6 +39,18 @@ describe('DevPage', () => {
     expect(screen.getByText('这个项目还没有任务')).toBeInTheDocument();
   });
 
+  it('新建项目弹窗里在名称框按回车直接提交（U7）', async () => {
+    renderDev();
+
+    await userEvent.click(screen.getAllByRole('button', { name: '新建项目' })[0]!);
+    const dialog = screen.getByRole('dialog', { name: '新建项目' });
+
+    await userEvent.type(within(dialog).getByLabelText(/^项目名称/), '回车建的项目{Enter}');
+
+    expect(useDevStore.getState().projects[0]!.name).toBe('回车建的项目');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
   it('展开状态可以收起和再展开', async () => {
     useDevStore.getState().addProject('写作助手', '');
     renderDev();
@@ -334,6 +346,21 @@ describe('DevPage 宽屏双栏', () => {
     expect(screen.getByText('React')).toBeInTheDocument();
     // 存完右栏回到占位，不留上一条的残影
     expect(within(panel()).getByText('还没有选中项目')).toBeInTheDocument();
+  });
+
+  it('编辑右栏里在项目名称框按回车也保存（U7 尾巴）', async () => {
+    useDevStore.getState().addProject('写作助手', '');
+    expectWideLayout();
+
+    renderDev();
+    await userEvent.click(screen.getByRole('button', { name: '编辑「写作助手」' }));
+
+    const aside = panel('编辑「写作助手」');
+    const nameInput = within(aside).getByLabelText(/^项目名称/);
+    await userEvent.clear(nameInput);
+    await userEvent.type(nameInput, '写作助手 V2{Enter}');
+
+    expect(useDevStore.getState().projects[0]!.name).toBe('写作助手 V2');
   });
 
   it('「取消」只关右栏，不写回 store', async () => {

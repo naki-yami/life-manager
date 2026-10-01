@@ -77,6 +77,18 @@ describe('GamesPage', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
+  it('添加游戏弹窗里在名称框按回车直接提交（U7）', async () => {
+    render(<GamesPage />);
+
+    await userEvent.click(screen.getAllByRole('button', { name: '添加游戏' })[0]!);
+    const dialog = screen.getByRole('dialog', { name: '添加游戏' });
+
+    await userEvent.type(within(dialog).getByLabelText(/^游戏名称/), '回车加的游戏{Enter}');
+
+    expect(useGameStore.getState().games[0]!.name).toBe('回车加的游戏');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
   it('统计卡片汇总游戏数、在玩、已通关与总时长', () => {
     addGame('塞尔达传说', 'Switch');
     addGame('哈迪斯');
@@ -492,6 +504,20 @@ describe('GamesPage 宽屏双栏', () => {
     await userEvent.click(within(aside).getByRole('button', { name: '清除' }));
     await userEvent.click(within(aside).getByRole('button', { name: '保存' }));
     expect(gameOf('哈迪斯').rating).toBe(0);
+  });
+
+  it('详情面板里在短评框按回车也保存（U7 尾巴）', async () => {
+    addGame('哈迪斯');
+    expectWideLayout();
+
+    render(<GamesPage />);
+    await userEvent.click(screen.getByRole('button', { name: '笔记' }));
+    const aside = panel('《哈迪斯》的笔记');
+    await userEvent.click(within(aside).getByRole('button', { name: '9' }));
+    await userEvent.type(within(aside).getByLabelText('短评'), '回车保存的手感{Enter}');
+
+    expect(gameOf('哈迪斯').rating).toBe(9);
+    expect(gameOf('哈迪斯').review).toBe('回车保存的手感');
   });
 
   it('F11：收藏星标与「下一步玩什么」的三种排序', async () => {

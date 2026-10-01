@@ -31,6 +31,7 @@ import {
   SegmentedControl,
   Select,
   StatCard,
+  SubmitForm,
   TagEditor,
   TagInput,
   Textarea,
@@ -514,7 +515,7 @@ export const DevPage: React.FC = () => {
         }
         detail={
           editingProject ? (
-            <div className="space-y-4">
+            <SubmitForm id="dev-project-edit-form" onSubmit={handleSaveEdit} className="space-y-4">
               <Input
                 label="项目名称"
                 value={editForm.name}
@@ -566,11 +567,11 @@ export const DevPage: React.FC = () => {
                 <Button variant="secondary" onClick={closeEditModal}>
                   取消
                 </Button>
-                <Button onClick={handleSaveEdit} disabled={!editForm.name.trim()}>
+                <Button type="submit" form="dev-project-edit-form" disabled={!editForm.name.trim()}>
                   保存
                 </Button>
               </div>
-            </div>
+            </SubmitForm>
           ) : null
         }
       >
@@ -818,14 +819,7 @@ export const DevPage: React.FC = () => {
           </>
         }
       >
-        <form
-          id="dev-project-add-form"
-          onSubmit={(event) => {
-            event.preventDefault();
-            handleAddProject();
-          }}
-        >
-          <button type="submit" className="sr-only" tabIndex={-1} aria-hidden="true" />
+        <SubmitForm id="dev-project-add-form" onSubmit={handleAddProject}>
           <div className="space-y-4">
             <Input
               label="项目名称"
@@ -845,7 +839,7 @@ export const DevPage: React.FC = () => {
               rows={3}
             />
           </div>
-        </form>
+        </SubmitForm>
       </Modal>
       <Modal
         isOpen={taskProject !== null}
@@ -856,13 +850,13 @@ export const DevPage: React.FC = () => {
             <Button variant="secondary" onClick={() => setTaskProjectId(null)}>
               取消
             </Button>
-            <Button onClick={handleAddTask} disabled={!taskForm.title.trim()}>
+            <Button type="submit" form="dev-task-add-form" disabled={!taskForm.title.trim()}>
               添加
             </Button>
           </>
         }
       >
-        <div className="space-y-4">
+        <SubmitForm id="dev-task-add-form" onSubmit={handleAddTask} className="space-y-4">
           <Input
             label="任务标题"
             value={taskForm.title}
@@ -884,7 +878,7 @@ export const DevPage: React.FC = () => {
               options={ITEM_TYPE_OPTIONS}
             />
           </div>
-        </div>
+        </SubmitForm>
       </Modal>
 
       <Modal
@@ -897,13 +891,13 @@ export const DevPage: React.FC = () => {
             <Button variant="secondary" onClick={() => setShowSessionModal(false)}>
               取消
             </Button>
-            <Button onClick={handleAddSession} disabled={!canSaveSession}>
+            <Button type="submit" form="dev-session-form" disabled={!canSaveSession}>
               保存
             </Button>
           </>
         }
       >
-        <div className="space-y-4">
+        <SubmitForm id="dev-session-form" onSubmit={handleAddSession} className="space-y-4">
           <Select
             label="项目"
             value={sessionForm.projectId}
@@ -933,7 +927,7 @@ export const DevPage: React.FC = () => {
             rows={3}
             placeholder="今天推进了什么…（可选）"
           />
-        </div>
+        </SubmitForm>
       </Modal>
 
       <ConfirmDialog

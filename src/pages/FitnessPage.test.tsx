@@ -55,6 +55,31 @@ describe('FitnessPage', () => {
     expect(screen.getByText('胸肩三头')).toBeInTheDocument();
   });
 
+  it('新建计划弹窗里在计划名称按回车直接创建（U7 尾巴）', async () => {
+    render(<FitnessPage />);
+
+    await userEvent.click(screen.getAllByRole('button', { name: '新建计划' })[0]!);
+    const dialog = screen.getByRole('dialog', { name: '新建训练计划' });
+
+    await userEvent.type(within(dialog).getByLabelText(/^计划名称/), '推日{Enter}');
+
+    expect(useFitnessStore.getState().plans[0]!.name).toBe('推日');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('记录身体数据弹窗里在体重框按回车直接保存（U7 尾巴）', async () => {
+    render(<FitnessPage />);
+
+    await userEvent.click(screen.getByRole('button', { name: /^身体指标/ }));
+    await userEvent.click(screen.getAllByRole('button', { name: '记录身体数据' })[0]!);
+    const dialog = screen.getByRole('dialog', { name: '记录身体数据' });
+
+    await userEvent.type(within(dialog).getByLabelText(/^体重/), '70.5{Enter}');
+
+    expect(useBodyStore.getState().records[0]!.weight).toBe(70.5);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
   it('统计卡片汇总计划、记录、本周次数与累计容量', () => {
     addPlan('推日');
     addPlan('腿日');

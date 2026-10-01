@@ -424,6 +424,23 @@ describe('TasksPage 宽屏双栏', () => {
     expect(within(panel()).getByText('还没有选中任务')).toBeInTheDocument();
   });
 
+  it('编辑右栏里在标题框按回车也直接保存（U7 尾巴）', async () => {
+    seed();
+    expectWideLayout();
+
+    render(<TasksPage />);
+    await userEvent.click(screen.getByRole('button', { name: '编辑「中等任务」' }));
+
+    const titleInput = within(panel()).getByLabelText(/^标题/);
+    await userEvent.clear(titleInput);
+    await userEvent.type(titleInput, '回车改名的任务{Enter}');
+
+    expect(useTaskStore.getState().tasks.some((task) => task.title === '回车改名的任务')).toBe(
+      true,
+    );
+    expect(within(panel()).getByText('还没有选中任务')).toBeInTheDocument();
+  });
+
   it('宽屏下命令面板聚焦某条任务，也直接进右栏', () => {
     seed();
     expectWideLayout();

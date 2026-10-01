@@ -29,6 +29,7 @@ import {
   SegmentedControl,
   Select,
   StatCard,
+  SubmitForm,
 } from '../components/ui';
 import { ListEmptyState, PageHeader, Toolbar } from '../components/layout';
 import { BarChart, Heatmap, LineChart } from '../components/charts';
@@ -1110,13 +1111,13 @@ export const FitnessPage: React.FC = () => {
             <Button variant="secondary" onClick={() => setShowPlanModal(false)}>
               取消
             </Button>
-            <Button onClick={handleAddPlan} disabled={!planForm.name.trim()}>
+            <Button type="submit" form="fitness-plan-form" disabled={!planForm.name.trim()}>
               {editingPlanId !== null ? '保存' : '创建'}
             </Button>
           </>
         }
       >
-        <div className="space-y-4">
+        <SubmitForm id="fitness-plan-form" onSubmit={handleAddPlan} className="space-y-4">
           <Input
             label="计划名称"
             value={planForm.name}
@@ -1218,7 +1219,7 @@ export const FitnessPage: React.FC = () => {
               )}
             </div>
           )}
-        </div>
+        </SubmitForm>
       </Modal>
 
       <Modal
@@ -1232,13 +1233,13 @@ export const FitnessPage: React.FC = () => {
             <Button variant="secondary" onClick={() => setShowWorkoutModal(false)}>
               取消
             </Button>
-            <Button onClick={handleLogWorkout} disabled={!canSaveWorkout}>
+            <Button type="submit" form="fitness-workout-form" disabled={!canSaveWorkout}>
               保存记录
             </Button>
           </>
         }
       >
-        <div className="space-y-4">
+        <SubmitForm id="fitness-workout-form" onSubmit={handleLogWorkout} className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
             <Select
               label="训练计划"
@@ -1354,7 +1355,7 @@ export const FitnessPage: React.FC = () => {
             multiline
             rows={2}
           />
-        </div>
+        </SubmitForm>
       </Modal>
 
       <Modal
@@ -1368,13 +1369,13 @@ export const FitnessPage: React.FC = () => {
             <Button variant="secondary" onClick={() => setShowBodyModal(false)}>
               取消
             </Button>
-            <Button onClick={handleSaveBody} disabled={!canSaveBody}>
+            <Button type="submit" form="fitness-body-form" disabled={!canSaveBody}>
               保存记录
             </Button>
           </>
         }
       >
-        <div className="space-y-4">
+        <SubmitForm id="fitness-body-form" onSubmit={handleSaveBody} className="space-y-4">
           <Input
             label="日期"
             type="date"
@@ -1420,7 +1421,7 @@ export const FitnessPage: React.FC = () => {
               ))}
             </div>
           </div>
-        </div>
+        </SubmitForm>
       </Modal>
 
       <Modal
