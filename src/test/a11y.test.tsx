@@ -12,6 +12,8 @@ import { DietPage } from '../pages/DietPage';
 import { FitnessPage } from '../pages/FitnessPage';
 import { GamesPage } from '../pages/GamesPage';
 import { GoalsPage } from '../pages/GoalsPage';
+import { HabitsPage } from '../pages/HabitsPage';
+import { JournalPage } from '../pages/JournalPage';
 import { HomePage } from '../pages/HomePage';
 import { NotFoundPage } from '../pages/NotFoundPage';
 import { ReviewPage } from '../pages/ReviewPage';
@@ -179,6 +181,9 @@ const HOST_PAGES: Record<string, React.ReactElement> = {
   '/health/diet': <DietPage />,
   '/insight/stats': <StatsPage />,
   '/insight/review': <ReviewPage />,
+  '/growth/habits': <HabitsPage />,
+  '/growth/goals': <GoalsPage />,
+  '/growth/journal': <JournalPage />,
 };
 
 const MODULE_HOSTS = Object.keys(MODULE_TABS);

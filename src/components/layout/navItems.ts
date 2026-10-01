@@ -119,27 +119,15 @@ export const NAV_ITEMS: NavItem[] = [
     group: 'main',
   },
   {
-    path: '/habits',
-    label: '习惯养成',
-    description: '每日打卡、节奏追踪与强度分数',
+    path: '/growth/habits',
+    host: '/growth',
+    label: '成长',
+    description: '习惯打卡、目标达成率与每日心情',
     icon: Target,
-    keywords: ['habits', 'habit', 'xiguan', '习惯', '打卡'],
-    group: 'main',
-  },
-  {
-    path: '/goals',
-    label: '目标',
-    description: '给指标定个数字，达成率从记录里自动算',
-    icon: Trophy,
-    keywords: ['goals', 'goal', 'mubiao', '目标', '达成率', '打卡'],
-    group: 'main',
-  },
-  {
-    path: '/journal',
-    label: '日记与心情',
-    description: '一天一条：写几句，记一个心情档位',
-    icon: BookHeart,
-    keywords: ['journal', 'diary', 'riji', '日记', '心情', 'mood'],
+    // 合并前「习惯养成」那一组词留在宿主上：习惯是默认子页，落点和宿主一致，搜「习惯」
+    // 回车直接进习惯页。目标与日记那两组词归各自的子页（见 MODULE_TABS）——
+    // 都堆在宿主上的话，搜「目标」回车会落在习惯页。
+    keywords: ['growth', 'chengzhang', '成长', 'habits', 'habit', 'xiguan', '习惯', '打卡'],
     group: 'main',
   },
   {
@@ -169,6 +157,10 @@ export const NAV_ITEMS: NavItem[] = [
  */
 export interface ModuleTab {
   path: string;
+  /**
+   * 签条上的名字。**一律照抄该子页的 h1**（「习惯养成」而不是「习惯」）——
+   * 顶栏标题与读屏播报也从它取，签条上写缩写、页内标题写全称，看着就像出了 bug。
+   */
   label: string;
   icon: LucideIcon;
   /**
@@ -210,6 +202,21 @@ export const MODULE_TABS: Record<string, ModuleTab[]> = {
       // 宿主的名字里就带「复盘」，只靠子串也能命中；这组词保证输入正好等于「复盘」时
       // 它是精确命中排第一（回车直接进复盘页，不落默认子页统计）
       keywords: ['review', 'retro', 'fupan', '复盘', '周报', '总结', '回顾'],
+    },
+  ],
+  '/growth': [
+    { path: '/growth/habits', label: '习惯养成', icon: Target },
+    {
+      path: '/growth/goals',
+      label: '目标',
+      icon: Trophy,
+      keywords: ['goals', 'goal', 'mubiao', '目标', '达成率'],
+    },
+    {
+      path: '/growth/journal',
+      label: '日记与心情',
+      icon: BookHeart,
+      keywords: ['journal', 'diary', 'riji', '日记', '心情', 'mood'],
     },
   ],
 };

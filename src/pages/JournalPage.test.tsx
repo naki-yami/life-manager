@@ -28,7 +28,7 @@ const entry = (patch: Partial<JournalEntry> & { date: string }): JournalEntry =>
 
 const renderPage = (): ReturnType<typeof render> =>
   render(
-    <MemoryRouter initialEntries={['/journal']}>
+    <MemoryRouter initialEntries={['/growth/journal']}>
       <ToastProvider>
         <JournalPage />
       </ToastProvider>

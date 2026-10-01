@@ -81,7 +81,7 @@ export function registerMobileCases() {
     // 底部 Tab 在，且有 5 项（4 个 Tab + 更多）
     assert.ok(await visible(session, TAB), '窄屏下底部 Tab 应当可见');
     const tabCount = await session.count(`${TAB} button`);
-    assert.equal(tabCount, 5, '底部 Tab 的项数（首页/今日计划/习惯/统计与复盘 + 更多）');
+    assert.equal(tabCount, 5, '底部 Tab 的项数（首页/今日计划/成长/统计与复盘 + 更多）');
 
     // 侧栏在窄屏应当被收起（而不是还占着位置）
     const sidebarAfter = await session.evaluate(
@@ -205,7 +205,7 @@ export function registerMobileCases() {
   test('touch-tap', '触屏点击能触发 React 事件：点习惯打卡格子并落库', async (ctx) => {
     const { session, baseUrl } = ctx;
     await session.setViewport(NARROW);
-    await session.goto(`${baseUrl}/habits`, { waitMs: 1500 });
+    await session.goto(`${baseUrl}/growth/habits`, { waitMs: 1500 });
     session.clearErrors();
 
     // 先造一个习惯（用弹窗，跟用户的操作路径一致）

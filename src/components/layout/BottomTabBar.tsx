@@ -12,7 +12,7 @@ import { NAV_ITEMS, isNavItemActive, type NavItem } from './navItems';
  * `/insight/stats` 而不是 `/stats` —— 后者现在只是重定向，写在 Tab 上会多一跳，
  * 而且高亮范围也跟着宿主走（停在复盘子页时这一位照样是亮的）。
  */
-const TAB_PATHS = ['/', '/tasks', '/habits', '/insight/stats'];
+const TAB_PATHS = ['/', '/tasks', '/growth/habits', '/insight/stats'];
 
 export interface BottomTabBarProps {
   /** 点「更多」时打开导航抽屉 */

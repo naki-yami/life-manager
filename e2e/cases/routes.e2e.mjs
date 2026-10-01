@@ -28,10 +28,10 @@ export const ROUTES = [
   { path: '/health/diet', title: '饮食' },
   { path: '/games', title: '游戏' },
   { path: '/insight/stats', title: '统计' },
-  { path: '/habits', title: '习惯养成' },
+  { path: '/growth/habits', title: '习惯养成' },
   { path: '/insight/review', title: '复盘' },
-  { path: '/goals', title: '目标' },
-  { path: '/journal', title: '日记与心情' },
+  { path: '/growth/goals', title: '目标' },
+  { path: '/growth/journal', title: '日记与心情' },
   { path: '/settings', title: '数据与设置' },
 ];
 
@@ -48,6 +48,9 @@ export const REDIRECTS = [
   { from: '/diet', to: '/health/diet', title: '饮食' },
   { from: '/stats', to: '/insight/stats', title: '统计' },
   { from: '/review', to: '/insight/review', title: '复盘' },
+  { from: '/habits', to: '/growth/habits', title: '习惯养成' },
+  { from: '/goals', to: '/growth/goals', title: '目标' },
+  { from: '/journal', to: '/growth/journal', title: '日记与心情' },
 ];
 
 /**
@@ -60,6 +63,7 @@ export const HOST_ENTRIES = [
   { from: '/study', to: '/study/books', title: '读书' },
   { from: '/health', to: '/health/fitness', title: '健身' },
   { from: '/insight', to: '/insight/stats', title: '统计' },
+  { from: '/growth', to: '/growth/habits', title: '习惯养成' },
 ];
 
 /** 用例标题里的路由条数现算，免得又一次和数组实际长度对不上 */
@@ -194,6 +198,15 @@ export function registerRouteCases() {
       to: '复盘',
       toPath: '/insight/review',
       slug: 'insight-review',
+    },
+    {
+      // 三个子页的宿主：从默认子页直接切到最右边那个
+      name: '成长',
+      entry: '/growth/habits',
+      from: '习惯养成',
+      to: '日记与心情',
+      toPath: '/growth/journal',
+      slug: 'growth-journal',
     },
   ];
 

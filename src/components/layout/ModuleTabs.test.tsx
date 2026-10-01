@@ -62,6 +62,20 @@ describe('MODULE_TABS', () => {
     ]);
   });
 
+  it('成长是唯一的三子页宿主，顺序是习惯 / 目标 / 日记', () => {
+    expect(MODULE_TABS['/growth']?.map((tab) => tab.path)).toEqual([
+      '/growth/habits',
+      '/growth/goals',
+      '/growth/journal',
+    ]);
+    // 签条上的名字照抄页内 h1（不是「习惯」这种缩写）
+    expect(MODULE_TABS['/growth']?.map((tab) => tab.label)).toEqual([
+      '习惯养成',
+      '目标',
+      '日记与心情',
+    ]);
+  });
+
   it('默认子页不重复带搜索词，其余子页自己带 —— 免得搜「写作」落在读书页', () => {
     const tabs = MODULE_TABS['/study'] ?? [];
     const host = NAV_ITEMS.find((item) => item.host === '/study');
@@ -81,6 +95,18 @@ describe('MODULE_TABS', () => {
     expect(tabs[0]?.keywords).toBeUndefined();
     expect(tabs[1]?.keywords).toContain('饮食');
     expect(host?.keywords).not.toContain('饮食');
+  });
+
+  it('成长：三个子页各自的词都挂在子页上，宿主只管默认子页那一组', () => {
+    const tabs = MODULE_TABS['/growth'] ?? [];
+    const host = NAV_ITEMS.find((item) => item.host === '/growth');
+
+    expect(tabs[0]?.path).toBe('/growth/habits');
+    expect(tabs[0]?.keywords).toBeUndefined();
+    expect(tabs[1]?.keywords).toContain('达成率');
+    expect(tabs[2]?.keywords).toContain('心情');
+    expect(host?.keywords).not.toContain('达成率');
+    expect(host?.keywords).not.toContain('心情');
   });
 
   it('统计与复盘：复盘那组词在子页上 —— 宿主名里就带「复盘」二字，词不能再上移', () => {
@@ -108,6 +134,11 @@ describe('MODULE_TABS', () => {
     expect(findModuleTab('/insight/review')?.label).toBe('复盘');
     expect(findModuleTab('/insight')).toBeUndefined();
     expect(findModuleTab('/review')).toBeUndefined();
+    expect(findModuleTab('/growth/habits')?.label).toBe('习惯养成');
+    expect(findModuleTab('/growth/goals')?.label).toBe('目标');
+    expect(findModuleTab('/growth/journal')?.label).toBe('日记与心情');
+    expect(findModuleTab('/growth')).toBeUndefined();
+    expect(findModuleTab('/journal')).toBeUndefined();
   });
 });
 

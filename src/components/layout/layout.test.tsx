@@ -46,12 +46,15 @@ describe('navItems', () => {
     expect(new Set(paths).size).toBe(paths.length);
   });
 
-  it('目标页挂在主导航上，命令面板也能按「目标 / 达成率」搜到', () => {
-    const goals = findNavItem('/goals');
+  it('目标不再是独立导航项，命令面板的词挂在 /growth/goals 子页上', () => {
+    const host = itemAt('/growth/habits');
+    const goals = MODULE_TABS['/growth']?.find((tab) => tab.path === '/growth/goals');
 
-    expect(goals).toMatchObject({ label: '目标', group: 'main' });
+    expect(findNavItem('/goals')).toBeUndefined();
+    expect(host).toMatchObject({ label: '成长', host: '/growth', group: 'main' });
     expect(goals?.keywords).toContain('目标');
     expect(goals?.keywords).toContain('达成率');
+    expect(host?.keywords).not.toContain('达成率');
   });
 
   it('复盘不再是独立导航项，命令面板的词挂在 /insight/review 子页上', () => {
@@ -66,10 +69,10 @@ describe('navItems', () => {
     expect(host?.keywords).not.toContain('周报');
   });
 
-  it('日记页挂在主导航上，命令面板也能按「日记 / 心情」搜到', () => {
-    const journal = findNavItem('/journal');
+  it('日记不再是独立导航项，命令面板的词挂在 /growth/journal 子页上', () => {
+    const journal = MODULE_TABS['/growth']?.find((tab) => tab.path === '/growth/journal');
 
-    expect(journal).toMatchObject({ label: '日记与心情', group: 'main' });
+    expect(findNavItem('/journal')).toBeUndefined();
     expect(journal?.keywords).toContain('日记');
     expect(journal?.keywords).toContain('心情');
   });
@@ -89,8 +92,8 @@ describe('navItems', () => {
     expect(findNavItem('/nope')).toBeUndefined();
   });
 
-  it('收敛节奏：13 → 12 → 11 → 10，阶段三是「统计与复盘」', () => {
-    expect(NAV_ITEMS.filter((item) => item.group === 'main')).toHaveLength(10);
+  it('收敛节奏：13 → 12 → 11 → 10 → 8，阶段四收在「成长」', () => {
+    expect(NAV_ITEMS.filter((item) => item.group === 'main')).toHaveLength(8);
   });
 
   it('读书与写作合成「书房」一条，两个子页都点亮它', () => {
@@ -207,6 +210,36 @@ describe('navItems', () => {
     expect(findLocationLabel('/insight/review')).toBe('复盘');
     expect(findLocationLabel('/insight')).toBe('统计与复盘');
   });
+
+  it('成长是三个子页的宿主，三条路径都点亮它', () => {
+    const growth = itemAt('/growth/habits');
+
+    expect(growth).toMatchObject({ label: '成长', host: '/growth', group: 'main' });
+
+    for (const path of ['/growth/habits', '/growth/goals', '/growth/journal']) {
+      expect(isNavItemActive(path, growth)).toBe(true);
+    }
+    expect(isNavItemActive('/growths', growth)).toBe(false);
+  });
+
+  it('习惯 / 目标 / 日记不再各自占一条导航项，旧路径也归约不到它们', () => {
+    const paths = NAV_ITEMS.map((item) => item.path);
+
+    for (const old of ['/habits', '/goals', '/journal']) {
+      expect(paths).not.toContain(old);
+      expect(findNavItem(old)).toBeUndefined();
+    }
+  });
+
+  it('成长宿主也吃嵌套归约与最深子页名', () => {
+    expect(findNavItem('/growth/journal')?.label).toBe('成长');
+    expect(findNavItem('/growth')?.label).toBe('成长');
+    // 子页 label 照抄页内 h1，签条上写「习惯养成」而不是「习惯」
+    expect(findLocationLabel('/growth/habits')).toBe('习惯养成');
+    expect(findLocationLabel('/growth/goals')).toBe('目标');
+    expect(findLocationLabel('/growth/journal')).toBe('日记与心情');
+    expect(findLocationLabel('/growth')).toBe('成长');
+  });
 });
 
 describe('NavList', () => {
@@ -305,6 +338,9 @@ const renderLayout = (path = '/') =>
           <Route path="/health/diet" element={<div>饮食内容</div>} />
           <Route path="/insight/stats" element={<div>统计内容</div>} />
           <Route path="/insight/review" element={<div>复盘内容</div>} />
+          <Route path="/growth/habits" element={<div>习惯内容</div>} />
+          <Route path="/growth/goals" element={<div>目标内容</div>} />
+          <Route path="/growth/journal" element={<div>日记内容</div>} />
         </Routes>
       </Layout>
     </MemoryRouter>,
@@ -405,6 +441,21 @@ describe('Layout', () => {
     expect(screen.getByText('复盘内容')).toBeInTheDocument();
   });
 
+  it('三个子页的宿主也不串门：搜「日记」直达日记子页，不落默认子页习惯', async () => {
+    renderLayout('/');
+
+    fireEvent.keyDown(window, { key: 'k', metaKey: true });
+    const palette = await screen.findByRole('dialog', { name: '命令面板' });
+
+    await userEvent.type(within(palette).getByRole('combobox'), '日记');
+
+    expect(within(palette).getAllByRole('option')[0]).toHaveTextContent('成长 · 日记与心情');
+
+    await userEvent.keyboard('{Enter}');
+
+    expect(screen.getByText('日记内容')).toBeInTheDocument();
+  });
+
   it('命令面板里可以切换密度', async () => {
     renderLayout('/');
 
@@ -435,7 +486,7 @@ describe('BottomTabBar', () => {
   it('只放四个高频入口，其余走「更多」抽屉', async () => {
     renderLayout('/');
 
-    for (const label of ['首页总览', '今日计划', '习惯养成', '统计与复盘']) {
+    for (const label of ['首页总览', '今日计划', '成长', '统计与复盘']) {
       expect(within(bar()).getByRole('button', { name: label })).toBeInTheDocument();
     }
     // 书房不在 Tab 上，只能从抽屉进
@@ -479,7 +530,7 @@ describe('BottomTabBar', () => {
     const more = within(bar()).getByRole('button', { name: '更多' });
     expect(more).toHaveClass('text-accent');
     expect(more).not.toHaveAttribute('aria-current');
-    for (const label of ['首页总览', '今日计划', '习惯养成', '统计与复盘']) {
+    for (const label of ['首页总览', '今日计划', '成长', '统计与复盘']) {
       expect(within(bar()).getByRole('button', { name: label })).toHaveClass(
         'text-content-tertiary',
       );

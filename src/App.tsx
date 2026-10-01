@@ -69,6 +69,13 @@ const App: React.FC = () => {
               <Route path="stats" element={<StatsPage />} />
               <Route path="review" element={<ReviewPage />} />
             </Route>
+            {/* 成长：习惯 + 目标 + 日记，三个子页 */}
+            <Route path="/growth" element={<ModuleHost host="/growth" />}>
+              <Route index element={<Navigate to="habits" replace />} />
+              <Route path="habits" element={<HabitsPage />} />
+              <Route path="goals" element={<GoalsPage />} />
+              <Route path="journal" element={<JournalPage />} />
+            </Route>
             {/* 旧路径永久保留，书签 / 外部链接 / 历史记录都不碎（决策 #3） */}
             <Route path="/books" element={<Navigate to="/study/books" replace />} />
             <Route path="/dev" element={<DevPage />} />
@@ -78,10 +85,10 @@ const App: React.FC = () => {
             <Route path="/diet" element={<Navigate to="/health/diet" replace />} />
             <Route path="/games" element={<GamesPage />} />
             <Route path="/stats" element={<Navigate to="/insight/stats" replace />} />
-            <Route path="/habits" element={<HabitsPage />} />
+            <Route path="/habits" element={<Navigate to="/growth/habits" replace />} />
             <Route path="/review" element={<Navigate to="/insight/review" replace />} />
-            <Route path="/goals" element={<GoalsPage />} />
-            <Route path="/journal" element={<JournalPage />} />
+            <Route path="/goals" element={<Navigate to="/growth/goals" replace />} />
+            <Route path="/journal" element={<Navigate to="/growth/journal" replace />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/ui" element={<UiPage />} />
             <Route path="*" element={<NotFoundPage />} />

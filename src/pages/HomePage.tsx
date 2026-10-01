@@ -832,7 +832,7 @@ export const HomePage: React.FC = () => {
                   : `还有 ${pendingHabitList.length} 个没打卡 · 点一下即可`
               }
               action={
-                <Button variant="ghost" size="sm" onClick={() => navigate('/habits')}>
+                <Button variant="ghost" size="sm" onClick={() => navigate('/growth/habits')}>
                   管理习惯
                 </Button>
               }
@@ -922,7 +922,7 @@ export const HomePage: React.FC = () => {
             title="今日心情"
             subtitle={todayJournal ? `已连续记录 ${journalStreak} 天` : '今天还没写'}
             action={
-              <Button variant="ghost" size="sm" onClick={() => navigate('/journal')}>
+              <Button variant="ghost" size="sm" onClick={() => navigate('/growth/journal')}>
                 {todayJournal ? '去写日记' : '写今天的日记'}
               </Button>
             }
@@ -962,7 +962,7 @@ export const HomePage: React.FC = () => {
               title="目标达成"
               subtitle={`${goalSummary.reached}/${goalSummary.total} 个已达成 · 数字从各模块记录现算`}
               action={
-                <Button variant="ghost" size="sm" onClick={() => navigate('/goals')}>
+                <Button variant="ghost" size="sm" onClick={() => navigate('/growth/goals')}>
                   管理目标
                 </Button>
               }
