@@ -1,6 +1,6 @@
 # e2e 冒烟测试
 
-「应用整体还能不能用」这一层。单测（`npm test`，1326 条）覆盖的是 store 逻辑与组件行为，
+「应用整体还能不能用」这一层。单测（`npm test`，1400+ 条）覆盖的是 store 逻辑与组件行为，
 e2e 只关心那件单测照不到的事：**在真浏览器里跑起来、路由真的能开、数据真的落到 IndexedDB、
 拖拽真能换位、窄屏真能点**。
 
@@ -59,7 +59,7 @@ e2e/
     assert.mjs         断言、用例注册、runner、彩色汇总
   cases/
     shell.e2e.mjs      外壳：能渲染、无异常、存储后端在位、顶栏开关可用
-    routes.e2e.mjs     逐条打开全部路由 + 旧路径重定向 + 宿主子页签条
+    routes.e2e.mjs     逐条打开全部路由 + 旧路径重定向 + 裸宿主落点 + 宿主子页签条
     keyboard.e2e.mjs   命令面板、单键快捷键、g 序列、404
     data.e2e.mjs       写入链路、刷新持久化、旧 key 迁移、主题落盘、模板、批量操作、
                        分模块导出、首页拖拽换位
@@ -76,7 +76,7 @@ import { assert, test } from '../lib/assert.mjs';
 test('my-case', '一句话说清这条用例在验什么', async (ctx) => {
   const { session, baseUrl, shot } = ctx;
 
-  await session.goto(`${baseUrl}/habits`, { waitMs: 1200 });
+  await session.goto(`${baseUrl}/growth/habits`, { waitMs: 1200 });
 
   const h1 = await session.text('h1');
   assert.equal(h1, '习惯养成', '习惯页的标题');

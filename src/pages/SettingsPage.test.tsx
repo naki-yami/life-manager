@@ -157,10 +157,12 @@ describe('SettingsPage', () => {
     expect(screen.getByText('快捷键')).toBeInTheDocument();
     expect(screen.getByText('Ctrl / ⌘ K')).toBeInTheDocument();
     expect(screen.getByText('g 后接 1-9')).toBeInTheDocument();
-    // 页面清单是从 mainNavShortcuts 现算的：导航收敛成「书房」之后这一行自动跟着变，
+    // 页面清单是从 mainNavShortcuts 现算的，这一行就是主导航收敛后的最终顺序（13 → 8），
     // 不再出现手写的「3 读书」这种对不上的旧文案
     expect(
-      screen.getByText(/跳转到对应的主页面（1 首页总览、2 今日计划、3 书房/),
+      screen.getByText(
+        '跳转到对应的主页面（1 首页总览、2 今日计划、3 书房、4 开发工作、5 健康、6 游戏娱乐、7 统计与复盘、8 成长）',
+      ),
     ).toBeInTheDocument();
   });
 
