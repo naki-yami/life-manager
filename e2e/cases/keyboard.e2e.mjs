@@ -152,6 +152,114 @@ export function registerKeyboardCases() {
     assert.equal(await session.exists(PANEL), false, 'Esc 之后命令面板应当消失');
   });
 
+  test('list-keyboard', '列表行间键盘导航：j / k 走行、x 进批量（U8）', async (ctx) => {
+    const { session, baseUrl } = ctx;
+    await session.goto(`${baseUrl}/tasks`, { waitMs: 1200 });
+    session.clearErrors();
+
+    // 走真实的新建弹窗造两条任务：绕过表单直接写 store 就测不到「用完还能用」这件事
+    for (const title of ['E2E 键盘甲', 'E2E 键盘乙']) {
+      const opened = await session.evaluate(
+        `(() => {
+          const b = [...document.querySelectorAll('button')].find(n => n.textContent.trim() === '添加任务');
+          if (!b) return 'MISS';
+          b.click();
+          return 'OK';
+        })()`,
+      );
+      assert.equal(opened, 'OK', '打开「添加任务」弹窗');
+      await delay(500);
+
+      const typed = await session.evaluate(
+        `(() => {
+          const d = document.querySelector('[role="dialog"]');
+          if (!d) return 'NO_DIALOG';
+          const label = [...d.querySelectorAll('label')].find(n => n.textContent.trim().replace(/\\*$/, '') === '标题');
+          if (!label) return 'NO_LABEL';
+          const input = document.getElementById(label.getAttribute('for'));
+          if (!input) return 'NO_INPUT';
+          const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+          setter.call(input, ${JSON.stringify(title)});
+          input.dispatchEvent(new Event('input', { bubbles: true }));
+          return 'OK';
+        })()`,
+      );
+      assert.equal(typed, 'OK', `填进「${title}」`);
+      await delay(300);
+
+      const saved = await session.evaluate(
+        `(() => {
+          const d = document.querySelector('[role="dialog"]');
+          if (!d) return 'NO_DIALOG';
+          const b = [...d.querySelectorAll('button')].find(n => n.textContent.trim() === '添加');
+          if (!b) return 'NO_BUTTON';
+          b.click();
+          return 'OK';
+        })()`,
+      );
+      assert.equal(saved, 'OK', `保存「${title}」`);
+      await delay(700);
+    }
+
+    // 行根元素是 data-row-id（useRovingList 的契约），勾选框是这一行的第一个控件
+    const focusState = (index) =>
+      session.evaluate(
+        `(() => {
+          const rows = [...document.querySelectorAll('[data-row-id]')];
+          if (rows.length < 2) return 'ROWS:' + rows.length;
+          const box = rows[${index}].querySelector('input[type="checkbox"]');
+          if (!box) return 'NO_BOX';
+          return document.activeElement === box ? 'FOCUSED' : 'NOT_FOCUSED';
+        })()`,
+      );
+
+    const seeded = await session.evaluate(
+      `(() => {
+        const rows = [...document.querySelectorAll('[data-row-id]')];
+        if (rows.length < 2) return 'ROWS:' + rows.length;
+        rows[0].querySelector('input[type="checkbox"]').focus();
+        return 'OK';
+      })()`,
+    );
+    assert.equal(seeded, 'OK', '两条任务都渲染成了带 data-row-id 的行');
+
+    // 这里派的也是真键盘事件：合成 KeyboardEvent 走不到 CDP 的那条路径
+    await session.key('j', { code: 'KeyJ', windowsVirtualKeyCode: 74 });
+    await delay(300);
+    assert.equal(await focusState(1), 'FOCUSED', 'j 之后焦点应当走到第二行');
+
+    await session.key('k', { code: 'KeyK', windowsVirtualKeyCode: 75 });
+    await delay(300);
+    assert.equal(await focusState(0), 'FOCUSED', 'k 之后焦点应当回到第一行');
+
+    await session.key('x', { code: 'KeyX', windowsVirtualKeyCode: 88 });
+    await delay(400);
+    const picked = await session.evaluate(
+      `(() => {
+        const rows = [...document.querySelectorAll('[data-row-id]')];
+        const box = rows[0].querySelector('input[type="checkbox"]');
+        if (!box) return 'NO_BOX';
+        if (!box.checked) return 'NOT_CHECKED';
+        return document.activeElement === box ? 'CHECKED_AND_FOCUSED' : 'CHECKED_LOST_FOCUS';
+      })()`,
+    );
+    assert.equal(picked, 'CHECKED_AND_FOCUSED', 'x 应当选中当前行，且焦点留在原处');
+
+    // 再按一次 x 取消：批量模式要能进能出
+    await session.key('x', { code: 'KeyX', windowsVirtualKeyCode: 88 });
+    await delay(400);
+    const released = await session.evaluate(
+      `(() => {
+        const rows = [...document.querySelectorAll('[data-row-id]')];
+        const box = rows[0].querySelector('input[type="checkbox"]');
+        return box && !box.checked ? 'RELEASED' : 'STILL_CHECKED';
+      })()`,
+    );
+    assert.equal(released, 'RELEASED', '再按一次 x 应当取消选中');
+
+    assert.empty(session.pageErrors, '走一遍列表键盘导航不该有未捕获异常');
+  });
+
   test('not-found', '乱路径落到 404 页，能回首页', async (ctx) => {
     const { session, baseUrl } = ctx;
     session.clearErrors();
