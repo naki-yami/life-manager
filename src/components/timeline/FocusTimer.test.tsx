@@ -82,6 +82,58 @@ describe('FocusTimer', () => {
     expect(screen.getByRole('button', { name: '开始专注' })).toBeDisabled();
   });
 
+  it('环里先摆出这一轮要走的时间，改计划时长它跟着变', async () => {
+    setup();
+
+    expect(screen.getByText('25:00')).toBeInTheDocument();
+
+    await userEvent.selectOptions(screen.getByLabelText('计划时长'), '45');
+
+    expect(screen.getByText('45:00')).toBeInTheDocument();
+  });
+
+  it('切成正计时时环里不再摆一个不存在的倒计时', async () => {
+    setup();
+
+    await userEvent.click(screen.getByRole('button', { name: '正计时' }));
+
+    expect(screen.getByText('00:00')).toBeInTheDocument();
+    expect(screen.queryByText('25:00')).not.toBeInTheDocument();
+  });
+
+  it('「换一个」往后挪一格，走到末尾绕回第一个', async () => {
+    setup();
+
+    await userEvent.click(screen.getByRole('button', { name: '换一个' }));
+    expect(screen.getByLabelText('专注对象')).toHaveValue('task:t1');
+
+    await userEvent.click(screen.getByRole('button', { name: '换一个' }));
+    expect(screen.getByLabelText('专注对象')).toHaveValue('book:b1');
+
+    // 两个对象，第三次该绕回来了
+    await userEvent.click(screen.getByRole('button', { name: '换一个' }));
+    expect(screen.getByLabelText('专注对象')).toHaveValue('task:t1');
+  });
+
+  it('「换一个」把对象名与所属分组一起摆到环旁边', async () => {
+    setup();
+
+    expect(screen.getByText(/共 2 个可专注对象/)).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: '换一个' }));
+
+    expect(screen.getByText('写周报')).toBeInTheDocument();
+    expect(screen.getByText('任务')).toBeInTheDocument();
+  });
+
+  it('一个可专注对象都没有时「换一个」也是灰的，点了不会把状态搞乱', () => {
+    setup({ options: [] });
+
+    const button = screen.getByRole('button', { name: '换一个' });
+    expect(button).toBeDisabled();
+    expect(screen.getByText('先挑一件事')).toBeInTheDocument();
+  });
+
   it('番茄钟显示剩余时间，结束与放弃各走各的回调', async () => {
     const { onFinish, onCancel } = setup({ active: activeFocus() });
 

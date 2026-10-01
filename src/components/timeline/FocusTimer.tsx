@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Play, Square } from 'lucide-react';
-import { Button, SegmentedControl, Select } from '../ui';
+import { Button, ProgressRing, SegmentedControl, Select } from '../ui';
 import type { ActiveFocus, FocusMode, FocusTarget } from '../../types';
 import type { StartFocusInput } from '../../store/focusStore';
 import {
@@ -18,6 +18,9 @@ import {
  *   时长照样会记下来，只是不再往计划时间上凑；
  * - **番茄钟到点自动结束**：到点了还让人手动点一下，等于把「专注」变成「盯表」；
  * - **倒计时按秒显示**：整分钟跳动会让人怀疑表停了。
+ *
+ * 版式上，环和「开始专注」是这张卡的主角，选对象 / 计时方式 / 时长退到下面一行 ——
+ * 「现在要不要开始」是一眼要看到的，「开始做什么、做多久」是想改的时候才去改的。
  */
 
 export interface FocusOption {
@@ -43,6 +46,20 @@ const PLAN_OPTIONS = [
   { value: '45', label: '45 分钟' },
   { value: '60', label: '60 分钟' },
 ];
+
+const MODE_OPTIONS: Array<{ value: FocusMode; label: string }> = [
+  { value: 'pomodoro', label: '番茄钟' },
+  { value: 'stopwatch', label: '正计时' },
+];
+
+/** 环的尺寸。直径与内圈文字的搭配是照着「一眼能读出分钟数」定的 */
+const DIAL_SIZE = 76;
+const DIAL_STROKE = 7;
+
+/** 环中央那串时间。比 ProgressRing 默认的 text-sm 大一档，才配得上 76px 的直径 */
+const DialTime: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <span className="text-[15px] font-semibold tracking-tight tabular">{children}</span>
+);
 
 export const FocusTimer: React.FC<FocusTimerProps> = ({
   active,
@@ -77,27 +94,43 @@ export const FocusTimer: React.FC<FocusTimerProps> = ({
 
   if (active) {
     const counting = active.mode === 'pomodoro' ? remaining : elapsed;
+    const plannedSeconds = active.plannedMinutes * 60;
+
     return (
-      <div className="flex flex-wrap items-center gap-3 rounded border border-accent bg-accent-soft px-3 py-2">
-        <div className="min-w-0 flex-1">
-          <p className="text-2xs text-content-secondary">
-            {active.mode === 'pomodoro' ? '番茄钟' : '正计时'} · 正在专注
-          </p>
-          <p className="truncate text-sm font-medium text-content">{active.title}</p>
+      <div>
+        <div className="flex items-center gap-3.5">
+          <ProgressRing
+            size={DIAL_SIZE}
+            strokeWidth={DIAL_STROKE}
+            // 番茄钟填的是「已经过去了多少」；正计时没有终点可填，环就空着不假装进度
+            value={active.mode === 'pomodoro' ? plannedSeconds - remaining : 0}
+            max={plannedSeconds}
+            tone="accent"
+            label={
+              active.mode === 'pomodoro'
+                ? `番茄钟剩余 ${formatTimer(remaining)}`
+                : `正计时已过 ${formatTimer(elapsed)}`
+            }
+            className="shrink-0"
+          >
+            <DialTime>{formatTimer(counting)}</DialTime>
+          </ProgressRing>
+          <div className="min-w-0 flex-1">
+            <p className="text-xs text-content-tertiary">
+              {active.mode === 'pomodoro' ? '番茄钟 · 正在专注' : '正计时 · 正在专注'}
+            </p>
+            <p className="mt-0.5 truncate text-sm font-medium text-content">{active.title}</p>
+            <p className="mt-0.5 text-2xs text-content-tertiary">
+              {active.mode === 'pomodoro' ? '剩余' : '已专注'}
+            </p>
+          </div>
         </div>
-        <div className="flex items-baseline gap-1">
-          <span className="text-2xs text-content-tertiary">
-            {active.mode === 'pomodoro' ? '剩余' : '已专注'}
-          </span>
-          <span className="tabular text-2xl font-semibold text-accent">
-            {formatTimer(counting)}
-          </span>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button size="sm" icon={<Square size={13} aria-hidden />} onClick={onFinish}>
+
+        <div className="mt-3.5 flex items-center gap-2">
+          <Button className="flex-1" icon={<Square size={13} aria-hidden />} onClick={onFinish}>
             结束并记录
           </Button>
-          <Button size="sm" variant="secondary" onClick={onCancel}>
+          <Button variant="secondary" onClick={onCancel}>
             放弃
           </Button>
         </div>
@@ -105,54 +138,106 @@ export const FocusTimer: React.FC<FocusTimerProps> = ({
     );
   }
 
+  const option = options.find((item) => item.key === picked) ?? null;
+  const plannedMinutes = Number(plan);
+
   const handleStart = (): void => {
-    const option = options.find((item) => item.key === picked);
     if (!option) return;
     onStart({
       entityId: option.entityId,
       title: option.title,
       target: option.target,
       mode,
-      plannedMinutes: Number(plan),
+      plannedMinutes,
     });
   };
 
+  /**
+   * 「换一个」：在可专注的对象里往后挪一格。
+   *
+   * 和下面那个下拉不是重复 —— 下拉是「我就要做那一件」，换一个是「随便给我一件，
+   * 别再让我选」。挑不出东西的时候，第二个才是能救场的那一个。
+   */
+  const cycle = (): void => {
+    if (options.length === 0) return;
+    const index = options.findIndex((item) => item.key === picked);
+    const next = options[(index + 1) % options.length];
+    if (next) setPicked(next.key);
+  };
+
   return (
-    <div className="flex flex-wrap items-end gap-2 rounded border border-dashed border-line px-3 py-2">
-      <div className="min-w-[11rem] flex-1">
+    <div>
+      <div className="flex items-center gap-3.5">
+        <ProgressRing
+          size={DIAL_SIZE}
+          strokeWidth={DIAL_STROKE}
+          // 还没开始，环空着；中央先把这一轮要走的分钟数摆出来
+          value={0}
+          max={plannedMinutes}
+          tone="accent"
+          label={option ? `本次专注对象：${option.title}` : '尚未选择专注对象'}
+          className="shrink-0"
+        >
+          <DialTime>{mode === 'pomodoro' ? formatTimer(plannedMinutes * 60) : '00:00'}</DialTime>
+        </ProgressRing>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-medium text-content">
+            {option ? option.title : '先挑一件事'}
+          </p>
+          <p className="mt-0.5 text-xs text-content-tertiary">
+            {mode === 'pomodoro' ? `番茄钟 ${plan} 分钟` : '正计时，停下来才记一笔'}
+            {options.length > 0 && ` · 共 ${options.length} 个可专注对象`}
+          </p>
+          {option && (
+            <p className="mt-0.5 truncate text-2xs text-content-tertiary">{option.group}</p>
+          )}
+        </div>
+      </div>
+
+      <div className="mt-3.5 flex items-center gap-2">
+        <Button
+          className="flex-1"
+          icon={<Play size={14} aria-hidden />}
+          disabled={!option}
+          onClick={handleStart}
+        >
+          开始专注
+        </Button>
+        <Button variant="secondary" disabled={options.length === 0} onClick={cycle}>
+          换一个
+        </Button>
+      </div>
+
+      <div className="mt-3 space-y-2 border-t border-line-subtle pt-3">
         <Select
           label="专注对象"
           value={picked}
           placeholder={options.length > 0 ? '选一个…' : '目前没有可以专注的对象'}
           disabled={options.length === 0}
           onChange={setPicked}
-          options={options.map((option) => ({
-            value: option.key,
-            label: `${option.group} · ${option.title}`,
+          options={options.map((item) => ({
+            value: item.key,
+            label: `${item.group} · ${item.title}`,
           }))}
         />
-      </div>
-      <SegmentedControl
-        label="计时方式"
-        value={mode}
-        onChange={setMode}
-        options={[
-          { value: 'pomodoro' as FocusMode, label: '番茄钟' },
-          { value: 'stopwatch' as FocusMode, label: '正计时' },
-        ]}
-      />
-      {mode === 'pomodoro' && (
-        <div className="w-28">
-          <Select label="计划时长" value={plan} onChange={setPlan} options={PLAN_OPTIONS} />
+        <div className="flex flex-wrap items-end gap-2">
+          <SegmentedControl
+            label="计时方式"
+            value={mode}
+            onChange={setMode}
+            options={MODE_OPTIONS}
+          />
+          {mode === 'pomodoro' && (
+            <div className="w-28">
+              <Select label="计划时长" value={plan} onChange={setPlan} options={PLAN_OPTIONS} />
+            </div>
+          )}
         </div>
-      )}
-      <Button icon={<Play size={14} aria-hidden />} disabled={!picked} onClick={handleStart}>
-        开始专注
-      </Button>
-      <p className="w-full text-2xs text-content-tertiary">
-        正计时适合不知道会做多久的事；番茄钟到点会自动记一笔。共 {options.length}{' '}
-        个可专注对象，单次最长记 {formatFocusDuration(600)}。
-      </p>
+        <p className="text-2xs text-content-tertiary">
+          正计时适合不知道会做多久的事；番茄钟到点会自动记一笔，单次最长记{' '}
+          {formatFocusDuration(600)}。
+        </p>
+      </div>
     </div>
   );
 };

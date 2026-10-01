@@ -151,6 +151,16 @@ export function weekdayName(date: Date = new Date()): string {
 }
 
 /**
+ * 「2026 年 10 月 1 日」。
+ *
+ * 和 `formatLongDate` 的区别只有一处：不带星期。首页页头把星期提到上面那行
+ * eyebrow 里当坐标用，正文再重复一遍就是同一句话说两遍。
+ */
+export function formatDateNumbers(date: Date = new Date()): string {
+  return `${date.getFullYear()} 年 ${date.getMonth() + 1} 月 ${date.getDate()} 日`;
+}
+
+/**
  * ISO 周序号，例如 2026-10-01 → 40。
  *
  * 用 ISO 8601 的定义而不是「今年的第几个自然周」：一周从周一算起，

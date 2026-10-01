@@ -4,7 +4,7 @@ export { Layout } from './Layout';
 export { BottomTabBar } from './BottomTabBar';
 export type { BottomTabBarProps } from './BottomTabBar';
 export { StorageAlert } from './StorageAlert';
-export { PageHeader } from './PageHeader';
+export { PageHeader, MetaSeparator } from './PageHeader';
 export type { PageHeaderProps } from './PageHeader';
 export { MasterDetail, MASTER_DETAIL_QUERY } from './MasterDetail';
 export type { MasterDetailProps } from './MasterDetail';

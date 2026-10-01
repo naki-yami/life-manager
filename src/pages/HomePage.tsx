@@ -31,7 +31,7 @@ import {
   Input,
   StatStrip,
 } from '../components/ui';
-import { PageHeader } from '../components/layout';
+import { MetaSeparator, PageHeader } from '../components/layout';
 import { DashboardGrid, type DashboardWidgetView } from '../components/dashboard';
 import { GoalProgressList } from '../components/goals';
 import { FocusCard } from '../components/timeline/FocusCard';
@@ -53,10 +53,12 @@ import { useJournalStore } from '../store/journalStore';
 import {
   dayKeyOf,
   daysBetween,
-  formatLongDate,
+  formatDateNumbers,
   formatNumber,
   greeting,
+  isoWeekNumber,
   todayKey,
+  weekdayName,
 } from '../utils/date';
 import {
   activeDays,
@@ -80,6 +82,7 @@ import {
   weightOf,
 } from '../utils/body';
 
+import { focusSummary } from '../utils/focus';
 import { parseQuickTask } from '../utils/quickParse';
 import { goalProgress, sortGoals, summarizeGoals } from '../utils/goals';
 import type { MetricSnapshot } from '../utils/metrics';
@@ -229,7 +232,6 @@ export const HomePage: React.FC = () => {
 
   const pendingTasks = useMemo(() => tasks.filter((task) => task.status === 'pending'), [tasks]);
   const completedCount = tasks.length - pendingTasks.length;
-  const urgentTasks = pendingTasks.filter((task) => task.priority === 'high');
   const todayTasks = pendingTasks.slice(0, 5);
 
   const focusTask = focusPick(pendingTasks, today);
@@ -247,6 +249,9 @@ export const HomePage: React.FC = () => {
   /** 今日心情卡：只读今天这一条，没有就提示去写 */
   const todayJournal = journalEntryOn(journalEntries, today);
   const journalStreak = currentStreak(journalSeries, today);
+
+  /** 页头那行元信息要念「已专注 N 次」，所以这里也得有一份今日专注汇总 */
+  const todayFocus = useMemo(() => focusSummary(focusSessions, today), [focusSessions, today]);
 
   /** 目标达成：数字全走 metrics registry，与复盘页共用同一段取数 */
   const goalProgressList = useMemo(() => {
@@ -839,17 +844,39 @@ export const HomePage: React.FC = () => {
     },
   ];
 
+  /**
+   * 页头那行元信息。
+   *
+   * 每个片段自己带单位（「0/1」而不是干巴巴一个 0），彼此之间插一根竖线；
+   * 这样一行里塞四件事也读得清 —— 老版本把它们揉成一句「今天是……今天有……其中……」
+   * 的长句，赶上紧急项多的时候会折成两行半。
+   */
+  const heroMeta = [
+    formatDateNumbers(),
+    dueTodayTasks.length > 0
+      ? `今日完成 ${dueTodayDone}/${dueTodayTasks.length}`
+      : `今日完成 ${completedToday} 项`,
+    `已专注 ${todayFocus.count} 次`,
+    `连续记录 ${journalStreak} 天`,
+  ];
+
   return (
     <div className="space-y-section">
       <PageHeader
-        title={`${greeting()} 👋`}
-        description={`今天是 ${formatLongDate()} · ${
+        // eyebrow 给这一天一个坐标；星期只在这里出现一次，下面不再重复
+        eyebrow={`第 ${isoWeekNumber()} 周 · ${weekdayName()}`}
+        // 标题直接给结论：先看还剩几件事，再看别的
+        title={
           pendingTasks.length > 0
-            ? `今天有 ${pendingTasks.length} 件事待办${
-                urgentTasks.length > 0 ? `，其中 ${urgentTasks.length} 件紧急` : ''
-              }`
-            : '今天暂无待办，可以安排点想做的事'
-        }`}
+            ? `${greeting()}，今天还剩 ${pendingTasks.length} 件事`
+            : `${greeting()}，今天没有要赶的事了`
+        }
+        meta={heroMeta.map((item, index) => (
+          <React.Fragment key={item}>
+            {index > 0 && <MetaSeparator />}
+            <span>{item}</span>
+          </React.Fragment>
+        ))}
         actions={
           <>
             <Button
@@ -860,9 +887,7 @@ export const HomePage: React.FC = () => {
             >
               {editingLayout ? '完成编辑' : '编辑布局'}
             </Button>
-            <Button variant="secondary" onClick={() => navigate('/tasks')}>
-              管理今日计划
-            </Button>
+            <Button onClick={() => navigate('/tasks')}>管理今日计划</Button>
           </>
         }
       />

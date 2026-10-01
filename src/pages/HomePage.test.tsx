@@ -120,16 +120,43 @@ describe('HomePage', () => {
     }
   });
 
-  it('问候语按时段变化，摘要里带待办数与紧急数', () => {
+  it('页头标题直接给结论：问候语 + 还剩几件事', () => {
     useTaskStore.getState().addTask('写周报', '', 'high', '');
     useTaskStore.getState().addTask('买牛奶', '', 'low', '');
 
     renderHome();
 
-    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(
-      /(早上好|中午好|下午好|晚上好|夜深了)/,
-    );
-    expect(screen.getByText(/今天有 2 件事待办，其中 1 件紧急/)).toBeInTheDocument();
+    const title = screen.getByRole('heading', { level: 1 });
+    expect(title).toHaveTextContent(/(早上好|中午好|下午好|晚上好|夜深了)，今天还剩 2 件事/);
+  });
+
+  it('一件待办都没有时标题改口，不说「还剩 0 件事」', () => {
+    renderHome();
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(/今天没有要赶的事了/);
+  });
+
+  it('页头有一行 eyebrow 交代这是哪一周，星期只出现一次', () => {
+    renderHome();
+
+    expect(screen.getByText(/^第 \d+ 周 · 星期[一二三四五六日]$/)).toBeInTheDocument();
+    // 星期只在 eyebrow 里出现这一次；下面那行元信息的日期不带星期，不再重复
+    expect(screen.getAllByText(/星期[一二三四五六日]/)).toHaveLength(1);
+    expect(screen.getByText(/^\d{4} 年 \d{1,2} 月 \d{1,2} 日$/)).toBeInTheDocument();
+  });
+
+  it('元信息一行四段：日期 / 今日完成 / 已专注 / 连续记录', () => {
+    useTaskStore.getState().addTask('今天的事', '', 'low', todayKey());
+
+    renderHome();
+
+    expect(screen.getByText('今日完成 0/1')).toBeInTheDocument();
+    expect(screen.getByText(/^已专注 \d+ 次$/)).toBeInTheDocument();
+    expect(screen.getByText(/^连续记录 \d+ 天$/)).toBeInTheDocument();
+  });
+
+  it('今天没有到期任务时改说完成了多少件，不摆一个「0/0」', () => {
+    renderHome();
+    expect(screen.getByText(/^今日完成 \d+ 项$/)).toBeInTheDocument();
   });
 
   it('今天卡片自动挑出最该先做的一件，并可一键完成', async () => {
