@@ -1030,8 +1030,24 @@ export const HomePage: React.FC = () => {
 
   // 示例数据（原 7.7）：全空时引导载入；demo 记录还在时提供一键清除
   const [demoBusy, setDemoBusy] = useState(false);
-  const appEmpty = useMemo(() => appIsEmpty(), [tasks, books, devProjects, writingProjects, workoutRecords, mealRecords, games]);
-  const demoLoaded = useMemo(() => demoDataExists(), [tasks, books, devProjects, writingProjects, workoutRecords, mealRecords, games]);
+  const appEmpty = useMemo(
+    () =>
+      appIsEmpty({ tasks, books, devProjects, writingProjects, workoutRecords, dietRecords: mealRecords, games }),
+    [tasks, books, devProjects, writingProjects, workoutRecords, mealRecords, games],
+  );
+  const demoLoaded = useMemo(
+    () =>
+      demoDataExists({
+        tasks,
+        books,
+        devProjects,
+        writingProjects,
+        workoutRecords,
+        dietRecords: mealRecords,
+        games,
+      }),
+    [tasks, books, devProjects, writingProjects, workoutRecords, mealRecords, games],
+  );
 
   return (
     <div className="space-y-section">
@@ -1077,7 +1093,7 @@ export const HomePage: React.FC = () => {
                 setDemoBusy(true);
                 try {
                   seedDemoData();
-                  useOptionalToast()?.toast({
+                  toast?.toast({
                     tone: 'success',
                     title: '示例数据已载入',
                     description: '各模块都有了两三条样本，随时可以在清除。看过之后点「清除示例数据」即可。',

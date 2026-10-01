@@ -31,31 +31,42 @@ const DEMO_PREFIX = 'demo-';
 
 const nowIso = (): string => new Date().toISOString();
 
+/** 页面组件里已经订阅好的模块数组；判定函数只读这些，不再自己 getState */
+export interface DemoModules {
+  tasks: Array<{ id: string }>;
+  books: Array<{ id: string }>;
+  devProjects: Array<{ id: string }>;
+  writingProjects: Array<{ id: string }>;
+  workoutRecords: Array<{ id: string }>;
+  dietRecords: Array<{ id: string }>;
+  games: Array<{ id: string }>;
+}
+
 /** 全应用是否还一条真实数据都没有（示例数据不算） */
-export function appIsEmpty(): boolean {
+export function appIsEmpty(modules: DemoModules): boolean {
   return (
-    useTaskStore.getState().tasks.length === 0 &&
-    useBookStore.getState().books.length === 0 &&
-    useDevStore.getState().projects.length === 0 &&
-    useWritingStore.getState().projects.length === 0 &&
-    useFitnessStore.getState().records.length === 0 &&
-    useDietStore.getState().records.length === 0 &&
-    useGameStore.getState().games.length === 0
+    modules.tasks.length === 0 &&
+    modules.books.length === 0 &&
+    modules.devProjects.length === 0 &&
+    modules.writingProjects.length === 0 &&
+    modules.workoutRecords.length === 0 &&
+    modules.dietRecords.length === 0 &&
+    modules.games.length === 0
   );
 }
 
 /** 库里是否还留着示例数据 */
-export function demoDataExists(): boolean {
+export function demoDataExists(modules: DemoModules): boolean {
   const hasDemo = (ids: Array<{ id: string }>): boolean =>
     ids.some((item) => item.id.startsWith(DEMO_PREFIX));
   return (
-    hasDemo(useTaskStore.getState().tasks) ||
-    hasDemo(useBookStore.getState().books) ||
-    hasDemo(useDevStore.getState().projects) ||
-    hasDemo(useWritingStore.getState().projects) ||
-    hasDemo(useFitnessStore.getState().records) ||
-    hasDemo(useDietStore.getState().records) ||
-    hasDemo(useGameStore.getState().games)
+    hasDemo(modules.tasks) ||
+    hasDemo(modules.books) ||
+    hasDemo(modules.devProjects) ||
+    hasDemo(modules.writingProjects) ||
+    hasDemo(modules.workoutRecords) ||
+    hasDemo(modules.dietRecords) ||
+    hasDemo(modules.games)
   );
 }
 

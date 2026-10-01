@@ -19,14 +19,25 @@ beforeEach(() => {
 });
 
 describe('示例数据', () => {
+  const modules = () => ({
+    tasks: useTaskStore.getState().tasks,
+    books: useBookStore.getState().books,
+    devProjects: useDevStore.getState().projects,
+    writingProjects: useWritingStore.getState().projects,
+    workoutRecords: useFitnessStore.getState().records,
+    dietRecords: useDietStore.getState().records,
+    games: useGameStore.getState().games,
+  });
+
+
   it('空应用时 appIsEmpty 为真，seed 后覆盖各模块且带 demo 前缀', () => {
-    expect(appIsEmpty()).toBe(true);
-    expect(demoDataExists()).toBe(false);
+    expect(appIsEmpty(modules())).toBe(true);
+    expect(demoDataExists(modules())).toBe(false);
 
     seedDemoData();
 
-    expect(appIsEmpty()).toBe(false);
-    expect(demoDataExists()).toBe(true);
+    expect(appIsEmpty(modules())).toBe(false);
+    expect(demoDataExists(modules())).toBe(true);
     expect(useTaskStore.getState().tasks.length).toBeGreaterThanOrEqual(3);
     expect(useBookStore.getState().books.length).toBeGreaterThanOrEqual(2);
     expect(useGameStore.getState().games.length).toBeGreaterThanOrEqual(1);
@@ -63,6 +74,6 @@ describe('示例数据', () => {
     // 游戏流水也跟着 demo 游戏一起被清掉
     expect(useGameStore.getState().games).toHaveLength(0);
     expect(useGameStore.getState().sessions).toHaveLength(0);
-    expect(demoDataExists()).toBe(false);
+    expect(demoDataExists(modules())).toBe(false);
   });
 });
