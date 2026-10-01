@@ -9,6 +9,7 @@ import { PageHeader } from './PageHeader';
 import { Toolbar } from './Toolbar';
 import { ListEmptyState } from './ListEmptyState';
 import {
+  MODULE_TABS,
   NAV_ITEMS,
   findLocationLabel,
   findNavItem,
@@ -92,15 +93,23 @@ describe('navItems', () => {
     const study = itemAt('/study/books');
 
     expect(study).toMatchObject({ label: '书房', host: '/study', group: 'main' });
-    // 合并后关键词要覆盖两组，否则命令面板搜「写作」找不到这个模块
-    for (const word of ['读书', '写作', 'reading', 'writing']) {
-      expect(study.keywords).toContain(word);
-    }
 
     expect(isNavItemActive('/study/books', study)).toBe(true);
     expect(isNavItemActive('/study/writing', study)).toBe(true);
     // 范围靠 host 圈，前缀相同的别的路径不会被误点亮
     expect(isNavItemActive('/bookshelf', study)).toBe(false);
+  });
+
+  it('合并前的两组搜索词一个都没丢：默认子页的归宿主，其余子页自己带', () => {
+    const study = itemAt('/study/books');
+    const tabs = MODULE_TABS['/study'] ?? [];
+    const words = [...study.keywords, ...tabs.flatMap((tab) => tab.keywords ?? [])];
+
+    for (const word of ['读书', '写作', 'reading', 'writing', 'dushu', 'xiezuo']) {
+      expect(words).toContain(word);
+    }
+    // 「写作」不能挂在宿主上：挂了的话搜「写作」会命中书房，回车落在读书页
+    expect(study.keywords).not.toContain('写作');
   });
 
   it('读书 / 写作不再各自占一条导航项，旧路径也归约不到它们', () => {
@@ -219,6 +228,7 @@ const renderLayout = (path = '/') =>
           <Route path="/" element={<div>首页内容</div>} />
           <Route path="/tasks" element={<div>任务内容</div>} />
           <Route path="/study/books" element={<div>读书内容</div>} />
+          <Route path="/study/writing" element={<div>写作内容</div>} />
         </Routes>
       </Layout>
     </MemoryRouter>,
@@ -269,6 +279,22 @@ describe('Layout', () => {
 
     expect(screen.queryByRole('dialog', { name: '命令面板' })).not.toBeInTheDocument();
     expect(screen.getByText('任务内容')).toBeInTheDocument();
+  });
+
+  it('命令面板搜子页名直达那一页，不用先进默认子页再点签条', async () => {
+    renderLayout('/');
+
+    fireEvent.keyDown(window, { key: 'k', metaKey: true });
+    const palette = await screen.findByRole('dialog', { name: '命令面板' });
+
+    await userEvent.type(within(palette).getByRole('combobox'), '写作');
+
+    // 第一项就是「写作」，归属写在副标题上 —— 合并前它是导航项，回车直接进写作页
+    expect(within(palette).getAllByRole('option')[0]).toHaveTextContent('书房 · 写作');
+
+    await userEvent.keyboard('{Enter}');
+
+    expect(screen.getByText('写作内容')).toBeInTheDocument();
   });
 
   it('命令面板里可以切换密度', async () => {

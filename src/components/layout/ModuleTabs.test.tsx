@@ -48,6 +48,17 @@ describe('MODULE_TABS', () => {
     }
   });
 
+  it('默认子页不重复带搜索词，其余子页自己带 —— 免得搜「写作」落在读书页', () => {
+    const tabs = MODULE_TABS['/study'] ?? [];
+    const host = NAV_ITEMS.find((item) => item.host === '/study');
+
+    expect(tabs[0]?.path).toBe('/study/books');
+    // 默认子页的落点和宿主一致，词挂在宿主上就够了
+    expect(tabs[0]?.keywords).toBeUndefined();
+    expect(tabs[1]?.keywords).toContain('写作');
+    expect(host?.keywords).not.toContain('写作');
+  });
+
   it('findModuleTab 只认子页路径，不认宿主也不认旧路径', () => {
     expect(findModuleTab('/study/books')?.label).toBe('读书');
     expect(findModuleTab('/study/writing')?.label).toBe('写作');

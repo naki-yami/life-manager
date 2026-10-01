@@ -40,7 +40,7 @@ import {
 } from '../../utils/entityIndex';
 import { fuzzyFilter } from '../../utils/fuzzy';
 import { parseCapture } from '../../utils/quickParse';
-import { NAV_ITEMS } from './navItems';
+import { MODULE_TABS, NAV_ITEMS } from './navItems';
 import { CommandPaletteContext, type CommandPaletteContextValue } from './commandPaletteContext';
 
 export interface CommandItem {
@@ -264,15 +264,42 @@ const CommandPaletteInner: React.FC<{ onClose: () => void }> = ({ onClose }) => 
       },
     });
 
-    const navigation: CommandItem[] = NAV_ITEMS.map((item) => ({
-      id: `nav:${item.path}`,
-      label: item.label,
-      hint: item.description,
-      icon: item.icon,
-      keywords: item.keywords,
-      group: GROUP.nav,
-      run: () => navigate(item.path),
-    }));
+    /**
+     * 导航项 + 宿主里的其余子页。
+     *
+     * 子页要单列，否则搜「写作」只能找到「书房」，回车落在默认子页读书上 —— 合并前
+     * 「写作」本来就是一条导航项，回车直接进写作页，这是一次实打实的能力回退（规划 §6.2）。
+     * 落点和宿主同一个地址的那条（默认子页）不再重复列，免得一个模块出现两条同义项；
+     * 子页紧跟在宿主后面，默认列表（空查询）里也就挨着，不用翻到最底下。
+     */
+    const navigation: CommandItem[] = NAV_ITEMS.flatMap<CommandItem>((item) => {
+      const host: CommandItem = {
+        id: `nav:${item.path}`,
+        label: item.label,
+        hint: item.description,
+        icon: item.icon,
+        keywords: item.keywords,
+        group: GROUP.nav,
+        run: () => navigate(item.path),
+      };
+
+      const tabs: CommandItem[] = (item.host ? (MODULE_TABS[item.host] ?? []) : [])
+        .filter((tab) => tab.path !== item.path)
+        .map((tab) => ({
+          id: `tab:${tab.path}`,
+          // label 直接用子页自己的名字，不加「书房 ·」前缀：输入正好等于命令名时才会命中
+          // 「就是它」那条规则，回车直接执行，不用先按方向键 —— 和合并前的体感一致。
+          // 归属放在 hint 里，列表上一样看得见。
+          label: tab.label,
+          hint: `${item.label} · ${tab.label}`,
+          icon: tab.icon,
+          keywords: [...(tab.keywords ?? []), tab.path],
+          group: GROUP.nav,
+          run: () => navigate(tab.path),
+        }));
+
+      return [host, ...tabs];
+    });
 
     const themes = (
       [

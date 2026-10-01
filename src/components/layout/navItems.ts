@@ -61,7 +61,7 @@ export const NAV_ITEMS: NavItem[] = [
     label: '书房',
     description: '读书与写作：在读进度、书摘笔记与稿件字数',
     icon: BookOpen,
-    keywords: ['study', 'shufang', '书房', '读书', '写作', 'reading', 'writing', 'dushu', 'xiezuo'],
+    keywords: ['study', 'shufang', '书房', '读书', 'reading', 'dushu'],
     group: 'main',
   },
   {
@@ -166,13 +166,26 @@ export interface ModuleTab {
   path: string;
   label: string;
   icon: LucideIcon;
+  /**
+   * 命令面板的额外匹配词（英文名 / 拼音 / 别名）。
+   *
+   * 默认子页（落点与宿主同一个地址的那条）**不用写** —— 它的词挂在宿主上，落点一样。
+   * 其余子页必须写自己的：不写的话，搜「写作 / writing」只能找到宿主，回车落在默认子页
+   * 读书上，进不了写作页（规划 §6.2 实测到的回退）。
+   */
+  keywords?: string[];
 }
 
 /** 宿主路径 → 子页清单 */
 export const MODULE_TABS: Record<string, ModuleTab[]> = {
   '/study': [
     { path: '/study/books', label: '读书', icon: BookOpen },
-    { path: '/study/writing', label: '写作', icon: PenTool },
+    {
+      path: '/study/writing',
+      label: '写作',
+      icon: PenTool,
+      keywords: ['writing', 'xiezuo', '写作', '稿件', '文章'],
+    },
   ],
 };
 
