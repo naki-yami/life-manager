@@ -34,7 +34,7 @@ import {
   ProgressRing,
   SegmentedControl,
   Select,
-  StatCard,
+  StatStrip,
   SubmitForm,
 } from '../components/ui';
 import { ListEmptyState, PageHeader, Toolbar } from '../components/layout';
@@ -433,50 +433,52 @@ export const DietPage: React.FC = () => {
         }
       />
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard
-          label="当日摄入"
-          value={formatNumber(dayCalories)}
-          unit="kcal"
-          tone="warning"
-          icon={<Flame size={16} aria-hidden />}
-          footer={selectedDate === today ? '今天' : formatDayLabel(selectedDate)}
-        />
-        <StatCard
-          label="当日餐次"
-          value={dayRecords.length}
-          unit="条"
-          icon={<UtensilsCrossed size={16} aria-hidden />}
-        />
-        <StatCard
-          label="近 7 天日均"
-          value={formatNumber(recentAverage)}
-          unit="kcal"
-          tone="accent"
-          icon={<TrendingUp size={16} aria-hidden />}
-          footer={
-            recentDays === 0 ? (
-              '最近 7 天还没有记录'
-            ) : (
-              <span className="block space-y-1.5">
-                <span className="block">按 {recentDays} 天有记录的天数计算</span>
-                <Sparkline
-                  data={calorieByDay.map((point) => point.value)}
-                  label="近 7 天每日摄入热量趋势"
-                  tone="warning"
-                  height={24}
-                />
-              </span>
-            )
-          }
-        />
-        <StatCard
-          label="累计记录"
-          value={records.length}
-          unit="条"
-          icon={<CalendarDays size={16} aria-hidden />}
-        />
-      </div>
+      <StatStrip
+        label="饮食概览"
+        items={[
+          {
+            label: '当日摄入',
+            value: formatNumber(dayCalories),
+            unit: 'kcal',
+            tone: 'warning',
+            icon: <Flame size={16} aria-hidden />,
+            hint: selectedDate === today ? '今天' : formatDayLabel(selectedDate),
+          },
+          {
+            label: '当日餐次',
+            value: dayRecords.length,
+            unit: '条',
+            icon: <UtensilsCrossed size={16} aria-hidden />,
+          },
+          {
+            label: '近 7 天日均',
+            value: formatNumber(recentAverage),
+            unit: 'kcal',
+            tone: 'accent',
+            icon: <TrendingUp size={16} aria-hidden />,
+            hint:
+              recentDays === 0 ? (
+                '最近 7 天还没有记录'
+              ) : (
+                <span className="block space-y-1.5">
+                  <span className="block">按 {recentDays} 天有记录的天数计算</span>
+                  <Sparkline
+                    data={calorieByDay.map((point) => point.value)}
+                    label="近 7 天每日摄入热量趋势"
+                    tone="warning"
+                    height={24}
+                  />
+                </span>
+              ),
+          },
+          {
+            label: '累计记录',
+            value: records.length,
+            unit: '条',
+            icon: <CalendarDays size={16} aria-hidden />,
+          },
+        ]}
+      />
 
       <Card>
         <CardHeader

@@ -28,7 +28,7 @@ import {
   NumberInput,
   SegmentedControl,
   Select,
-  StatCard,
+  StatStrip,
   SubmitForm,
 } from '../components/ui';
 import { ListEmptyState, PageHeader, Toolbar } from '../components/layout';
@@ -590,71 +590,76 @@ export const FitnessPage: React.FC = () => {
       />
 
       {view === 'body' ? (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <StatCard
-            label="当前体重"
-            value={latestWeight ? formatMetric(latestWeight.value) : '—'}
-            unit={latestWeight ? 'kg' : undefined}
-            icon={<Scale size={16} aria-hidden />}
-            footer={latestWeight ? `${latestWeight.date} 记录` : '还没有称过'}
-          />
-          <StatCard
-            label="较上次"
-            value={weightChange ? formatDelta(weightChange.delta) : '—'}
-            unit={weightChange ? 'kg' : undefined}
-            icon={<TrendingUp size={16} aria-hidden />}
-            footer={
-              weightChange
+        <StatStrip
+          label="身体数据概览"
+          items={[
+            {
+              label: '当前体重',
+              value: latestWeight ? formatMetric(latestWeight.value) : '—',
+              unit: latestWeight ? 'kg' : undefined,
+              icon: <Scale size={16} aria-hidden />,
+              hint: latestWeight ? `${latestWeight.date} 记录` : '还没有称过',
+            },
+            {
+              label: '较上次',
+              value: weightChange ? formatDelta(weightChange.delta) : '—',
+              unit: weightChange ? 'kg' : undefined,
+              icon: <TrendingUp size={16} aria-hidden />,
+              hint: weightChange
                 ? `上次 ${formatMetric(weightChange.previous.value)} kg（${weightChange.previous.date}）`
-                : '至少两次记录才有对比'
-            }
-          />
-          <StatCard
-            label="当前体脂率"
-            value={latestBodyFat ? formatMetric(latestBodyFat.value) : '—'}
-            unit={latestBodyFat ? '%' : undefined}
-            icon={<Percent size={16} aria-hidden />}
-            footer={latestBodyFat ? `${latestBodyFat.date} 记录` : '还没有体脂记录'}
-          />
-          <StatCard
-            label="记录天数"
-            value={bodyRecords.length}
-            unit="天"
-            icon={<CalendarDays size={16} aria-hidden />}
-            footer={
-              measurementKeys.length > 0 ? `围度记了 ${measurementKeys.length} 项` : '围度还没记过'
-            }
-          />
-        </div>
+                : '至少两次记录才有对比',
+            },
+            {
+              label: '当前体脂率',
+              value: latestBodyFat ? formatMetric(latestBodyFat.value) : '—',
+              unit: latestBodyFat ? '%' : undefined,
+              icon: <Percent size={16} aria-hidden />,
+              hint: latestBodyFat ? `${latestBodyFat.date} 记录` : '还没有体脂记录',
+            },
+            {
+              label: '记录天数',
+              value: bodyRecords.length,
+              unit: '天',
+              icon: <CalendarDays size={16} aria-hidden />,
+              hint:
+                measurementKeys.length > 0
+                  ? `围度记了 ${measurementKeys.length} 项`
+                  : '围度还没记过',
+            },
+          ]}
+        />
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <StatCard
-            label="训练计划数"
-            value={plans.length}
-            unit="个"
-            icon={<ListChecks size={16} aria-hidden />}
-          />
-          <StatCard
-            label="训练记录数"
-            value={records.length}
-            unit="次"
-            icon={<Dumbbell size={16} aria-hidden />}
-          />
-          <StatCard
-            label="本周训练"
-            value={thisWeekCount}
-            unit="次"
-            tone="accent"
-            icon={<CalendarDays size={16} aria-hidden />}
-            footer={thisWeekCount === 0 ? '本周还没练' : `近 14 天有 ${recentTrainingDays} 天练过`}
-          />
-          <StatCard
-            label="累计容量"
-            value={formatNumber(totalVolume)}
-            unit="kg"
-            icon={<TrendingUp size={16} aria-hidden />}
-          />
-        </div>
+        <StatStrip
+          label="训练概览"
+          items={[
+            {
+              label: '训练计划数',
+              value: plans.length,
+              unit: '个',
+              icon: <ListChecks size={16} aria-hidden />,
+            },
+            {
+              label: '训练记录数',
+              value: records.length,
+              unit: '次',
+              icon: <Dumbbell size={16} aria-hidden />,
+            },
+            {
+              label: '本周训练',
+              value: thisWeekCount,
+              unit: '次',
+              tone: 'accent',
+              icon: <CalendarDays size={16} aria-hidden />,
+              hint: thisWeekCount === 0 ? '本周还没练' : `近 14 天有 ${recentTrainingDays} 天练过`,
+            },
+            {
+              label: '累计容量',
+              value: formatNumber(totalVolume),
+              unit: 'kg',
+              icon: <TrendingUp size={16} aria-hidden />,
+            },
+          ]}
+        />
       )}
 
       {view !== 'body' && records.length > 0 && (

@@ -13,7 +13,7 @@ import {
   NumberInput,
   ProgressBar,
   SegmentedControl,
-  StatCard,
+  StatStrip,
 } from '../components/ui';
 import { PageHeader } from '../components/layout';
 import { useHabitStore } from '../store/habitStore';
@@ -223,28 +223,31 @@ export const HabitsPage: React.FC = () => {
         </Card>
       ) : (
         <>
-          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-            <StatCard
-              label="今日完成"
-              value={`${summary.doneToday}/${habits.length}`}
-              unit="个"
-              icon={<Check size={16} aria-hidden />}
-            />
-            <StatCard
-              label="平均强度"
-              value={Math.round(summary.average * 100)}
-              unit="%"
-              icon={<Sparkles size={16} aria-hidden />}
-              footer={strengthLabel(summary.average)}
-            />
-            <StatCard
-              label="最长连续"
-              value={summary.bestStreak}
-              unit="次"
-              icon={<Flame size={16} aria-hidden />}
-            />
-            <StatCard label="近 7 天打卡" value={summary.weekCount} unit="次" />
-          </div>
+          <StatStrip
+            label="习惯概览"
+            items={[
+              {
+                label: '今日完成',
+                value: `${summary.doneToday}/${habits.length}`,
+                unit: '个',
+                icon: <Check size={16} aria-hidden />,
+              },
+              {
+                label: '平均强度',
+                value: Math.round(summary.average * 100),
+                unit: '%',
+                icon: <Sparkles size={16} aria-hidden />,
+                hint: strengthLabel(summary.average),
+              },
+              {
+                label: '最长连续',
+                value: summary.bestStreak,
+                unit: '次',
+                icon: <Flame size={16} aria-hidden />,
+              },
+              { label: '近 7 天打卡', value: summary.weekCount, unit: '次' },
+            ]}
+          />
 
           {pending.length > 0 && (
             <Card>

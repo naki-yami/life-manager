@@ -8,7 +8,7 @@ import {
   CardHeader,
   EmptyState,
   SegmentedControl,
-  StatCard,
+  StatStrip,
   Textarea,
 } from '../components/ui';
 import { PageHeader } from '../components/layout';
@@ -240,18 +240,16 @@ export const ReviewPage: React.FC = () => {
         </CardBody>
       </Card>
 
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
-        {metrics.map((metric) => (
-          <StatCard
-            key={metric.key}
-            label={metric.label}
-            value={metric.value}
-            unit={metric.unit || undefined}
-            tone={metric.tone}
-            footer={metric.footer}
-          />
-        ))}
-      </div>
+      <StatStrip
+        label="复盘概览"
+        items={metrics.map((metric) => ({
+          label: metric.label,
+          value: metric.value,
+          unit: metric.unit || undefined,
+          tone: metric.tone,
+          hint: metric.footer,
+        }))}
+      />
 
       {stalled.length > 0 && (
         <Card>

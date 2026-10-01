@@ -30,7 +30,7 @@ import {
   ProgressBar,
   SegmentedControl,
   Select,
-  StatCard,
+  StatStrip,
   SubmitForm,
   TagEditor,
   TagInput,
@@ -418,35 +418,37 @@ export const DevPage: React.FC = () => {
         }
       />
 
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <StatCard
-          label="项目总数"
-          value={stats.total}
-          icon={<FolderKanban size={16} aria-hidden />}
-        />
-        <StatCard
-          label="进行中项目"
-          value={stats.active}
-          tone="accent"
-          icon={<Zap size={16} aria-hidden />}
-        />
-        <StatCard
-          label="任务总数"
-          value={stats.tasks}
-          icon={<ListChecks size={16} aria-hidden />}
-        />
-        <StatCard
-          label="已完成任务"
-          value={stats.doneTasks}
-          tone="success"
-          icon={<ListChecks size={16} aria-hidden />}
-          footer={
-            stats.tasks > 0
-              ? `完成率 ${Math.round((stats.doneTasks / stats.tasks) * 100)}%`
-              : '还没有任务'
-          }
-        />
-      </div>
+      <StatStrip
+        label="开发概览"
+        items={[
+          {
+            label: '项目总数',
+            value: stats.total,
+            icon: <FolderKanban size={16} aria-hidden />,
+          },
+          {
+            label: '进行中项目',
+            value: stats.active,
+            tone: 'accent',
+            icon: <Zap size={16} aria-hidden />,
+          },
+          {
+            label: '任务总数',
+            value: stats.tasks,
+            icon: <ListChecks size={16} aria-hidden />,
+          },
+          {
+            label: '已完成任务',
+            value: stats.doneTasks,
+            tone: 'success',
+            icon: <ListChecks size={16} aria-hidden />,
+            hint:
+              stats.tasks > 0
+                ? `完成率 ${Math.round((stats.doneTasks / stats.tasks) * 100)}%`
+                : '还没有任务',
+          },
+        ]}
+      />
 
       {sessions.length > 0 && (
         <Card>

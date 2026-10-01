@@ -23,7 +23,7 @@ import {
   NumberInput,
   SegmentedControl,
   Select,
-  StatCard,
+  StatStrip,
   SubmitForm,
   TagEditor,
   TagInput,
@@ -246,39 +246,41 @@ export const WritingPage: React.FC = () => {
         }
       />
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard
-          label="项目总数"
-          value={projects.length}
-          unit="个"
-          icon={<FileText size={16} aria-hidden />}
-        />
-        <StatCard
-          label="进行中项目"
-          value={countOf('in-progress')}
-          unit="个"
-          tone="accent"
-          icon={<PenLine size={16} aria-hidden />}
-        />
-        <StatCard
-          label="已完成项目"
-          value={countOf('completed')}
-          unit="个"
-          tone="success"
-          icon={<CheckCircle2 size={16} aria-hidden />}
-        />
-        <StatCard
-          label="累计字数"
-          value={formatNumber(totalWords)}
-          unit="字"
-          icon={<Hash size={16} aria-hidden />}
-          footer={
-            projects.length > 0
-              ? `平均每篇 ${formatNumber(Math.round(totalWords / projects.length))} 字`
-              : undefined
-          }
-        />
-      </div>
+      <StatStrip
+        label="写作概览"
+        items={[
+          {
+            label: '项目总数',
+            value: projects.length,
+            unit: '个',
+            icon: <FileText size={16} aria-hidden />,
+          },
+          {
+            label: '进行中项目',
+            value: countOf('in-progress'),
+            unit: '个',
+            tone: 'accent',
+            icon: <PenLine size={16} aria-hidden />,
+          },
+          {
+            label: '已完成项目',
+            value: countOf('completed'),
+            unit: '个',
+            tone: 'success',
+            icon: <CheckCircle2 size={16} aria-hidden />,
+          },
+          {
+            label: '累计字数',
+            value: formatNumber(totalWords),
+            unit: '字',
+            icon: <Hash size={16} aria-hidden />,
+            hint:
+              projects.length > 0
+                ? `平均每篇 ${formatNumber(Math.round(totalWords / projects.length))} 字`
+                : undefined,
+          },
+        ]}
+      />
 
       <MasterDetail
         detailTitle={noteProject ? `《${noteProject.title}》的创作笔记` : '创作笔记'}

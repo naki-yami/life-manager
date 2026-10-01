@@ -12,7 +12,7 @@ import {
   Input,
   ProgressRing,
   SegmentedControl,
-  StatCard,
+  StatStrip,
 } from '../components/ui';
 import { BarChart, Heatmap, Sparkline, StackedBar } from '../components/charts';
 import type { ChartBucket } from '../components/charts';
@@ -533,50 +533,52 @@ export const StatsPage: React.FC = () => {
         }
       />
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard
-          label={`${rangeLabel}完成任务`}
-          value={completedInWindow}
-          unit="个"
-          tone="success"
-          icon={<CalendarCheck size={16} aria-hidden />}
-          footer={
-            <Sparkline
-              data={sparkSeries.map((point) => point.value)}
-              label={`${rangeLabel}每日完成任务数趋势`}
-              tone="success"
-              height={28}
-            />
-          }
-        />
-        <StatCard
-          label={`${rangeLabel}训练`}
-          value={workoutInWindow}
-          unit="次"
-          tone="accent"
-          icon={<Activity size={16} aria-hidden />}
-          footer={trainedDays > 0 ? `分布在 ${trainedDays} 天里` : '这段时间还没有训练记录'}
-        />
-        <StatCard
-          label="近 7 天日均热量"
-          value={formatNumber(averageCalories)}
-          unit="kcal"
-          tone="warning"
-          icon={<Flame size={16} aria-hidden />}
-          footer={
-            recentCalorieDays.length > 0
-              ? `按 ${recentCalorieDays.length} 天有记录的天数计算`
-              : '最近 7 天还没有饮食记录'
-          }
-        />
-        <StatCard
-          label="连续记录"
-          value={streak}
-          unit="天"
-          icon={<TrendingUp size={16} aria-hidden />}
-          footer="任务 / 训练 / 饮食 / 日记任意一天有记录即算"
-        />
-      </div>
+      <StatStrip
+        label="统计概览"
+        items={[
+          {
+            label: `${rangeLabel}完成任务`,
+            value: completedInWindow,
+            unit: '个',
+            tone: 'success',
+            icon: <CalendarCheck size={16} aria-hidden />,
+            hint: (
+              <Sparkline
+                data={sparkSeries.map((point) => point.value)}
+                label={`${rangeLabel}每日完成任务数趋势`}
+                tone="success"
+                height={28}
+              />
+            ),
+          },
+          {
+            label: `${rangeLabel}训练`,
+            value: workoutInWindow,
+            unit: '次',
+            tone: 'accent',
+            icon: <Activity size={16} aria-hidden />,
+            hint: trainedDays > 0 ? `分布在 ${trainedDays} 天里` : '这段时间还没有训练记录',
+          },
+          {
+            label: '近 7 天日均热量',
+            value: formatNumber(averageCalories),
+            unit: 'kcal',
+            tone: 'warning',
+            icon: <Flame size={16} aria-hidden />,
+            hint:
+              recentCalorieDays.length > 0
+                ? `按 ${recentCalorieDays.length} 天有记录的天数计算`
+                : '最近 7 天还没有饮食记录',
+          },
+          {
+            label: '连续记录',
+            value: streak,
+            unit: '天',
+            icon: <TrendingUp size={16} aria-hidden />,
+            hint: '任务 / 训练 / 饮食 / 日记任意一天有记录即算',
+          },
+        ]}
+      />
 
       {!hasAnyData ? (
         <Card>

@@ -25,7 +25,7 @@ import {
   NumberInput,
   ProgressBar,
   Select,
-  StatCard,
+  StatStrip,
   Textarea,
   type KanbanColumnData,
   type KanbanMoveResult,
@@ -288,32 +288,35 @@ export const DevProjectPage: React.FC = () => {
         }
       />
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard
-          label="累计工时"
-          value={`${formatNumber(Math.round(totalHours * 10) / 10)} 小时`}
-          icon={<Clock size={16} aria-hidden />}
-          footer={`本月 ${formatNumber(Math.round(monthHours * 10) / 10)} 小时`}
-        />
-        <StatCard
-          label="任务总数"
-          value={project.tasks.length}
-          icon={<ListChecks size={16} aria-hidden />}
-        />
-        <StatCard
-          label="已完成任务"
-          value={doneTasks}
-          tone="success"
-          icon={<ListChecks size={16} aria-hidden />}
-          footer={project.tasks.length > 0 ? `完成率 ${percent}%` : '还没有任务'}
-        />
-        <StatCard
-          label="工时流水"
-          value={projectSessions.length}
-          unit="条"
-          icon={<Clock size={16} aria-hidden />}
-        />
-      </div>
+      <StatStrip
+        label="项目概览"
+        items={[
+          {
+            label: '累计工时',
+            value: `${formatNumber(Math.round(totalHours * 10) / 10)} 小时`,
+            icon: <Clock size={16} aria-hidden />,
+            hint: `本月 ${formatNumber(Math.round(monthHours * 10) / 10)} 小时`,
+          },
+          {
+            label: '任务总数',
+            value: project.tasks.length,
+            icon: <ListChecks size={16} aria-hidden />,
+          },
+          {
+            label: '已完成任务',
+            value: doneTasks,
+            tone: 'success',
+            icon: <ListChecks size={16} aria-hidden />,
+            hint: project.tasks.length > 0 ? `完成率 ${percent}%` : '还没有任务',
+          },
+          {
+            label: '工时流水',
+            value: projectSessions.length,
+            unit: '条',
+            icon: <Clock size={16} aria-hidden />,
+          },
+        ]}
+      />
 
       <Card>
         <CardHeader title="项目信息" />

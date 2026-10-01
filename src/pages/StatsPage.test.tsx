@@ -26,9 +26,15 @@ const renderStats = () =>
     </MemoryRouter>,
   );
 
-/** 按标签定位到统计卡片内部，避免多个卡片出现相同数字时断言串台 */
+/**
+ * 按标签定位到统计格内部，避免多个格子出现相同数字时断言串台。
+ *
+ * 两种外壳都要认：统计条（StatStrip）的一格是 `[role="group"]` 的直接子 div，
+ * 而下面的分模块卡片是 ExportableCard 的 `div.rounded-lg`。
+ * `closest` 取最近的祖先，所以统计格不会被外层的整条外壳抢走。
+ */
 const cardFor = (label: string) => {
-  const node = screen.getByText(label).closest('div.rounded-lg');
+  const node = screen.getByText(label).closest('[role="group"] > div, div.rounded-lg');
   if (!node) throw new Error(`找不到统计卡片：${label}`);
   return within(node as HTMLElement);
 };

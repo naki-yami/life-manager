@@ -17,7 +17,7 @@ import {
   Select,
   SelectionBar,
   Slider,
-  StatCard,
+  StatStrip,
   SubmitForm,
   TagEditor,
   TagInput,
@@ -419,34 +419,37 @@ export const GamesPage: React.FC = () => {
         }
       />
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard
-          label="游戏总数"
-          value={games.length}
-          unit="款"
-          icon={<Gamepad2 size={16} aria-hidden />}
-        />
-        <StatCard
-          label="在玩中"
-          value={countOf('playing')}
-          unit="款"
-          tone="accent"
-          icon={<Gamepad2 size={16} aria-hidden />}
-        />
-        <StatCard
-          label="已通关数"
-          value={countOf('completed')}
-          unit="款"
-          tone="success"
-          icon={<Trophy size={16} aria-hidden />}
-        />
-        <StatCard
-          label="总时长"
-          value={formatDuration(totalHours)}
-          icon={<Clock size={16} aria-hidden />}
-          footer={`合计 ${formatNumber(Math.round(totalHours * 10) / 10)} 小时`}
-        />
-      </div>
+      <StatStrip
+        label="游戏概览"
+        items={[
+          {
+            label: '游戏总数',
+            value: games.length,
+            unit: '款',
+            icon: <Gamepad2 size={16} aria-hidden />,
+          },
+          {
+            label: '在玩中',
+            value: countOf('playing'),
+            unit: '款',
+            tone: 'accent',
+            icon: <Gamepad2 size={16} aria-hidden />,
+          },
+          {
+            label: '已通关数',
+            value: countOf('completed'),
+            unit: '款',
+            tone: 'success',
+            icon: <Trophy size={16} aria-hidden />,
+          },
+          {
+            label: '总时长',
+            value: formatDuration(totalHours),
+            icon: <Clock size={16} aria-hidden />,
+            hint: `合计 ${formatNumber(Math.round(totalHours * 10) / 10)} 小时`,
+          },
+        ]}
+      />
 
       {sessions.length > 0 && (
         <Card>
