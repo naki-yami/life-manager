@@ -35,7 +35,7 @@ import {
 } from '../components/ui';
 import { PageHeader } from '../components/layout';
 import { DashboardGrid, type DashboardWidgetView } from '../components/dashboard';
-import { appIsEmpty, clearDemoData, demoDataExists, seedDemoData } from '../data/demoData';
+import { DemoDataCard } from '../components/DemoDataCard';
 import { GoalProgressList } from '../components/goals';
 import { DayTimeline, type TimelineEntry } from '../components/timeline/DayTimeline';
 import { FocusTimer, type FocusOption } from '../components/timeline/FocusTimer';
@@ -1028,27 +1028,6 @@ export const HomePage: React.FC = () => {
     },
   ];
 
-  // 示例数据（原 7.7）：全空时引导载入；demo 记录还在时提供一键清除
-  const [demoBusy, setDemoBusy] = useState(false);
-  const appEmpty = useMemo(
-    () =>
-      appIsEmpty({ tasks, books, devProjects, writingProjects, workoutRecords, dietRecords: mealRecords, games }),
-    [tasks, books, devProjects, writingProjects, workoutRecords, mealRecords, games],
-  );
-  const demoLoaded = useMemo(
-    () =>
-      demoDataExists({
-        tasks,
-        books,
-        devProjects,
-        writingProjects,
-        workoutRecords,
-        dietRecords: mealRecords,
-        games,
-      }),
-    [tasks, books, devProjects, writingProjects, workoutRecords, mealRecords, games],
-  );
-
   return (
     <div className="space-y-section">
       <PageHeader
@@ -1077,53 +1056,7 @@ export const HomePage: React.FC = () => {
         }
       />
 
-      {appEmpty && !demoLoaded && (
-        <Card>
-          <CardBody className="flex flex-wrap items-center gap-4">
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium text-content">第一次用？载入一份示例数据看看各页面长什么样</p>
-              <p className="mt-0.5 text-xs text-content-tertiary">
-                会往每个模块写两三条带 demo 标记的样本记录，随时可以一键清除，不会和真实数据混在一起。
-              </p>
-            </div>
-            <Button
-              variant="secondary"
-              disabled={demoBusy}
-              onClick={() => {
-                setDemoBusy(true);
-                try {
-                  seedDemoData();
-                  toast?.toast({
-                    tone: 'success',
-                    title: '示例数据已载入',
-                    description: '各模块都有了两三条样本，随时可以在清除。看过之后点「清除示例数据」即可。',
-                  });
-                } finally {
-                  setDemoBusy(false);
-                }
-              }}
-            >
-              一键载入示例数据
-            </Button>
-          </CardBody>
-        </Card>
-      )}
-
-      {demoLoaded && (
-        <Card>
-          <CardBody className="flex flex-wrap items-center gap-4">
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium text-content">示例数据还在</p>
-              <p className="mt-0.5 text-xs text-content-tertiary">
-                id 带 demo 前缀的记录就是示例数据；清除只删这些，你后来记的真实数据不受影响。
-              </p>
-            </div>
-            <Button variant="secondary" onClick={clearDemoData}>
-              清除示例数据
-            </Button>
-          </CardBody>
-        </Card>
-      )}
+      <DemoDataCard variant="home" />
 
       <DashboardGrid
         widgets={dashboard}

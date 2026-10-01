@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { Book, Game } from '../types';
+import { DemoDataCard } from '../components/DemoDataCard';
 import { formatNumber } from '../utils/date';
 import {
   Database,
@@ -635,6 +636,8 @@ export const SettingsPage: React.FC = () => {
           </div>
         </CardBody>
       </Card>
+
+      <DemoDataCard variant="settings" />
 
       <Card>
         <CardHeader title="快捷键" subtitle="在任何页面都能用（输入框里打字时不会触发）" />

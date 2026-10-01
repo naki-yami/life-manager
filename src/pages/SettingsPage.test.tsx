@@ -558,4 +558,28 @@ describe('SettingsPage', () => {
     const added = useBookStore.getState().books.find((book) => book.title === '新的一本书')!;
     expect(added.status).toBe('finished');
   });
+
+  it('设置页随时可以载入/清除示例数据（有真实数据也出载入口）', async () => {
+    // 库里先有一条真实书（非全空 → 首页引导卡不会出现，但设置页仍可用）
+    useBookStore.getState().addBook('真实书', '', '');
+
+    render(
+      <MemoryRouter initialEntries={['/settings']}>
+        <Routes>
+          <Route path="/settings" element={<ToastProvider><SettingsPage /></ToastProvider>} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText('示例数据')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: '载入示例数据' }));
+
+    expect(useBookStore.getState().books.some((book) => book.id.startsWith('demo-'))).toBe(true);
+    expect(screen.getByRole('button', { name: '清除示例数据' })).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: '清除示例数据' }));
+    expect(useBookStore.getState().books.some((book) => book.id.startsWith('demo-'))).toBe(false);
+    // 真实书还在
+    expect(useBookStore.getState().books.some((book) => book.title === '真实书')).toBe(true);
+  });
 });
