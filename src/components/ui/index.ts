@@ -6,6 +6,8 @@ export { Select } from './Select';
 export type { SelectProps, SelectOption } from './Select';
 export { FormField } from './FormField';
 export type { FormFieldProps } from './FormField';
+export { SubmitForm } from './SubmitForm';
+export type { SubmitFormProps } from './SubmitForm';
 export { Card, CardHeader, CardBody, CardFooter, StatCard } from './Card';
 export type { CardProps, CardHeaderProps, StatCardProps, StatTone } from './Card';
 export { ExportableCard } from './ExportableCard';
