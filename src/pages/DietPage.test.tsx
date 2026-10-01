@@ -274,9 +274,11 @@ describe('DietPage', () => {
     render(<DietPage />);
 
     expect(screen.getByText('饮食日历')).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: /2026-09-01/ }));
+    // 点昨天：如果昨天跨月（今天是 1 号），日历的点格会带出上月的日期键，
+    // 所以断言只针对「切走之后当天没记录」这个行为，不钉死具体日期
+    const yesterday = addDays(today, -1);
+    await userEvent.click(screen.getByRole('button', { name: new RegExp(yesterday) }));
 
-    // 切到 9 月 1 日后，当日摄入归零（那天没记录）
     expect(screen.getByText(/这天还是空的/)).toBeInTheDocument();
   });
 
