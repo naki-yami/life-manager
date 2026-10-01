@@ -12,8 +12,8 @@ import { delay } from '../lib/cdp.mjs';
 
 /**
  * 与 src/App.tsx 的路由表逐条对应；`title` 是 <PageHeader> 里真实的标题文案 ——
- * 注意它和侧栏导航标签不完全一致（导航叫「健身计划」，页面标题是「健身」；
- * 导航叫「饮食计划」，页面标题是「饮食」）。这里等的是页面，所以核对页面标题。
+ * 注意它和侧栏导航标签不完全一致（导航叫「书房」，子页标题是「读书」「写作」；
+ * 导航叫「健康」，子页标题是「健身」「饮食」）。这里等的是页面，所以核对页面标题。
  */
 export const ROUTES = [
   // 首页的 h1 是问候语（「下午好 👋」），不是固定文案，所以不核对
@@ -23,8 +23,8 @@ export const ROUTES = [
   { path: '/dev', title: '开发工作' },
   { path: '/dev/d1', title: null, note: '开发项目详情，h1 跟着项目名走（播种项目 d1）' },
   { path: '/study/writing', title: '写作' },
-  { path: '/fitness', title: '健身' },
-  { path: '/diet', title: '饮食' },
+  { path: '/health/fitness', title: '健身' },
+  { path: '/health/diet', title: '饮食' },
   { path: '/games', title: '游戏' },
   { path: '/stats', title: '统计' },
   { path: '/habits', title: '习惯养成' },
@@ -43,6 +43,19 @@ export const ROUTES = [
 export const REDIRECTS = [
   { from: '/books', to: '/study/books', title: '读书' },
   { from: '/writing', to: '/study/writing', title: '写作' },
+  { from: '/fitness', to: '/health/fitness', title: '健身' },
+  { from: '/diet', to: '/health/diet', title: '饮食' },
+];
+
+/**
+ * 光秃秃的宿主地址（`/study`、`/health`）要落到默认子页。
+ *
+ * 不是「旧路径」，但同样是「地址栏必须跟着换」的活儿：index 那条 `<Navigate>` 一旦
+ * 写错（比如忘了 replace），页面照样能出来，只有地址栏是错的 —— 只有 e2e 看得到。
+ */
+export const HOST_ENTRIES = [
+  { from: '/study', to: '/study/books', title: '读书' },
+  { from: '/health', to: '/health/fitness', title: '健身' },
 ];
 
 /** 用例标题里的路由条数现算，免得又一次和数组实际长度对不上 */
@@ -126,41 +139,76 @@ export function registerRouteCases() {
     assert.nonEmpty(h1, '回首页后标题');
   });
 
-  test('routes-redirect', '旧路径永久重定向到书房子页，地址栏也跟着换', async (ctx) => {
+  /** 重定向类用例的公共断言：地址栏 + 标题 + 不抛错 */
+  const checkRedirect = async (session, baseUrl, item) => {
+    session.clearErrors();
+    await session.goto(`${baseUrl}${item.from}`, { waitMs: 700 });
+
+    assert.equal(
+      await session.evaluate('location.pathname'),
+      item.to,
+      `${item.from} 重定向后的地址栏`,
+    );
+    assert.equal(await session.text('h1'), item.title, `${item.from} 重定向后的标题`);
+    assert.empty([...session.pageErrors, ...session.consoleErrors], `${item.from} 重定向时抛错`);
+  };
+
+  test('routes-redirect', '旧路径永久重定向到模块子页，地址栏也跟着换', async (ctx) => {
     const { session, baseUrl } = ctx;
 
-    for (const item of REDIRECTS) {
-      session.clearErrors();
-      await session.goto(`${baseUrl}${item.from}`, { waitMs: 700 });
-
-      assert.equal(
-        await session.evaluate('location.pathname'),
-        item.to,
-        `${item.from} 重定向后的地址栏`,
-      );
-      assert.equal(await session.text('h1'), item.title, `${item.from} 重定向后的标题`);
-      assert.empty([...session.pageErrors, ...session.consoleErrors], `${item.from} 重定向时抛错`);
-    }
+    for (const item of REDIRECTS) await checkRedirect(session, baseUrl, item);
   });
 
-  test('routes-study-tabs', '书房：子页签条切到写作，地址与按下态一起走', async (ctx) => {
-    const { session, baseUrl, shot } = ctx;
-    const strip = '[role="group"][aria-label="书房内的页面"]';
+  test('routes-host-index', '裸宿主地址落到默认子页，地址栏也跟着换', async (ctx) => {
+    const { session, baseUrl } = ctx;
 
-    await session.goto(`${baseUrl}/study/books`, { waitMs: 900 });
-    session.clearErrors();
-
-    assert.ok(await session.exists(strip), '书房宿主应当渲染出子页签条');
-    assert.equal(await pressedTab(session, strip), '读书', '起始时按下的子页');
-
-    assert.clicked(await clickTab(session, strip, '写作'), '签条上的「写作」');
-    await delay(900);
-
-    assert.equal(await session.evaluate('location.pathname'), '/study/writing', '切子页后的落点');
-    assert.equal(await session.text('h1'), '写作', '切子页后的页面标题');
-    assert.equal(await pressedTab(session, strip), '写作', '切子页后按下的子页');
-    await shot('study-writing');
-
-    assert.empty([...session.pageErrors, ...session.consoleErrors], '切子页时抛错');
+    for (const item of HOST_ENTRIES) await checkRedirect(session, baseUrl, item);
   });
+
+  /** 模块签条的用例参数：从默认子页切到另一个子页 */
+  const TAB_CASES = [
+    {
+      name: '书房',
+      entry: '/study/books',
+      from: '读书',
+      to: '写作',
+      toPath: '/study/writing',
+      slug: 'study-writing',
+    },
+    {
+      name: '健康',
+      entry: '/health/fitness',
+      from: '健身',
+      to: '饮食',
+      toPath: '/health/diet',
+      slug: 'health-diet',
+    },
+  ];
+
+  for (const item of TAB_CASES) {
+    test(
+      `routes-tabs-${item.slug}`,
+      `${item.name}：子页签条切到${item.to}，地址与按下态一起走`,
+      async (ctx) => {
+        const { session, baseUrl, shot } = ctx;
+        const strip = `[role="group"][aria-label="${item.name}内的页面"]`;
+
+        await session.goto(`${baseUrl}${item.entry}`, { waitMs: 900 });
+        session.clearErrors();
+
+        assert.ok(await session.exists(strip), `${item.name}宿主应当渲染出子页签条`);
+        assert.equal(await pressedTab(session, strip), item.from, '起始时按下的子页');
+
+        assert.clicked(await clickTab(session, strip, item.to), `签条上的「${item.to}」`);
+        await delay(900);
+
+        assert.equal(await session.evaluate('location.pathname'), item.toPath, '切子页后的落点');
+        assert.equal(await session.text('h1'), item.to, '切子页后的页面标题');
+        assert.equal(await pressedTab(session, strip), item.to, '切子页后按下的子页');
+        await shot(item.slug);
+
+        assert.empty([...session.pageErrors, ...session.consoleErrors], '切子页时抛错');
+      },
+    );
+  }
 }

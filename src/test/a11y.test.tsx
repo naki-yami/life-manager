@@ -1,9 +1,9 @@
 import React from 'react';
 import { render, screen, within } from '@testing-library/react';
-import { MemoryRouter, Navigate, Route, Routes } from 'react-router-dom';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { computeAccessibleName } from 'dom-accessibility-api';
-import { StudyLayout } from '../components/layout';
+import { MODULE_TABS, NAV_ITEMS, ModuleHost } from '../components/layout';
 import { ToastProvider } from '../components/ui';
 import { BooksPage } from '../pages/BooksPage';
 import { DevPage } from '../pages/DevPage';
@@ -168,15 +168,30 @@ describe('无障碍基线', () => {
  * 它**不能塞进 PAGES**：宿主自己不渲染 h1（标题由子页出），进 PAGES 那条「只有一个 h1」
  * 会被误判成 0 个。而正因为不在 PAGES 里，上面那两条 it.each 覆盖不到它 —— 不补这几条，
  * 「每阶段跑无障碍基线」对宿主就是一句空话。
+ *
+ * 用例按 MODULE_TABS 逐模块生成：以后每合并一个模块，宿主的无障碍基线自动就位。
+ * 子页页面漏登记的话 `tabsOf` 会当场炸，不会静默少测一个模块。
  */
-describe('书房宿主壳', () => {
-  const renderHost = (paths: Array<{ path: string; element: React.ReactElement }>): void => {
+const HOST_PAGES: Record<string, React.ReactElement> = {
+  '/study/books': <BooksPage />,
+  '/study/writing': <WritingPage />,
+  '/health/fitness': <FitnessPage />,
+  '/health/diet': <DietPage />,
+};
+
+const MODULE_HOSTS = Object.keys(MODULE_TABS);
+
+describe('模块宿主壳', () => {
+  const renderHost = (
+    host: string,
+    initial: string,
+    paths: Array<{ path: string; element: React.ReactElement }>,
+  ): void => {
     render(
-      <MemoryRouter initialEntries={['/study/books']}>
+      <MemoryRouter initialEntries={[initial]}>
         <ToastProvider>
           <Routes>
-            <Route path="/study" element={<StudyLayout />}>
-              <Route index element={<Navigate to="books" replace />} />
+            <Route path={host} element={<ModuleHost host={host} />}>
               {paths.map((route) => (
                 <Route key={route.path} path={route.path} element={route.element} />
               ))}
@@ -187,14 +202,25 @@ describe('书房宿主壳', () => {
     );
   };
 
-  it('壳自己不出 h1 —— 标题留给子页，一页只有一个', () => {
-    renderHost([]);
+  /** 宿主的子页，转成路由要的相对路径；页面没登记就当场炸，免得静默漏测 */
+  const tabsOf = (host: string): Array<{ path: string; element: React.ReactElement }> =>
+    (MODULE_TABS[host] ?? []).map((tab) => {
+      const element = HOST_PAGES[tab.path];
+      if (!element) throw new Error(`宿主 ${host} 的子页 ${tab.path} 没有登记被测页面`);
+      return { path: tab.path.slice(host.length + 1), element };
+    });
+
+  it.each(MODULE_HOSTS)('%s：壳自己不出 h1 —— 标题留给子页，一页只有一个', (host) => {
+    const tabs = MODULE_TABS[host] ?? [];
+    // 从默认子页进：一进模块就该看到内容，而不是先被重定向
+    renderHost(host, tabs[0]!.path, []);
 
     expect(document.querySelectorAll('h1')).toHaveLength(0);
   });
 
-  it('带上子页时仍然是唯一 h1，且基线三连（名字 / 重复 id / 正 tabindex）都过', () => {
-    renderHost([{ path: 'books', element: <BooksPage /> }]);
+  it.each(MODULE_HOSTS)('%s：带上全部子页时仍然唯一 h1，基线三连都过', (host) => {
+    const tabs = MODULE_TABS[host] ?? [];
+    renderHost(host, tabs[0]!.path, tabsOf(host));
 
     expect(document.querySelectorAll('h1')).toHaveLength(1);
     expect(elementsWithoutName()).toEqual([]);
@@ -202,24 +228,22 @@ describe('书房宿主壳', () => {
     expect(positiveTabIndexes()).toEqual([]);
   });
 
-  it('子页签条是一组有名字的按钮，当前子页按下', () => {
-    renderHost([
-      { path: 'books', element: <BooksPage /> },
-      { path: 'writing', element: <WritingPage /> },
-    ]);
+  it.each(MODULE_HOSTS)('%s：子页签条是一组有名字的按钮，当前子页按下', (host) => {
+    const tabs = MODULE_TABS[host] ?? [];
+    const hostLabel = NAV_ITEMS.find((item) => item.host === host)?.label;
+    renderHost(host, tabs[0]!.path, tabsOf(host));
 
-    const strip = screen.getByRole('group', { name: '书房内的页面' });
+    // 组名取宿主在 NAV_ITEMS 里的名字，子页签条本身不带标题
+    const strip = screen.getByRole('group', { name: `${hostLabel}内的页面` });
     // 签条在内容之前：子页标题上方，和实现里的位置一致
     expect(strip.compareDocumentPosition(screen.getByRole('heading', { level: 1 }))).toBe(
       Node.DOCUMENT_POSITION_FOLLOWING,
     );
-    expect(within(strip).getByRole('button', { name: '读书' })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    );
-    expect(within(strip).getByRole('button', { name: '写作' })).toHaveAttribute(
-      'aria-pressed',
-      'false',
-    );
+    for (const tab of tabs) {
+      expect(within(strip).getByRole('button', { name: tab.label })).toHaveAttribute(
+        'aria-pressed',
+        String(tab.path === tabs[0]!.path),
+      );
+    }
   });
 });

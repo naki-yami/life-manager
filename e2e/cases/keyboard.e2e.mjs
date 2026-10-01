@@ -65,6 +65,31 @@ export function registerKeyboardCases() {
     assert.equal(h1, '读书', '跳转后的页面标题');
   });
 
+  test('palette-subpage', '命令面板：搜子页名直达那一页，不落在同模块的默认子页', async (ctx) => {
+    const { session, baseUrl } = ctx;
+    await session.goto(`${baseUrl}/`, { waitMs: 900 });
+
+    await session.key('k', { code: 'KeyK', windowsVirtualKeyCode: 75, modifiers: 2 });
+    await delay(400);
+    assert.ok(await session.exists(PANEL), '命令面板');
+
+    // 「饮食」和「健身」同属健康模块，默认子页是健身 —— 合并前「饮食」本身就是一条导航项，
+    // 回车直接进饮食页。这条守的就是那次能力回退（和书房搜「写作」是同一类问题）
+    await session.fill(`${PANEL} input[role="combobox"], ${PANEL} input`, '饮食');
+    await delay(400);
+
+    await session.key('Enter', { code: 'Enter', windowsVirtualKeyCode: 13 });
+    await delay(900);
+
+    assert.equal(await session.exists(PANEL), false, '回车之后面板应当关闭');
+    assert.equal(
+      await session.evaluate('location.pathname'),
+      '/health/diet',
+      '回车后应当落在饮食子页',
+    );
+    assert.equal(await session.text('h1'), '饮食', '跳转后的页面标题');
+  });
+
   test('g-sequence', 'g 序列：g 之后按 2 跳到今日计划', async (ctx) => {
     const { session, baseUrl } = ctx;
     await session.goto(`${baseUrl}/`, { waitMs: 900 });

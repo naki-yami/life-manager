@@ -85,8 +85,8 @@ describe('navItems', () => {
     expect(findNavItem('/nope')).toBeUndefined();
   });
 
-  it('阶段一的收敛节奏：主导航 13 条 → 12 条', () => {
-    expect(NAV_ITEMS.filter((item) => item.group === 'main')).toHaveLength(12);
+  it('收敛节奏：主导航 13 → 12 → 11，阶段二把健身与饮食并成「健康」', () => {
+    expect(NAV_ITEMS.filter((item) => item.group === 'main')).toHaveLength(11);
   });
 
   it('读书与写作合成「书房」一条，两个子页都点亮它', () => {
@@ -134,6 +134,47 @@ describe('navItems', () => {
     expect(findLocationLabel('/study')).toBe('书房');
     expect(findLocationLabel('/tasks')).toBe('今日计划');
     expect(findLocationLabel('/nope')).toBeUndefined();
+  });
+
+  it('健身与饮食合成「健康」一条，两个子页都点亮它', () => {
+    const health = itemAt('/health/fitness');
+
+    expect(health).toMatchObject({ label: '健康', host: '/health', group: 'main' });
+
+    expect(isNavItemActive('/health/fitness', health)).toBe(true);
+    expect(isNavItemActive('/health/diet', health)).toBe(true);
+    // 范围靠 host 圈，前缀相同的别的路径不会被误点亮
+    expect(isNavItemActive('/healthcare', health)).toBe(false);
+  });
+
+  it('健康的两组搜索词一个都没丢：默认子页的归宿主，其余子页自己带', () => {
+    const health = itemAt('/health/fitness');
+    const tabs = MODULE_TABS['/health'] ?? [];
+    const words = [...health.keywords, ...tabs.flatMap((tab) => tab.keywords ?? [])];
+
+    for (const word of ['health', '健身', '训练', '体重', '体脂', 'diet', '饮食', '热量']) {
+      expect(words).toContain(word);
+    }
+    // 「饮食」不能挂在宿主上：挂了的话搜「饮食」会命中健康，回车落在健身页
+    expect(health.keywords).not.toContain('饮食');
+  });
+
+  it('健身 / 饮食不再各自占一条导航项，旧路径也归约不到它们', () => {
+    const paths = NAV_ITEMS.map((item) => item.path);
+
+    expect(paths).not.toContain('/fitness');
+    expect(paths).not.toContain('/diet');
+    expect(findNavItem('/fitness')).toBeUndefined();
+    expect(findNavItem('/diet')).toBeUndefined();
+  });
+
+  it('健康宿主也吃嵌套归约与最深子页名', () => {
+    expect(findNavItem('/health/diet')?.label).toBe('健康');
+    // 宿主自己也要能查到，ModuleTabs 靠它取组名
+    expect(findNavItem('/health')?.label).toBe('健康');
+    expect(findLocationLabel('/health/fitness')).toBe('健身');
+    expect(findLocationLabel('/health/diet')).toBe('饮食');
+    expect(findLocationLabel('/health')).toBe('健康');
   });
 });
 
@@ -229,6 +270,8 @@ const renderLayout = (path = '/') =>
           <Route path="/tasks" element={<div>任务内容</div>} />
           <Route path="/study/books" element={<div>读书内容</div>} />
           <Route path="/study/writing" element={<div>写作内容</div>} />
+          <Route path="/health/fitness" element={<div>健身内容</div>} />
+          <Route path="/health/diet" element={<div>饮食内容</div>} />
         </Routes>
       </Layout>
     </MemoryRouter>,
@@ -295,6 +338,21 @@ describe('Layout', () => {
     await userEvent.keyboard('{Enter}');
 
     expect(screen.getByText('写作内容')).toBeInTheDocument();
+  });
+
+  it('命令面板搜「饮食」落饮食页，不落同一个宿主的默认子页健身', async () => {
+    renderLayout('/');
+
+    fireEvent.keyDown(window, { key: 'k', metaKey: true });
+    const palette = await screen.findByRole('dialog', { name: '命令面板' });
+
+    await userEvent.type(within(palette).getByRole('combobox'), '饮食');
+
+    expect(within(palette).getAllByRole('option')[0]).toHaveTextContent('健康 · 饮食');
+
+    await userEvent.keyboard('{Enter}');
+
+    expect(screen.getByText('饮食内容')).toBeInTheDocument();
   });
 
   it('命令面板里可以切换密度', async () => {

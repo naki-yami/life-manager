@@ -229,8 +229,8 @@ export function buildEntityIndex(source: EntitySource): SearchableEntity[] {
       tags: record.tags,
       // 训练记录没有 createdAt，用训练日期兜底排序
       createdAt: record.createdAt || record.date,
-      path: '/fitness',
-      // 健身页暂时没有「打开某条记录」的入口，回车先跳到模块
+      path: '/health/fitness',
+      // 健身页暂时没有「打开某条记录」的入口，回车先跳到那一页
       focusable: false,
     })),
     ...recent(source.mealRecords, STREAM_LIMIT).map<SearchableEntity>((record) => ({
@@ -244,7 +244,7 @@ export function buildEntityIndex(source: EntitySource): SearchableEntity[] {
       tags: record.tags,
       // 饮食记录只有日期，没有创建时间
       createdAt: record.date,
-      path: '/diet',
+      path: '/health/diet',
       focusable: false,
     })),
   ];

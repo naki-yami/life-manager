@@ -74,19 +74,28 @@ export const NAV_ITEMS: NavItem[] = [
   },
 
   {
-    path: '/fitness',
-    label: '健身计划',
-    description: '训练记录与身体指标',
+    path: '/health/fitness',
+    host: '/health',
+    label: '健康',
+    description: '健身与饮食：训练记录、身体指标与三餐热量',
     icon: Dumbbell,
-    keywords: ['fitness', 'workout', 'jianshen', '健身', '训练', '运动', '体重', '体脂', '围度'],
-    group: 'main',
-  },
-  {
-    path: '/diet',
-    label: '饮食计划',
-    description: '三餐记录与热量统计',
-    icon: UtensilsCrossed,
-    keywords: ['diet', 'food', 'yinshi', '饮食', '热量'],
+    // 合并前「健身计划」那一组词（训练 / 体重 / 体脂…）留在宿主上：健身是默认子页，
+    // 落点和宿主一致，搜「健身」回车就直接进健身页。饮食那组词归 /health/diet 子页
+    // （见 MODULE_TABS）—— 两组词要是都堆在这里，搜「饮食」回车会落在健身页。
+    keywords: [
+      'health',
+      'jiankang',
+      '健康',
+      'fitness',
+      'workout',
+      'jianshen',
+      '健身',
+      '训练',
+      '运动',
+      '体重',
+      '体脂',
+      '围度',
+    ],
     group: 'main',
   },
   {
@@ -185,6 +194,15 @@ export const MODULE_TABS: Record<string, ModuleTab[]> = {
       label: '写作',
       icon: PenTool,
       keywords: ['writing', 'xiezuo', '写作', '稿件', '文章'],
+    },
+  ],
+  '/health': [
+    { path: '/health/fitness', label: '健身', icon: Dumbbell },
+    {
+      path: '/health/diet',
+      label: '饮食',
+      icon: UtensilsCrossed,
+      keywords: ['diet', 'food', 'yinshi', '饮食', '热量'],
     },
   ],
 };

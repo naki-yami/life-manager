@@ -48,6 +48,13 @@ describe('MODULE_TABS', () => {
     }
   });
 
+  it('健康的子页是健身与饮食，且都在宿主之下', () => {
+    expect(MODULE_TABS['/health']?.map((tab) => tab.path)).toEqual([
+      '/health/fitness',
+      '/health/diet',
+    ]);
+  });
+
   it('默认子页不重复带搜索词，其余子页自己带 —— 免得搜「写作」落在读书页', () => {
     const tabs = MODULE_TABS['/study'] ?? [];
     const host = NAV_ITEMS.find((item) => item.host === '/study');
@@ -59,11 +66,25 @@ describe('MODULE_TABS', () => {
     expect(host?.keywords).not.toContain('写作');
   });
 
+  it('健康同理：搜「饮食」不能落在默认子页健身', () => {
+    const tabs = MODULE_TABS['/health'] ?? [];
+    const host = NAV_ITEMS.find((item) => item.host === '/health');
+
+    expect(tabs[0]?.path).toBe('/health/fitness');
+    expect(tabs[0]?.keywords).toBeUndefined();
+    expect(tabs[1]?.keywords).toContain('饮食');
+    expect(host?.keywords).not.toContain('饮食');
+  });
+
   it('findModuleTab 只认子页路径，不认宿主也不认旧路径', () => {
     expect(findModuleTab('/study/books')?.label).toBe('读书');
     expect(findModuleTab('/study/writing')?.label).toBe('写作');
     expect(findModuleTab('/study')).toBeUndefined();
     expect(findModuleTab('/books')).toBeUndefined();
+    expect(findModuleTab('/health/fitness')?.label).toBe('健身');
+    expect(findModuleTab('/health/diet')?.label).toBe('饮食');
+    expect(findModuleTab('/health')).toBeUndefined();
+    expect(findModuleTab('/diet')).toBeUndefined();
   });
 });
 

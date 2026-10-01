@@ -1,6 +1,6 @@
 import React, { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { Layout, PageSkeleton, StudyLayout } from './components/layout';
+import { Layout, PageSkeleton, ModuleHost } from './components/layout';
 
 /*
  * 按路由分包：首屏只需要外壳 + 首页，其余页面访问到时再下载。
@@ -52,18 +52,24 @@ const App: React.FC = () => {
             <Route path="/" element={<HomePage />} />
             <Route path="/tasks" element={<TasksPage />} />
             {/* 书房：读书 + 写作共用一个宿主壳，壳里出子页签条（见 MODULE_TABS） */}
-            <Route path="/study" element={<StudyLayout />}>
+            <Route path="/study" element={<ModuleHost host="/study" />}>
               <Route index element={<Navigate to="books" replace />} />
               <Route path="books" element={<BooksPage />} />
               <Route path="writing" element={<WritingPage />} />
+            </Route>
+            {/* 健康：健身 + 饮食同一个模式，只有 host 不同 */}
+            <Route path="/health" element={<ModuleHost host="/health" />}>
+              <Route index element={<Navigate to="fitness" replace />} />
+              <Route path="fitness" element={<FitnessPage />} />
+              <Route path="diet" element={<DietPage />} />
             </Route>
             {/* 旧路径永久保留，书签 / 外部链接 / 历史记录都不碎（决策 #3） */}
             <Route path="/books" element={<Navigate to="/study/books" replace />} />
             <Route path="/dev" element={<DevPage />} />
             <Route path="/dev/:id" element={<DevProjectPage />} />
             <Route path="/writing" element={<Navigate to="/study/writing" replace />} />
-            <Route path="/fitness" element={<FitnessPage />} />
-            <Route path="/diet" element={<DietPage />} />
+            <Route path="/fitness" element={<Navigate to="/health/fitness" replace />} />
+            <Route path="/diet" element={<Navigate to="/health/diet" replace />} />
             <Route path="/games" element={<GamesPage />} />
             <Route path="/stats" element={<StatsPage />} />
             <Route path="/habits" element={<HabitsPage />} />

@@ -473,22 +473,22 @@ export const HomePage: React.FC = () => {
       },
       {
         icon: Dumbbell,
-        label: '健身计划',
+        label: '健身',
         stat: `累计 ${workoutRecords.length} 次`,
         detail:
           workoutRecords.length > 0
             ? `最近一次 ${workoutRecords[workoutRecords.length - 1]!.date}`
             : '还没有训练记录',
         tone: 'warning',
-        path: '/fitness',
+        path: '/health/fitness',
       },
       {
         icon: UtensilsCrossed,
-        label: '饮食计划',
+        label: '饮食',
         stat: `${formatNumber(caloriesToday)} kcal`,
         detail: '今日已记录',
         tone: 'danger',
-        path: '/diet',
+        path: '/health/diet',
       },
       {
         icon: Gamepad2,
@@ -882,7 +882,7 @@ export const HomePage: React.FC = () => {
                 : '第一次记录，坚持量下去就能看到趋势'
             }
             action={
-              <Button variant="ghost" size="sm" onClick={() => navigate('/fitness')}>
+              <Button variant="ghost" size="sm" onClick={() => navigate('/health/fitness')}>
                 记录
               </Button>
             }

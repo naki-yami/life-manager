@@ -240,8 +240,8 @@ describe('训练与饮食记录的索引', () => {
       kind: 'workout',
       kindLabel: '训练记录',
       title: '胸肌日',
-      path: '/fitness',
-      // 健身页还没有「打开某条记录」的入口，所以只跳到模块
+      path: '/health/fitness',
+      // 健身页还没有「打开某条记录」的入口，所以只跳到那一页
       focusable: false,
     });
     expect(byId['workout:wo1']!.subtitle).toContain('2026-09-20');
@@ -274,7 +274,7 @@ describe('训练与饮食记录的索引', () => {
       kind: 'meal',
       kindLabel: '饮食记录',
       title: '晚餐：米饭、鸡胸肉',
-      path: '/diet',
+      path: '/health/diet',
       focusable: false,
     });
     expect(byId['meal:m1']!.subtitle).toContain('700 千卡');

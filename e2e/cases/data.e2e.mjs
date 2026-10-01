@@ -272,7 +272,7 @@ export function registerDataCases() {
       assert.ok(seeded, 'v11 旧档的播种');
 
       // 整页刷新让模块重新求值，迁移与 hydrate 才有机会跑
-      await session.goto(`${baseUrl}/fitness`, { waitMs: 2000 });
+      await session.goto(`${baseUrl}/health/fitness`, { waitMs: 2000 });
       session.clearErrors();
 
       const fitness = await readState(session, 'lm:fitness');
@@ -285,7 +285,7 @@ export function registerDataCases() {
       assert.ok(Array.isArray(plan.exercises), '新补的动作清单应当是数组');
       assert.equal(plan.exercises.length, 0, '旧计划没有动作，补出来就该是空的');
 
-      await session.goto(`${baseUrl}/diet`, { waitMs: 2000 });
+      await session.goto(`${baseUrl}/health/diet`, { waitMs: 2000 });
       const diet = await readState(session, 'lm:diet');
       assert.ok(diet, 'lm:diet 应当已落到 IndexedDB');
       assert.ok(Array.isArray(diet.templates), '新补的餐次模板应当是数组');
@@ -307,7 +307,7 @@ export function registerDataCases() {
 
   test('meal-template-prefill', '一餐存成模板后，点一下就能按今天预填进表单', async (ctx) => {
     const { session, baseUrl } = ctx;
-    await session.goto(`${baseUrl}/diet`, { waitMs: 1500 });
+    await session.goto(`${baseUrl}/health/diet`, { waitMs: 1500 });
     session.clearErrors();
 
     // 先记一餐，才有东西可存成模板

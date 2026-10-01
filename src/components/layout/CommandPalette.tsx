@@ -111,7 +111,7 @@ const QUICK_ACTIONS: QuickAction[] = [
   },
   {
     id: 'action:fitness',
-    path: '/fitness',
+    path: '/health/fitness',
     label: '记录训练',
     hint: '打开健身页的训练记录弹窗',
     icon: Dumbbell,
@@ -119,7 +119,7 @@ const QUICK_ACTIONS: QuickAction[] = [
   },
   {
     id: 'action:diet',
-    path: '/diet',
+    path: '/health/diet',
     label: '记录一餐',
     hint: '打开饮食页的记餐弹窗',
     icon: UtensilsCrossed,

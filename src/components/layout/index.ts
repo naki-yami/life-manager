@@ -28,4 +28,5 @@ export {
 export type { NavItem, ModuleTab } from './navItems';
 export { ModuleTabs } from './ModuleTabs';
 export type { ModuleTabsProps } from './ModuleTabs';
-export { StudyLayout } from './StudyLayout';
+export { ModuleHost } from './ModuleHost';
+export type { ModuleHostProps } from './ModuleHost';
