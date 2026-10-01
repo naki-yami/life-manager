@@ -43,25 +43,25 @@ export const StatStrip: React.FC<StatStripProps> = ({ items, label, className = 
   <div
     role="group"
     aria-label={label}
-    className={`flex flex-col overflow-hidden rounded-lg border border-line-subtle bg-surface shadow-xs sm:flex-row ${className}`}
+    className={`flex flex-col overflow-hidden rounded-lg border border-line-subtle bg-surface sm:flex-row ${className}`}
   >
     {items.map((item) => (
       <div
         key={item.label}
-        className="min-w-0 flex-1 border-t border-line-subtle px-4 py-3 first:border-t-0 sm:border-l sm:border-t-0 sm:first:border-l-0"
+        className="min-w-0 flex-1 border-t border-line-subtle px-[18px] py-[13px] first:border-t-0 sm:border-l sm:border-t-0 sm:first:border-l-0"
       >
-        <p className="flex items-center gap-1.5 text-xs font-medium text-content-tertiary">
+        <p className="flex items-center gap-1.5 text-2sm text-content-tertiary">
           {item.icon}
           <span className="truncate">{item.label}</span>
         </p>
         <div className="mt-1 flex items-baseline gap-1">
-          <span className={`text-xl font-semibold tabular ${TONE[item.tone ?? 'default']}`}>
+          <span className={`text-xl font-[640] tabular ${TONE[item.tone ?? 'default']}`}>
             {item.value}
           </span>
           {item.unit && <span className="text-xs text-content-tertiary">{item.unit}</span>}
         </div>
         {(item.trend || item.hint) && (
-          <div className="mt-0.5 flex items-center gap-1.5 text-xs text-content-tertiary">
+          <div className="mt-0.5 flex items-center gap-1.5 text-2sm text-content-tertiary">
             {item.trend && (
               <span
                 className={`flex items-center gap-0.5 ${

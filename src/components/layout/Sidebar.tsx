@@ -114,8 +114,8 @@ export const NavList: React.FC<NavListProps> = ({ collapsed = false, onNavigate 
                   aria-current={active ? 'page' : undefined}
                   aria-label={collapsed ? item.label : undefined}
                   title={collapsed ? undefined : item.description}
-                  className={`flex w-full items-center gap-2.5 rounded-lg text-sm transition-colors duration-fast ease-standard focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-line-focus ${
-                    collapsed ? 'justify-center px-2 py-2.5' : 'px-2.5 py-2'
+                  className={`flex w-full items-center gap-2.5 rounded-[8px] text-sm transition-colors duration-fast ease-standard focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-line-focus ${
+                    collapsed ? 'justify-center px-2 py-2.5' : 'px-2.5 py-[7px]'
                   } ${
                     active
                       ? 'bg-accent-soft font-semibold text-accent'
@@ -160,7 +160,7 @@ export const Sidebar: React.FC = () => {
       data-testid="sidebar"
       data-collapsed={collapsed}
       className={`hidden shrink-0 flex-col border-r border-line-subtle bg-surface transition-[width] duration-base ease-standard lg:flex ${
-        collapsed ? 'w-16' : 'w-56'
+        collapsed ? 'w-16' : 'w-[228px]'
       }`}
     >
       <div className={`shrink-0 ${collapsed ? 'px-3 pb-3 pt-4' : 'px-3 pb-2 pt-4'}`}>

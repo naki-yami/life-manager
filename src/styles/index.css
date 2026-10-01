@@ -11,6 +11,16 @@
 
   body {
     margin: 0;
+    /*
+     * 基准字号取样稿的 13px / 1.55。
+     *
+     * 这一行是整张皮的地基：以前 body 没设字号，继承浏览器的 16px，
+     * 于是「没写 text-* 类」的文字全都比样稿大一圈 —— 色板再对也不像。
+     * 各档位由 tailwind.config.js 的 fontSize 提供（sm=13、base=14…），
+     * 需要更小或更大时用语义档位，不要再写死 px。
+     */
+    font-size: 13px;
+    line-height: 1.55;
     background-color: var(--lm-bg-canvas);
     color: var(--lm-content);
     font-family:

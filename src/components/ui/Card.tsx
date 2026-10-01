@@ -12,6 +12,10 @@ export interface CardProps {
 /**
  * 卡片外壳。ref 转发到最外层节点：导出 PNG 时拍的就是这一层，
  * 只要卡片本身，不带外层列表的留白。
+ *
+ * 样稿里的卡片是**平**的：只有一根 1px 描边，没有投影，圆角 13px
+ * （`rounded-lg` 已按样稿重排）。投影留给浮层 —— 卡片是页面的一部分，
+ * 不是浮在页面上的东西，一层阴影会让整页显得发灰。
  */
 export const Card = React.forwardRef<HTMLDivElement, CardProps>(
   ({ children, className = '', onClick, interactive }, ref) => {
@@ -30,7 +34,7 @@ export const Card = React.forwardRef<HTMLDivElement, CardProps>(
               onClick();
             }
           }}
-          className={`rounded-lg border border-line-subtle bg-surface shadow-xs transition-colors duration-fast ease-standard hover:border-line hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-line-focus focus-visible:ring-offset-2 focus-visible:ring-offset-canvas cursor-pointer ${className}`}
+          className={`rounded-lg border border-line-subtle bg-surface transition-colors duration-fast ease-standard hover:border-line focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-line-focus focus-visible:ring-offset-2 focus-visible:ring-offset-canvas cursor-pointer ${className}`}
         >
           {children}
         </div>
@@ -38,10 +42,7 @@ export const Card = React.forwardRef<HTMLDivElement, CardProps>(
     }
 
     return (
-      <div
-        className={`rounded-lg border border-line-subtle bg-surface shadow-xs ${className}`}
-        ref={ref}
-      >
+      <div className={`rounded-lg border border-line-subtle bg-surface ${className}`} ref={ref}>
         {children}
       </div>
     );
@@ -56,18 +57,20 @@ export interface CardHeaderProps {
   className?: string;
 }
 
+/**
+ * 卡片头。样稿里标题与正文之间**不画分隔线**，靠留白分层次 ——
+ * 卡片内部再横一根线，一屏里会多出十几条线，页面显脏。
+ */
 export const CardHeader: React.FC<CardHeaderProps> = ({
   title,
   subtitle,
   action,
   className = '',
 }) => (
-  <div
-    className={`flex items-center justify-between gap-4 border-b border-line-subtle px-4 py-3 ${className}`}
-  >
+  <div className={`flex items-center justify-between gap-4 px-[17px] pt-[15px] pb-1 ${className}`}>
     <div className="min-w-0">
-      <h2 className="text-base font-semibold text-content">{title}</h2>
-      {subtitle && <p className="mt-0.5 text-xs text-content-tertiary">{subtitle}</p>}
+      <h2 className="text-base font-[620] text-content">{title}</h2>
+      {subtitle && <p className="mt-0.5 text-2sm text-content-tertiary">{subtitle}</p>}
     </div>
     {action && <div className="shrink-0">{action}</div>}
   </div>
@@ -76,14 +79,14 @@ export const CardHeader: React.FC<CardHeaderProps> = ({
 export const CardBody: React.FC<{ children: React.ReactNode; className?: string }> = ({
   children,
   className = '',
-}) => <div className={`p-4 ${className}`}>{children}</div>;
+}) => <div className={`px-[17px] pt-[13px] pb-4 ${className}`}>{children}</div>;
 
 export const CardFooter: React.FC<{ children: React.ReactNode; className?: string }> = ({
   children,
   className = '',
 }) => (
   <div
-    className={`flex items-center justify-end gap-2 border-t border-line-subtle px-4 py-3 ${className}`}
+    className={`flex items-center justify-end gap-2 border-t border-line-subtle px-[17px] py-3 ${className}`}
   >
     {children}
   </div>

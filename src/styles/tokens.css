@@ -31,7 +31,7 @@
   --lm-bg-selected: rgba(59, 91, 219, 0.1);
 
   /* 描边 */
-  --lm-line-subtle: rgba(17, 24, 39, 0.06);
+  --lm-line-subtle: rgba(17, 24, 39, 0.08);
   --lm-line: rgba(17, 24, 39, 0.12);
   --lm-line-strong: rgba(17, 24, 39, 0.22);
   --lm-line-focus: #4c6ef5;
@@ -146,7 +146,7 @@
   --lm-bg-active: rgba(255, 255, 255, 0.1);
   --lm-bg-selected: rgba(139, 157, 255, 0.16);
 
-  --lm-line-subtle: rgba(255, 255, 255, 0.06);
+  --lm-line-subtle: rgba(255, 255, 255, 0.08);
   --lm-line: rgba(255, 255, 255, 0.12);
   --lm-line-strong: rgba(255, 255, 255, 0.24);
   --lm-line-focus: #8b9dff;
@@ -214,7 +214,9 @@
  * 只覆盖「结构间距」，不改变字号，避免影响可读性。
  * ------------------------------------------------------------------------- */
 :root {
-  --lm-page-pad: 24px;
+  /* 32px 横向留白是样稿的 main padding（26px 32px 40px）；这里合成一个四周同值的档位，
+     密度与小屏各自再往下收（见下面两段覆盖） */
+  --lm-page-pad: 32px;
   --lm-section-gap: 20px;
   --lm-row-pad-y: 10px;
 }

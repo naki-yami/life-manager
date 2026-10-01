@@ -4,18 +4,15 @@ import {
   BookOpen,
   CheckCircle2,
   Code2,
-  Flame,
   Gamepad2,
   Heart,
   LayoutDashboard,
   ListPlus,
-  ListTodo,
   NotebookPen,
   PenTool,
   Plus,
   Send,
   Trash2,
-  TrendingUp,
   UtensilsCrossed,
   type LucideIcon,
 } from 'lucide-react';
@@ -406,7 +403,6 @@ export const HomePage: React.FC = () => {
               value: pendingTasks.length,
               unit: '项',
               tone: 'accent',
-              icon: <ListTodo size={16} aria-hidden />,
               hint: `已完成 ${completedCount} 项`,
             },
             dueTodayTasks.length > 0
@@ -415,7 +411,6 @@ export const HomePage: React.FC = () => {
                   value: Math.round((dueTodayDone / dueTodayTasks.length) * 100),
                   unit: '%',
                   tone: 'success',
-                  icon: <CheckCircle2 size={16} aria-hidden />,
                   hint: `今日到期 ${dueTodayDone}/${dueTodayTasks.length}`,
                 }
               : {
@@ -423,7 +418,6 @@ export const HomePage: React.FC = () => {
                   value: completedToday,
                   unit: '项',
                   tone: 'success',
-                  icon: <CheckCircle2 size={16} aria-hidden />,
                   hint: '今天没有到期任务',
                 },
             {
@@ -431,7 +425,6 @@ export const HomePage: React.FC = () => {
               value: streak,
               unit: '天',
               tone: streak > 0 ? 'warning' : 'default',
-              icon: <Flame size={16} aria-hidden />,
               hint: '完成任务/训练/饮食都算',
             },
             {
@@ -439,7 +432,6 @@ export const HomePage: React.FC = () => {
               value: weekCompletion.current,
               unit: '项',
               tone: 'success',
-              icon: <TrendingUp size={16} aria-hidden />,
               trend: { value: completionChange, label: '较上一周' },
             },
           ]}
@@ -464,7 +456,7 @@ export const HomePage: React.FC = () => {
           />
           <CardBody>
             {focusTask && (
-              <div className="mb-3 flex flex-wrap items-center gap-3 rounded border border-accent-soft bg-accent-soft px-3 py-2">
+              <div className="mb-3 flex flex-wrap items-center gap-3 rounded-md bg-inset px-3.5 py-3">
                 <Badge tone="accent">先做这件</Badge>
                 <span className="min-w-0 flex-1 truncate text-sm font-medium text-content">
                   {focusTask.title}
@@ -838,8 +830,8 @@ export const HomePage: React.FC = () => {
                   },
                 ].map((item) => (
                   <div key={item.label}>
-                    <dt className="text-xs text-content-tertiary">{item.label}</dt>
-                    <dd className="mt-1 text-lg font-semibold tabular text-content">
+                    <dt className="text-2sm text-content-tertiary">{item.label}</dt>
+                    <dd className="mt-1 text-[17px] font-[620] tabular text-content">
                       {item.value}
                     </dd>
                   </div>
@@ -855,24 +847,32 @@ export const HomePage: React.FC = () => {
       content: (
         <section>
           <div className="mb-3">
-            <h2 className="text-lg font-semibold text-content">模块概览</h2>
-            <p className="mt-0.5 text-xs text-content-tertiary">点一下进对应模块</p>
+            <h2 className="text-base font-semibold text-content">模块概览</h2>
+            <p className="mt-0.5 text-2sm text-content-tertiary">点一下进对应模块</p>
           </div>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
             {moduleCards.map((module) => {
               const Icon = module.icon;
               return (
-                <Card key={module.path} onClick={() => navigate(module.path)} className="p-4">
-                  <div className="flex items-center gap-3">
+                <Card
+                  key={module.path}
+                  onClick={() => navigate(module.path)}
+                  className="rounded-md px-[11px] py-[10px]"
+                >
+                  <div className="flex items-center gap-2.5">
                     <span
-                      className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${TONE_CLASS[module.tone]}`}
+                      className={`flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-[8px] ${TONE_CLASS[module.tone]}`}
                     >
-                      <Icon size={20} aria-hidden />
+                      <Icon size={14} aria-hidden />
                     </span>
                     <div className="min-w-0">
-                      <p className="text-sm font-medium text-content">{module.label}</p>
-                      <p className="truncate text-xs text-content-secondary">{module.stat}</p>
-                      <p className="truncate text-2xs text-content-tertiary">{module.detail}</p>
+                      <p className="text-2sm font-semibold text-content">{module.label}</p>
+                      {/* 样稿的瓦片是两行：名字一行，「数字 · 补充」一行 */}
+                      <p className="truncate text-2xs text-content-tertiary">
+                        <span className="text-content-secondary">{module.stat}</span>
+                        {' · '}
+                        {module.detail}
+                      </p>
                     </div>
                   </div>
                 </Card>

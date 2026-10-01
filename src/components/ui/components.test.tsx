@@ -7,6 +7,9 @@ import {
   Badge,
   BADGE_TONES,
   Button,
+  Card,
+  CardBody,
+  CardHeader,
   ConfirmDialog,
   Drawer,
   EmptyState,
@@ -614,5 +617,52 @@ describe('浮层关闭后的焦点归还（U8）', () => {
 
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(trigger).toHaveFocus();
+  });
+});
+
+/**
+ * 样稿皮的公共件不变量。
+ *
+ * 这套外观是照着 `.runtime/mock-home.html` 一寸一寸对出来的，而这些决定全都长在
+ * 类名里 —— 谁顺手加回一个 `shadow-xs`、一行 `border-b`，肉眼在单页上很难发现，
+ * 但整屏的「平」与「留白分明」就没了。所以在这里钉住几条最容易被打回去的。
+ *
+ * 只断言「结构性的那几条」，不断言具体字号：尺度由 tailwind.config.js 一处提供，
+ * 改尺度是有意为之的动作，不该每条用例都跟着抖。
+ */
+describe('换肤后的公共件不变量', () => {
+  it('卡片是平的：不投阴影，圆角走 lg（13px）', () => {
+    const { container } = render(<Card>内容</Card>);
+    const card = container.firstElementChild as HTMLElement;
+
+    expect(card).toHaveClass('rounded-lg');
+    expect(card.className).not.toContain('shadow');
+  });
+
+  it('卡片头与正文之间不画分隔线，靠留白分层次', () => {
+    const { container } = render(
+      <Card>
+        <CardHeader title="今天" subtitle="副标题" />
+        <CardBody>正文</CardBody>
+      </Card>,
+    );
+    const header = container.querySelector('h2')!.parentElement!;
+
+    expect(header.className).not.toContain('border-b');
+    expect(header).toHaveClass('min-w-0');
+  });
+
+  it('主按钮是 34px 高（样稿 .btn 的高度）', () => {
+    render(<Button>开始专注</Button>);
+
+    expect(screen.getByRole('button', { name: '开始专注' })).toHaveClass('h-[34px]');
+  });
+
+  it('统计条整条不投阴影，数字走 xl 档', () => {
+    render(<StatStrip label="概览统计" items={[{ label: '待办任务', value: 3 }]} />);
+
+    const group = screen.getByRole('group', { name: '概览统计' });
+    expect(group.className).not.toContain('shadow');
+    expect(screen.getByText('3')).toHaveClass('text-xl');
   });
 });

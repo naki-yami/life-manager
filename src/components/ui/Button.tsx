@@ -15,7 +15,7 @@ export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElemen
 }
 
 const BASE =
-  'inline-flex items-center justify-center gap-2 font-medium whitespace-nowrap select-none ' +
+  'inline-flex items-center justify-center gap-2 font-[550] whitespace-nowrap select-none ' +
   'transition-colors duration-fast ease-standard ' +
   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-line-focus focus-visible:ring-offset-2 focus-visible:ring-offset-canvas ' +
   'disabled:pointer-events-none disabled:opacity-50';
@@ -28,10 +28,11 @@ const VARIANTS: Record<ButtonVariant, string> = {
   danger: 'bg-danger text-danger-contrast hover:opacity-90 shadow-xs',
 };
 
+/** 尺寸按样稿的控件尺度：主按钮 34px 高 / 圆角 9px，小按钮 28px（样稿聚焦框里的「完成」） */
 const SIZES: Record<ButtonSize, string> = {
-  sm: 'h-8 px-3 text-xs rounded-sm',
-  md: 'h-9 px-3.5 text-sm rounded',
-  lg: 'h-11 px-5 text-base rounded-md',
+  sm: 'h-7 px-[11px] text-xs rounded-sm',
+  md: 'h-[34px] px-[15px] text-sm rounded',
+  lg: 'h-10 px-5 text-base rounded-md',
 };
 
 export const Button: React.FC<ButtonProps> = ({
@@ -72,8 +73,8 @@ export interface IconButtonProps extends React.ButtonHTMLAttributes<HTMLButtonEl
 
 const ICON_SIZES: Record<ButtonSize, string> = {
   sm: 'h-7 w-7 rounded-sm',
-  md: 'h-9 w-9 rounded',
-  lg: 'h-11 w-11 rounded-md',
+  md: 'h-[34px] w-[34px] rounded',
+  lg: 'h-10 w-10 rounded-md',
 };
 
 export const IconButton: React.FC<IconButtonProps> = ({
