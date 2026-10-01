@@ -59,7 +59,7 @@ e2e/
     assert.mjs         断言、用例注册、runner、彩色汇总
   cases/
     shell.e2e.mjs      外壳：能渲染、无异常、存储后端在位、顶栏开关可用
-    routes.e2e.mjs     17 条路由逐条打开
+    routes.e2e.mjs     逐条打开全部路由 + 旧路径重定向 + 宿主子页签条
     keyboard.e2e.mjs   命令面板、单键快捷键、g 序列、404
     data.e2e.mjs       写入链路、刷新持久化、旧 key 迁移、主题落盘、模板、批量操作、
                        分模块导出、首页拖拽换位

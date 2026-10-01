@@ -1,8 +1,9 @@
 import React from 'react';
-import { render } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { render, screen, within } from '@testing-library/react';
+import { MemoryRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { computeAccessibleName } from 'dom-accessibility-api';
+import { StudyLayout } from '../components/layout';
 import { ToastProvider } from '../components/ui';
 import { BooksPage } from '../pages/BooksPage';
 import { DevPage } from '../pages/DevPage';
@@ -158,5 +159,67 @@ describe('无障碍基线', () => {
     expect(document.querySelectorAll('h1')).toHaveLength(1);
     expect(duplicatedIds()).toEqual([]);
     expect(positiveTabIndexes()).toEqual([]);
+  });
+});
+
+/**
+ * 宿主壳（合并出来的那些模块）单独扫一遍。
+ *
+ * 它**不能塞进 PAGES**：宿主自己不渲染 h1（标题由子页出），进 PAGES 那条「只有一个 h1」
+ * 会被误判成 0 个。而正因为不在 PAGES 里，上面那两条 it.each 覆盖不到它 —— 不补这几条，
+ * 「每阶段跑无障碍基线」对宿主就是一句空话。
+ */
+describe('书房宿主壳', () => {
+  const renderHost = (paths: Array<{ path: string; element: React.ReactElement }>): void => {
+    render(
+      <MemoryRouter initialEntries={['/study/books']}>
+        <ToastProvider>
+          <Routes>
+            <Route path="/study" element={<StudyLayout />}>
+              <Route index element={<Navigate to="books" replace />} />
+              {paths.map((route) => (
+                <Route key={route.path} path={route.path} element={route.element} />
+              ))}
+            </Route>
+          </Routes>
+        </ToastProvider>
+      </MemoryRouter>,
+    );
+  };
+
+  it('壳自己不出 h1 —— 标题留给子页，一页只有一个', () => {
+    renderHost([]);
+
+    expect(document.querySelectorAll('h1')).toHaveLength(0);
+  });
+
+  it('带上子页时仍然是唯一 h1，且基线三连（名字 / 重复 id / 正 tabindex）都过', () => {
+    renderHost([{ path: 'books', element: <BooksPage /> }]);
+
+    expect(document.querySelectorAll('h1')).toHaveLength(1);
+    expect(elementsWithoutName()).toEqual([]);
+    expect(duplicatedIds()).toEqual([]);
+    expect(positiveTabIndexes()).toEqual([]);
+  });
+
+  it('子页签条是一组有名字的按钮，当前子页按下', () => {
+    renderHost([
+      { path: 'books', element: <BooksPage /> },
+      { path: 'writing', element: <WritingPage /> },
+    ]);
+
+    const strip = screen.getByRole('group', { name: '书房内的页面' });
+    // 签条在内容之前：子页标题上方，和实现里的位置一致
+    expect(strip.compareDocumentPosition(screen.getByRole('heading', { level: 1 }))).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+    expect(within(strip).getByRole('button', { name: '读书' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(within(strip).getByRole('button', { name: '写作' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
   });
 });

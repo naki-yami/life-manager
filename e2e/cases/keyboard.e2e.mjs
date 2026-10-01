@@ -44,28 +44,29 @@ export function registerKeyboardCases() {
     await delay(400);
     assert.ok(await session.exists(PANEL), '命令面板');
 
-    // 输入时区里稳定能命中的跳转项：导航项的 label 里一定含「写作」
-    await session.fill(`${PANEL} input[role="combobox"], ${PANEL} input`, '写作');
+    // 搜「书房」：合并后它是唯一的模块条目，输入又正好等于命令名，
+    // 所以回车执行的必定是它，落点是默认子页（不是裸宿主，省掉一次重定向）
+    await session.fill(`${PANEL} input[role="combobox"], ${PANEL} input`, '书房');
     await delay(400);
 
     await session.key('Enter', { code: 'Enter', windowsVirtualKeyCode: 13 });
     await delay(900);
 
     assert.equal(await session.exists(PANEL), false, '回车之后面板应当关闭');
-    assert.includes(
+    assert.equal(
       await session.evaluate('location.pathname'),
-      '/writing',
-      '回车后应当跳到写作页',
+      '/study/books',
+      '回车后应当落进书房的默认子页',
     );
     const h1 = await session.text('h1');
-    assert.equal(h1, '写作', '跳转后的页面标题');
+    assert.equal(h1, '读书', '跳转后的页面标题');
   });
 
   test('g-sequence', 'g 序列：g 之后按 2 跳到今日计划', async (ctx) => {
     const { session, baseUrl } = ctx;
     await session.goto(`${baseUrl}/`, { waitMs: 900 });
 
-    // NAV_ITEMS 的 main 组顺序：首页总览 / 今日计划 / 读书 …，所以 2 == 今日计划
+    // NAV_ITEMS 的 main 组顺序：首页总览 / 今日计划 / 书房 …，所以 2 == 今日计划
     await session.key('g', { code: 'KeyG', windowsVirtualKeyCode: 71 });
     await delay(200);
     await session.key('2', { code: 'Digit2', windowsVirtualKeyCode: 50 });
