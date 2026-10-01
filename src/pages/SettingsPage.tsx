@@ -133,6 +133,7 @@ const SHORTCUT_ROWS: Array<{ keys: string; action: string }> = [
   { keys: '/', action: '打开命令面板搜索' },
   { keys: 'n', action: '新建当前模块的条目' },
   { keys: 'Esc', action: '关闭弹层与抽屉' },
+  { keys: 'j / k / x', action: '列表内：行间移动焦点 / 把当前行勾进批量操作' },
   goToShortcutRow(),
 ];
 

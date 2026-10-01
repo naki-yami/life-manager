@@ -157,6 +157,8 @@ describe('SettingsPage', () => {
     expect(screen.getByText('快捷键')).toBeInTheDocument();
     expect(screen.getByText('Ctrl / ⌘ K')).toBeInTheDocument();
     expect(screen.getByText('g 后接 1-9')).toBeInTheDocument();
+    expect(screen.getByText('j / k / x')).toBeInTheDocument();
+    expect(screen.getByText('列表内：行间移动焦点 / 把当前行勾进批量操作')).toBeInTheDocument();
     // 页面清单是从 mainNavShortcuts 现算的，这一行就是主导航收敛后的最终顺序（13 → 8），
     // 不再出现手写的「3 读书」这种对不上的旧文案
     expect(

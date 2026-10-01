@@ -103,7 +103,7 @@ scripts/       构建产物体积预算、PWA 图标生成等小工具
 | `npm run test`         | vitest 单元与组件测试（1400+ 条）           |
 | `npm run build`        | 生产构建                                    |
 | `npm run size`         | 首屏 gzip 体积预算（≤ 300KB，构建后跑）     |
-| `npm run e2e`          | 真浏览器冒烟（28 条，需本机 Edge，不进 CI） |
+| `npm run e2e`          | 真浏览器冒烟（30 条，需本机 Edge，不进 CI） |
 
 CI（`.github/workflows/ci.yml`）按 `typecheck → lint → format:check → test → build → size` 顺序跑。
 `npm run e2e` 只在本地跑 —— 它驱动本机 Edge，CI runner 上没有，详见 `e2e/README.md`。
@@ -119,10 +119,14 @@ CI（`.github/workflows/ci.yml`）按 `typecheck → lint → format:check → t
 | `/`            | 打开命令面板并直接搜索                          |
 | `n`            | 新建当前模块的条目                              |
 | `g` 后接 `1-9` | 跳转到对应主页面（1 首页、2 今日计划、3 书房…） |
+| `j` / `k`      | 列表里在上一条 / 下一条之间移动焦点             |
+| `x`            | 把焦点所在的那一行勾进批量操作                  |
 | `Esc`          | 关闭弹层与抽屉                                  |
 
 命令面板里可以直接录入：`写周报 !高 @明天 #工作`（`!` 优先级、`@` 日期、`#` 标签），
 输入 `#工作` 则跨模块列出所有打了该标签的记录。
+
+`j` / `k` / `x` 只在焦点落在列表里时生效（书房 / 游戏 / 任务三页），不抢全局按键。
 
 ## 文档
 
