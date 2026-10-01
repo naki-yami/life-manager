@@ -104,6 +104,41 @@ export function registerKeyboardCases() {
     assert.equal(await session.text('h1'), '今日计划', '今日计划的标题');
   });
 
+  test(
+    'g-sequence-tail',
+    'g 序列：7 落在成长、8 落在统计与复盘（统计与复盘是 main 组末位）',
+    async (ctx) => {
+      const { session, baseUrl } = ctx;
+      await session.goto(`${baseUrl}/`, { waitMs: 900 });
+
+      // 「成长」提到「统计与复盘」之前，于是 7 == 成长（落默认子页习惯养成）、
+      // 8 == 统计与复盘（落默认子页统计）。这条守的就是那次顺序调整。
+      await session.key('g', { code: 'KeyG', windowsVirtualKeyCode: 71 });
+      await delay(200);
+      await session.key('8', { code: 'Digit8', windowsVirtualKeyCode: 56 });
+      await delay(900);
+
+      assert.equal(
+        await session.evaluate('location.pathname'),
+        '/insight/stats',
+        'g 之后按 8 的落点',
+      );
+      assert.equal(await session.text('h1'), '统计', '统计页的标题');
+
+      await session.key('g', { code: 'KeyG', windowsVirtualKeyCode: 71 });
+      await delay(200);
+      await session.key('7', { code: 'Digit7', windowsVirtualKeyCode: 55 });
+      await delay(900);
+
+      assert.equal(
+        await session.evaluate('location.pathname'),
+        '/growth/habits',
+        'g 之后按 7 的落点',
+      );
+      assert.equal(await session.text('h1'), '习惯养成', '习惯养成页的标题');
+    },
+  );
+
   test('slash', '斜杠 / 也能开命令面板', async (ctx) => {
     const { session, baseUrl } = ctx;
     await session.goto(`${baseUrl}/`, { waitMs: 900 });

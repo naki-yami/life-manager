@@ -16,8 +16,8 @@
 | 开发工作 `/dev`（不动，含 `/dev/:id`） | — | — |
 | **健康** `/health` | 健身 `/health/fitness`（原 `/fitness`）<br>饮食 `/health/diet`（原 `/diet`） | 健身 / 饮食 |
 | 游戏娱乐 `/games`（不动） | — | — |
-| **统计与复盘** `/insight` | 统计 `/insight/stats`（原 `/stats`）<br>复盘 `/insight/review`（原 `/review`） | 统计 / 复盘 |
 | **成长** `/growth` | 习惯 `/growth/habits`（原 `/habits`）<br>目标 `/growth/goals`（原 `/goals`）<br>日记 `/growth/journal`（原 `/journal`） | 习惯 / 目标 / 日记与心情 |
+| **统计与复盘** `/insight` | 统计 `/insight/stats`（原 `/stats`）<br>复盘 `/insight/review`（原 `/review`） | 统计 / 复盘 |
 | 数据与设置 `/settings`（system 组，不动） | — | — |
 
 **命名定稿**（2026-10-01 定）：
@@ -122,7 +122,7 @@ widget 直跳子页**既不丢上下文、也不多一次点击**。**不要**�
 | `navItems.ts` | **按阶段递增收敛**：阶段一 13 → 12，阶段二 → 11，阶段三 → 10，阶段四 → 8（8 是终点，不是阶段一的动作）；keywords 合并两组（如「读书 写作 reading writing」指向宿主）；宿主 `path` 指向默认子路由 |
 | 侧栏 / 移动抽屉 | 复用 NAV_ITEMS，自动收敛 |
 | 移动端底部 Tab | **阶段一不动**（`TAB_PATHS` 里没有任何书房路径，改了反而是噪音）；阶段三对齐「统计」位、阶段四把「习惯」位改「成长」；「更多」抽屉自动生效 |
-| `g+数字` | 新映射：1 首页 2 今日计划 3 读书与写作 4 开发 5 健康 6 游戏 7 统计与复盘 8 成长（main 只剩 8 项，快捷键表同步） |
+| `g+数字` | 新映射：1 首页 2 今日计划 3 读书与写作 4 开发 5 健康 6 游戏 7 成长 8 统计与复盘（main 只剩 8 项，快捷键表同步）——「成长」提到统计与复盘之前，统计与复盘收在功能模块末位 |
 | 命令面板 | NAV_ITEMS 驱动，自动收敛；keywords 已含两组词。但 `QUICK_ACTIONS` 里的 `/books` `/writing` **阶段一就要改**（其余三条留阶段五）—— 它们会真的落在旧 URL 上，靠重定向能跳、地址栏却仍是旧路径 |
 | 首页仪表盘 | widget 的跳转 path 改新地址（如读书 widget → `/study/books`），widget 本身不动 |
 | 页内互跳 | 复盘页 / 目标页里指向 `/stats`、`/habits` 的链接改为新路径 |

@@ -107,18 +107,6 @@ export const NAV_ITEMS: NavItem[] = [
     group: 'main',
   },
   {
-    path: '/insight/stats',
-    host: '/insight',
-    label: '统计与复盘',
-    description: '活动热力图、趋势，以及每日 / 每周回顾',
-    icon: BarChart3,
-    // 合并前「统计」那一组词留在宿主上：统计是默认子页，落点和宿主一致，搜「统计」「趋势」
-    // 回车直接进统计页。复盘那组词归 /insight/review 子页（见 MODULE_TABS）——
-    // 宿主名里带着「复盘」二字本来就靠子串命中，词再挂上来就更压不住了。
-    keywords: ['insight', 'stats', 'chart', 'tongji', '统计', '统计与复盘', '图表', '趋势'],
-    group: 'main',
-  },
-  {
     path: '/growth/habits',
     host: '/growth',
     label: '成长',
@@ -128,6 +116,18 @@ export const NAV_ITEMS: NavItem[] = [
     // 回车直接进习惯页。目标与日记那两组词归各自的子页（见 MODULE_TABS）——
     // 都堆在宿主上的话，搜「目标」回车会落在习惯页。
     keywords: ['growth', 'chengzhang', '成长', 'habits', 'habit', 'xiguan', '习惯', '打卡'],
+    group: 'main',
+  },
+  {
+    path: '/insight/stats',
+    host: '/insight',
+    label: '统计与复盘',
+    description: '活动热力图、趋势，以及每日 / 每周回顾',
+    icon: BarChart3,
+    // 合并前「统计」那一组词留在宿主上：统计是默认子页，落点和宿主一致，搜「统计」「趋势」
+    // 回车直接进统计页。复盘那组词归 /insight/review 子页（见 MODULE_TABS）——
+    // 宿主名里带着「复盘」二字本来就靠子串命中，词再挂上来就更压不住了。
+    keywords: ['insight', 'stats', 'chart', 'tongji', '统计', '统计与复盘', '图表', '趋势'],
     group: 'main',
   },
   {

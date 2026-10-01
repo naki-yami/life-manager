@@ -92,8 +92,22 @@ describe('navItems', () => {
     expect(findNavItem('/nope')).toBeUndefined();
   });
 
-  it('收敛节奏：13 → 12 → 11 → 10 → 8，阶段四收在「成长」', () => {
-    expect(NAV_ITEMS.filter((item) => item.group === 'main')).toHaveLength(8);
+  it('收敛节奏：13 → 12 → 11 → 10 → 8，统计与复盘收在 main 组最末', () => {
+    const main = NAV_ITEMS.filter((item) => item.group === 'main');
+
+    expect(main).toHaveLength(8);
+    // 这份顺序同时是侧栏顺序和 `g+1..9` 的落点：成长提到统计与复盘之前，
+    // 统计与复盘是功能模块的最后一项（system 组另起一段，不参与编号）
+    expect(main.map((item) => item.label)).toEqual([
+      '首页总览',
+      '今日计划',
+      '书房',
+      '开发工作',
+      '健康',
+      '游戏娱乐',
+      '成长',
+      '统计与复盘',
+    ]);
   });
 
   it('读书与写作合成「书房」一条，两个子页都点亮它', () => {
