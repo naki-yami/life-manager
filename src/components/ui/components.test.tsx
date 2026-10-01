@@ -15,6 +15,7 @@ import {
   Modal,
   SegmentedControl,
   Slider,
+  StatStrip,
   Switch,
   ToastProvider,
   Tooltip,
@@ -348,6 +349,57 @@ describe('EmptyState / ErrorState', () => {
 
     const heading = screen.getByRole('heading', { level: 1, name: '找不到这个页面' });
     expect(heading).toHaveClass('text-2xl');
+  });
+});
+
+describe('StatStrip', () => {
+  const ITEMS = [
+    { label: '待办任务', value: 3, unit: '项', tone: 'accent' as const, hint: '已完成 1 项' },
+    { label: '今日完成率', value: 100, unit: '%', tone: 'success' as const },
+    { label: '连续打卡', value: 0, unit: '天' },
+    { label: '近 7 天完成', value: 12, unit: '项', trend: { value: 50, label: '较上一周' } },
+  ];
+
+  it('四项排成一条，整组带可读名字', () => {
+    render(<StatStrip label="概览统计" items={ITEMS} />);
+
+    const group = screen.getByRole('group', { name: '概览统计' });
+    expect(group.children).toHaveLength(4);
+    for (const label of ['待办任务', '今日完成率', '连续打卡', '近 7 天完成']) {
+      expect(screen.getByText(label)).toBeInTheDocument();
+    }
+  });
+
+  it('数字按 tone 上色，单位跟在数字后面', () => {
+    render(<StatStrip label="概览统计" items={ITEMS} />);
+
+    expect(screen.getByText('3')).toHaveClass('text-accent');
+    expect(screen.getByText('100')).toHaveClass('text-success');
+    expect(screen.getByText('0')).toHaveClass('text-content');
+    expect(screen.getAllByText('项')).toHaveLength(2);
+    expect(screen.getByText('天')).toBeInTheDocument();
+  });
+
+  it('环比带正负号与百分号，涨跌换色', () => {
+    render(<StatStrip label="概览统计" items={ITEMS} />);
+    expect(screen.getByText('+50%')).toHaveClass('tabular');
+    expect(screen.getByText('较上一周')).toBeInTheDocument();
+
+    render(
+      <StatStrip label="环比" items={[{ label: '日均完成', value: 2, trend: { value: -25 } }]} />,
+    );
+    expect(screen.getByText('-25%')).toBeInTheDocument();
+  });
+
+  it('hint 渲染在数字下方，可以塞自定义节点', () => {
+    render(
+      <StatStrip
+        label="概览统计"
+        items={[{ label: '近 7 天完成', value: 12, hint: <span>迷你趋势图</span> }]}
+      />,
+    );
+
+    expect(screen.getByText('迷你趋势图')).toBeInTheDocument();
   });
 });
 

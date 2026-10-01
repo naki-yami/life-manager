@@ -30,7 +30,7 @@ import {
   EmptyState,
   IconButton,
   Input,
-  StatCard,
+  StatStrip,
   useOptionalToast,
 } from '../components/ui';
 import { PageHeader } from '../components/layout';
@@ -521,58 +521,62 @@ export const HomePage: React.FC = () => {
       id: 'stats',
       title: '概览统计',
       content: (
-        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-          <StatCard
-            label="待办任务"
-            value={pendingTasks.length}
-            tone="accent"
-            icon={<ListTodo size={16} aria-hidden />}
-            footer={`已完成 ${completedCount} 项`}
-          />
-          {dueTodayTasks.length > 0 ? (
-            <StatCard
-              label="今日完成率"
-              value={Math.round((dueTodayDone / dueTodayTasks.length) * 100)}
-              unit="%"
-              tone="success"
-              icon={<CheckCircle2 size={16} aria-hidden />}
-              footer={`今日到期 ${dueTodayDone}/${dueTodayTasks.length}`}
-            />
-          ) : (
-            <StatCard
-              label="今日完成率"
-              value={completedToday}
-              unit="项"
-              tone="success"
-              icon={<CheckCircle2 size={16} aria-hidden />}
-              footer="今天没有到期任务"
-            />
-          )}
-          <StatCard
-            label="连续打卡"
-            value={streak}
-            unit="天"
-            tone={streak > 0 ? 'warning' : 'default'}
-            icon={<Flame size={16} aria-hidden />}
-            footer="完成任务/训练/饮食都算"
-          />
-          <StatCard
-            label="近 7 天完成"
-            value={weekCompletion.current}
-            unit="项"
-            tone="success"
-            icon={<TrendingUp size={16} aria-hidden />}
-            trend={{ value: completionChange, label: '较上一周' }}
-            footer={
-              <Sparkline
-                data={completionSeries.map((point) => point.value)}
-                label="近 14 天每日完成任务数趋势"
-                tone="success"
-                height={24}
-              />
-            }
-          />
-        </div>
+        <StatStrip
+          label="概览统计"
+          items={[
+            {
+              label: '待办任务',
+              value: pendingTasks.length,
+              unit: '项',
+              tone: 'accent',
+              icon: <ListTodo size={16} aria-hidden />,
+              hint: `已完成 ${completedCount} 项`,
+            },
+            dueTodayTasks.length > 0
+              ? {
+                  label: '今日完成率',
+                  value: Math.round((dueTodayDone / dueTodayTasks.length) * 100),
+                  unit: '%',
+                  tone: 'success',
+                  icon: <CheckCircle2 size={16} aria-hidden />,
+                  hint: `今日到期 ${dueTodayDone}/${dueTodayTasks.length}`,
+                }
+              : {
+                  label: '今日完成率',
+                  value: completedToday,
+                  unit: '项',
+                  tone: 'success',
+                  icon: <CheckCircle2 size={16} aria-hidden />,
+                  hint: '今天没有到期任务',
+                },
+            {
+              label: '连续打卡',
+              value: streak,
+              unit: '天',
+              tone: streak > 0 ? 'warning' : 'default',
+              icon: <Flame size={16} aria-hidden />,
+              hint: '完成任务/训练/饮食都算',
+            },
+            {
+              label: '近 7 天完成',
+              value: weekCompletion.current,
+              unit: '项',
+              tone: 'success',
+              icon: <TrendingUp size={16} aria-hidden />,
+              trend: { value: completionChange, label: '较上一周' },
+              hint: (
+                <span className="min-w-0 flex-1">
+                  <Sparkline
+                    data={completionSeries.map((point) => point.value)}
+                    label="近 14 天每日完成任务数趋势"
+                    tone="success"
+                    height={24}
+                  />
+                </span>
+              ),
+            },
+          ]}
+        />
       ),
     },
     {

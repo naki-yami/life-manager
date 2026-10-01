@@ -10,6 +10,8 @@ export { SubmitForm } from './SubmitForm';
 export type { SubmitFormProps } from './SubmitForm';
 export { Card, CardHeader, CardBody, CardFooter, StatCard } from './Card';
 export type { CardProps, CardHeaderProps, StatCardProps, StatTone } from './Card';
+export { StatStrip } from './StatStrip';
+export type { StatStripProps, StatStripItem } from './StatStrip';
 export { ExportableCard } from './ExportableCard';
 export type { ExportableCardProps } from './ExportableCard';
 export { Modal, ConfirmDialog } from './Modal';

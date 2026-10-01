@@ -61,6 +61,19 @@ const widgetEl = (id: string): HTMLElement =>
 /** 卡片所在的那一列（通栏卡片所在的是它自己独占一行的段） */
 const columnEl = (id: string): HTMLElement => widgetEl(id).closest('ul')!;
 
+/**
+ * 概览统计条里某一格的整格元素与数字。
+ * 统计条没有标题，只能靠格内的小标签定位到格子，再取格里的数字。
+ */
+const statCell = (label: string): HTMLElement => {
+  const cell = screen.getByText(label).closest('div');
+  if (!cell) throw new Error(`没找到统计格：${label}`);
+  return cell;
+};
+
+const statValue = (label: string): string =>
+  statCell(label).querySelector('span.tabular')?.textContent ?? '';
+
 describe('HomePage', () => {
   it('统计卡片反映真实数据', () => {
     const tasks = useTaskStore.getState();
@@ -71,8 +84,7 @@ describe('HomePage', () => {
 
     renderHome();
 
-    const 待办 = screen.getByText('待办任务').closest('div')!.parentElement!;
-    expect(within(待办).getByText('2')).toBeInTheDocument();
+    expect(statValue('待办任务')).toBe('2');
     expect(screen.getByText('已完成 1 项')).toBeInTheDocument();
   });
 
@@ -83,7 +95,7 @@ describe('HomePage', () => {
 
     renderHome();
     // 今日到期 1 件已完成 1 件 → 100%
-    expect(screen.getByText('100')).toBeInTheDocument();
+    expect(statValue('今日完成率')).toBe('100');
     expect(screen.getByText('今日到期 1/1')).toBeInTheDocument();
   });
 
@@ -93,8 +105,19 @@ describe('HomePage', () => {
     useTaskStore.getState().toggleTaskStatus(useTaskStore.getState().tasks[0]!.id);
 
     renderHome();
-    expect(screen.getByText('今日完成率').closest('div')!.parentElement!).toHaveTextContent('1');
+    expect(statValue('今日完成率')).toBe('1');
     expect(screen.getByText('今天没有到期任务')).toBeInTheDocument();
+  });
+
+  it('概览统计收成一条：四格共用一条外壳，不再各占一张带边卡的卡', () => {
+    renderHome();
+
+    const strip = screen.getByRole('group', { name: '概览统计' });
+    expect(strip.children).toHaveLength(4);
+
+    for (const label of ['待办任务', '今日完成率', '连续打卡', '近 7 天完成']) {
+      expect(strip).toContainElement(statCell(label));
+    }
   });
 
   it('问候语按时段变化，摘要里带待办数与紧急数', () => {
@@ -145,8 +168,7 @@ describe('HomePage', () => {
 
     renderHome();
 
-    const streakCard = screen.getByText('连续打卡').closest('div')!.parentElement!;
-    expect(within(streakCard).getByText('1')).toBeInTheDocument();
+    expect(statValue('连续打卡')).toBe('1');
   });
 
   it('备忘可以一键转为任务', async () => {
@@ -276,9 +298,9 @@ describe('HomePage', () => {
 
     renderHome();
 
-    const card = screen.getByText('近 7 天完成').closest('div.rounded-lg') as HTMLElement;
-    expect(within(card).getByText('1')).toBeInTheDocument();
-    expect(within(card).getByText('+100')).toBeInTheDocument();
+    const card = statCell('近 7 天完成');
+    expect(statValue('近 7 天完成')).toBe('1');
+    expect(within(card).getByText('+100%')).toBeInTheDocument();
     expect(within(card).getByText('较上一周')).toBeInTheDocument();
     expect(
       within(card).getByRole('img', { name: '近 14 天每日完成任务数趋势' }),
@@ -450,9 +472,8 @@ describe('HomePage 仪表盘', () => {
     renderHome();
 
     // 旧实现按 UTC 切日期，在东八区会把这条算成昨天：完成率 0、连续打卡 0
-    expect(screen.getByText('今日完成率').closest('div')!.parentElement!).toHaveTextContent('1');
-    const streakCard = screen.getByText('连续打卡').closest('div')!.parentElement!;
-    expect(within(streakCard).getByText('1')).toBeInTheDocument();
+    expect(statValue('今日完成率')).toBe('1');
+    expect(statValue('连续打卡')).toBe('1');
   });
 
   it('今日习惯卡片列出没打卡的习惯，点一下即可完成', async () => {
