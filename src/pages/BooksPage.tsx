@@ -938,13 +938,21 @@ export const BooksPage: React.FC = () => {
             <Button variant="secondary" onClick={() => setShowAddModal(false)}>
               取消
             </Button>
-            <Button onClick={handleAdd} disabled={!form.title.trim()}>
+            <Button type="submit" form="book-add-form" disabled={!form.title.trim()}>
               添加
             </Button>
           </>
         }
       >
-        <div className="space-y-4">
+                <form
+          id="book-add-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            handleAdd();
+          }}
+        >
+          <button type="submit" className="sr-only" tabIndex={-1} aria-hidden="true" />
+<div className="space-y-4">
           <Input
             label="书名"
             value={form.title}
@@ -972,6 +980,7 @@ export const BooksPage: React.FC = () => {
             onChange={(tags) => setForm({ ...form, tags })}
           />
         </div>
+        </form>
       </Modal>
 
       <Modal

@@ -608,4 +608,15 @@ describe('BooksPage 批量操作', () => {
 
     expect(screen.queryByRole('toolbar', { name: '批量操作' })).not.toBeInTheDocument();
   });
+
+  it('添加书籍弹窗里按回车直接提交（U7）', async () => {
+    render(<BooksPage />);
+
+    await userEvent.click(screen.getAllByRole('button', { name: '添加书籍' })[0]!);
+    const dialog = screen.getByRole('dialog', { name: '添加书籍' });
+
+    await userEvent.type(within(dialog).getByLabelText(/^书名/), '回车添加的书{Enter}');
+
+    expect(useBookStore.getState().books[0]!.title).toBe('回车添加的书');
+  });
 });

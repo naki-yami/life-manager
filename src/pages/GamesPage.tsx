@@ -1090,13 +1090,21 @@ export const GamesPage: React.FC = () => {
             <Button variant="secondary" onClick={() => setShowAddModal(false)}>
               取消
             </Button>
-            <Button onClick={handleAddGame} disabled={!form.name.trim()}>
+            <Button type="submit" form="game-add-form" disabled={!form.name.trim()}>
               添加
             </Button>
           </>
         }
       >
-        <div className="space-y-4">
+                <form
+          id="game-add-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            handleAddGame();
+          }}
+        >
+          <button type="submit" className="sr-only" tabIndex={-1} aria-hidden="true" />
+<div className="space-y-4">
           <Input
             label="游戏名称"
             value={form.name}
@@ -1118,6 +1126,7 @@ export const GamesPage: React.FC = () => {
             onChange={(tags) => setForm({ ...form, tags })}
           />
         </div>
+        </form>
       </Modal>
 
       <ConfirmDialog

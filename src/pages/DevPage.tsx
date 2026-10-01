@@ -812,13 +812,21 @@ export const DevPage: React.FC = () => {
             <Button variant="secondary" onClick={() => setShowAddProject(false)}>
               取消
             </Button>
-            <Button onClick={handleAddProject} disabled={!projectForm.name.trim()}>
+            <Button type="submit" form="dev-project-add-form" disabled={!projectForm.name.trim()}>
               创建
             </Button>
           </>
         }
       >
-        <div className="space-y-4">
+                <form
+          id="dev-project-add-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            handleAddProject();
+          }}
+        >
+          <button type="submit" className="sr-only" tabIndex={-1} aria-hidden="true" />
+<div className="space-y-4">
           <Input
             label="项目名称"
             value={projectForm.name}
@@ -837,6 +845,7 @@ export const DevPage: React.FC = () => {
             rows={3}
           />
         </div>
+        </form>
       </Modal>
       <Modal
         isOpen={taskProject !== null}

@@ -509,13 +509,21 @@ export const WritingPage: React.FC = () => {
             <Button variant="secondary" onClick={() => setShowAddModal(false)}>
               取消
             </Button>
-            <Button onClick={handleAdd} disabled={!form.title.trim()}>
+            <Button type="submit" form="writing-add-form" disabled={!form.title.trim()}>
               创建
             </Button>
           </>
         }
       >
-        <div className="space-y-4">
+                <form
+          id="writing-add-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            handleAdd();
+          }}
+        >
+          <button type="submit" className="sr-only" tabIndex={-1} aria-hidden="true" />
+<div className="space-y-4">
           <Input
             label="标题"
             value={form.title}
@@ -537,6 +545,7 @@ export const WritingPage: React.FC = () => {
             onChange={(tags) => setForm({ ...form, tags })}
           />
         </div>
+        </form>
       </Modal>
 
       <Modal

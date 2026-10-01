@@ -982,13 +982,22 @@ export const TasksPage: React.FC = () => {
             <Button variant="secondary" onClick={() => setShowAddModal(false)}>
               取消
             </Button>
-            <Button onClick={handleAdd} disabled={!form.title.trim()}>
+            <Button type="submit" form="task-add-form" disabled={!form.title.trim()}>
               添加
             </Button>
           </>
         }
       >
-        <TaskFormFields form={form} onChange={setForm} tagSuggestions={tagSuggestions} />
+        <form
+          id="task-add-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            handleAdd();
+          }}
+        >
+          <button type="submit" className="sr-only" tabIndex={-1} aria-hidden="true" />
+          <TaskFormFields form={form} onChange={setForm} tagSuggestions={tagSuggestions} />
+        </form>
       </Modal>
 
       <ConfirmDialog

@@ -633,4 +633,16 @@ describe('TasksPage 批量操作', () => {
     // 选中的条目已经不在列表里了，不该还留在选中集里
     expect(screen.queryByRole('toolbar', { name: '批量操作' })).not.toBeInTheDocument();
   });
+
+  it('新建弹窗里在标题框按回车直接提交（U7）', async () => {
+    render(<TasksPage />);
+
+    await userEvent.click(screen.getAllByRole('button', { name: '添加任务' })[0]!);
+    const dialog = screen.getByRole('dialog', { name: '添加任务' });
+
+    await userEvent.type(within(dialog).getByLabelText(/^标题/), '回车提交的任务{Enter}');
+
+    expect(useTaskStore.getState().tasks[0]!.title).toBe('回车提交的任务');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
 });
