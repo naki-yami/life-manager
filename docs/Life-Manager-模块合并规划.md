@@ -36,7 +36,8 @@
 ### 2.1 宿主页 + 嵌套子路由（路线 A，推荐）
 
 ```tsx
-<Route path="/study" element={<StudyLayout />}>
+{/* 宿主壳就一个泛化组件，四个模块共用；阶段二已经把 StudyLayout 并进它 */}
+<Route path="/study" element={<ModuleHost host="/study" />}>
   <Route index element={<Navigate to="books" replace />} />
   <Route path="books" element={<BooksPage />} />
   <Route path="writing" element={<WritingPage />} />
@@ -46,8 +47,10 @@
 <Route path="/writing" element={<Navigate to="/study/writing" replace />} />
 ```
 
-- 每组合并新增一个**薄宿主组件**（约 30 行）：只渲染「子页签条 + `<Outlet />`」，
+- 宿主壳是**一个**泛化组件 `<ModuleHost host="..." />`：只渲染「子页签条 + `<Outlet />`」，
   **不放组名 h1**——子页面保留自己的 PageHeader，a11y 基线（每页唯一 h1）不破。
+  （初稿计划「每组合并新增一个薄宿主」，阶段二合并健康时发现四个模块除了 `host` 一模一样，
+  就并成一个组件了。）
 - 子页签条是共用新组件 `ModuleTabs`（包一层 SegmentedControl，当前项从 location 推导，
   点击走 navigate）。
 - 子页面组件**零改动**：它们不知道自己被嵌套了。
@@ -210,8 +213,9 @@ grep -rn "'/books'\|'/writing'\|'/fitness'\|'/diet'\|'/stats'\|'/review'\|'/goal
 3. **旧路径不删**：全部 `Navigate replace` 重定向，书签、e2e、文档里的旧链接软着陆。
 4. **a11y 不回退**：宿主无 h1、子页签条带 role=group + aria-label、当前项 aria-pressed。
    ⚠️ **注意基线盲区**：`src/test/a11y.test.tsx:123-139` 是**直接渲染 15 个页面组件、不走路由**的 ——
-   新宿主组件**不在它的覆盖面内**。所以阶段一必须**给宿主补独立用例**（直接渲染 `<StudyLayout />`，
-   断言无 h1、子页签条 `role=group`），否则「每阶段跑无障碍基线」这句验收是**假的**。
+   新宿主组件**不在它的覆盖面内**。所以必须**给宿主补独立用例**（直接渲染 `<ModuleHost host="..." />`，
+   断言无 h1、子页签条 `role=group`）。阶段二起这组用例按 `MODULE_TABS` 逐模块生成，
+   新模块的页面漏登记就抛错 —— 「每阶段跑无障碍基线」这句验收才不是空话。
 5. **首屏体积**：新增四个宿主组件都是几十行薄壳，忽略不计；红线 ≤300KB 不变。
 6. **重定向无性能代价（已实测）**：在全量懒加载 + `future.v7_startTransition` 下，
    `<Navigate replace>` 是**非紧急更新**，React 把它与目标 chunk 的加载合并在同一 commit，
