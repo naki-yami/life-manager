@@ -27,7 +27,6 @@ import {
   CardBody,
   CardHeader,
   CheckboxRow,
-  EmptyState,
   IconButton,
   Input,
   StatStrip,
@@ -60,6 +59,8 @@ import {
   todayKey,
 } from '../utils/date';
 import {
+  activeDays,
+  averageOf,
   changeRate,
   currentStreak,
   seriesByDay,
@@ -478,12 +479,10 @@ export const HomePage: React.FC = () => {
               </div>
             )}
             {todayTasks.length === 0 ? (
-              <EmptyState
-                icon={<CheckCircle2 size={20} aria-hidden />}
-                title="待办清空了"
-                description="今天的任务都处理完了，下面直接加一件就行。"
-                className="py-6"
-              />
+              <p className="flex items-center gap-2 rounded bg-inset px-3 py-2 text-sm text-content-secondary">
+                <CheckCircle2 size={16} className="shrink-0 text-success" aria-hidden />
+                待办清空了 —— 今天的都处理完了，下面直接加一件就行。
+              </p>
             ) : (
               <ul className="space-y-1">
                 {restTasks.map((task) => (
@@ -567,12 +566,10 @@ export const HomePage: React.FC = () => {
             </div>
 
             {memos.length === 0 ? (
-              <EmptyState
-                icon={<NotebookPen size={20} aria-hidden />}
-                title="还没有备忘"
-                description="随手记下临时想法，回车就保存。"
-                className="py-6"
-              />
+              <p className="flex items-center gap-2 rounded bg-inset px-3 py-2 text-sm text-content-secondary">
+                <NotebookPen size={16} className="shrink-0 text-content-tertiary" aria-hidden />
+                还没有备忘，随手记下临时想法，回车就保存。
+              </p>
             ) : (
               <ul className="max-h-64 space-y-2 overflow-y-auto">
                 {memos.slice(0, 10).map((memo) => (
@@ -783,8 +780,29 @@ export const HomePage: React.FC = () => {
                 </Badge>
               }
             />
-            <CardBody>
+            <CardBody className="flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-8">
               <Heatmap data={activitySeries} label="近 30 天活动热力图" />
+              <dl className="grid min-w-0 flex-1 grid-cols-2 gap-x-6 gap-y-4">
+                {[
+                  { label: '30 天合计', value: `${activityTotal} 次` },
+                  { label: '近 7 天', value: `${weekActivity.current} 次` },
+                  {
+                    label: '有记录的天数',
+                    value: `${activeDays(activitySeries).length} / ${activitySeries.length}`,
+                  },
+                  {
+                    label: '日均',
+                    value: `${averageOf(activitySeries.map((point) => point.value))} 次`,
+                  },
+                ].map((item) => (
+                  <div key={item.label}>
+                    <dt className="text-xs text-content-tertiary">{item.label}</dt>
+                    <dd className="mt-1 text-lg font-semibold tabular text-content">
+                      {item.value}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
             </CardBody>
           </Card>
         ) : null,

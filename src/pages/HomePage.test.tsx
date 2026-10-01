@@ -198,7 +198,7 @@ describe('HomePage', () => {
 
   it('待办为空时给出空态', () => {
     renderHome();
-    expect(screen.getByText('待办清空了')).toBeInTheDocument();
+    expect(screen.getByText(/待办清空了/)).toBeInTheDocument();
   });
 
   it('回车可以新增备忘', async () => {
@@ -267,6 +267,23 @@ describe('HomePage', () => {
     ).toBeInTheDocument();
     expect(screen.getByText('近 7 天 2 次，上一周 0 次')).toBeInTheDocument();
     expect(screen.getByText(/环比/, { selector: 'span' }).textContent).toContain('+100%');
+  });
+
+  it('热力图卡右侧补上合计 / 近 7 天 / 有记录的天数 / 日均', () => {
+    useTaskStore.getState().addTask('写周报', '', 'high', '');
+    useTaskStore.getState().toggleTaskStatus(useTaskStore.getState().tasks[0]!.id);
+    useDietStore
+      .getState()
+      .addRecord(todayKey(), 'lunch', [{ name: '鸡胸肉', category: 'protein', calories: 300 }]);
+
+    renderHome();
+
+    const metric = (label: string) => screen.getByText(label).nextElementSibling?.textContent;
+
+    expect(metric('30 天合计')).toBe('2 次');
+    expect(metric('近 7 天')).toBe('2 次');
+    expect(metric('有记录的天数')).toBe('1 / 30');
+    expect(metric('日均')).toBe('0 次');
   });
 
   it('写一篇日记也算一天的活动，热力图跟着亮起来', () => {
