@@ -16,6 +16,7 @@ import {
   Sun,
   Trash2,
   Upload,
+  Check,
 } from 'lucide-react';
 import {
   Alert,
@@ -57,7 +58,7 @@ import { useFocusStore } from '../store/focusStore';
 import { useReviewStore } from '../store/reviewStore';
 import { useJournalStore } from '../store/journalStore';
 import { useGoalStore } from '../store/goalStore';
-import { useThemeStore } from '../store/themeStore';
+import { useThemeStore, type AccentId } from '../store/themeStore';
 import { useUiStore } from '../store/uiStore';
 import { BACKUP_MODULES, MODULE_LABELS } from '../services/schemas';
 import type { BackupData, BackupModule } from '../services/schemas';
@@ -101,6 +102,16 @@ import type { AppStorageUsage } from '../store/storage';
 import { Kbd } from '../components/ui';
 
 /** 快捷键说明表的数据；与 useShortcuts 里真正实现的按键保持一致 */
+/** 主题色色板：展示用取各预设的亮色 accent（U6），暗色下的实际色由 CSS 覆盖块决定 */
+const ACCENT_SWATCHES: Array<{ id: AccentId; label: string; color: string }> = [
+  { id: 'indigo', label: '靛蓝', color: '#3b5bdb' },
+  { id: 'teal', label: '青', color: '#0b7285' },
+  { id: 'green', label: '绿', color: '#237032' },
+  { id: 'orange', label: '橙', color: '#b8440c' },
+  { id: 'pink', label: '粉', color: '#a61e4d' },
+  { id: 'violet', label: '紫', color: '#5f3dc4' },
+];
+
 const SHORTCUT_ROWS: Array<{ keys: string; action: string }> = [
   { keys: 'Ctrl / ⌘ K', action: '打开命令面板（跳转页面、切换外观）' },
   { keys: '/', action: '打开命令面板搜索' },
@@ -215,6 +226,8 @@ const FORMAT_HINTS: Record<ExportFormat, string> = {
 
 export const SettingsPage: React.FC = () => {
   const { themeMode, setThemeMode } = useTheme();
+  const accent = useThemeStore((state) => state.accent);
+  const setAccent = useThemeStore((state) => state.setAccent);
   const density = useUiStore((state) => state.density);
   const setDensity = useUiStore((state) => state.setDensity);
   const sidebarCollapsed = useUiStore((state) => state.sidebarCollapsed);
@@ -565,7 +578,8 @@ export const SettingsPage: React.FC = () => {
       />
 
       <Card>
-        <CardHeader title="外观" subtitle="主题模式与界面密度会随备份一起导出" />
+        <CardHeader title="外观" subtitle="主题模式、主题色与界面密度会随备份一起导出" />
+
         <CardBody>
           <div className="space-y-5">
             <div>
@@ -580,6 +594,31 @@ export const SettingsPage: React.FC = () => {
                   { value: 'system', label: '跟随系统', icon: <Monitor size={14} aria-hidden /> },
                 ]}
               />
+            </div>
+
+            <div>
+              <p className="mb-2 text-sm font-medium text-content-secondary">主题色</p>
+              <div role="group" aria-label="主题色" className="flex flex-wrap items-center gap-2">
+                {ACCENT_SWATCHES.map((swatch) => {
+                  const active = accent === swatch.id;
+                  return (
+                    <button
+                      key={swatch.id}
+                      type="button"
+                      aria-pressed={active}
+                      aria-label={`主题色：${swatch.label}`}
+                      title={swatch.label}
+                      onClick={() => setAccent(swatch.id)}
+                      className={`flex h-9 w-9 items-center justify-center rounded-full transition-shadow duration-fast ease-standard focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-line-focus ${
+                        active ? 'ring-2 ring-line-focus ring-offset-2 ring-offset-canvas' : ''
+                      }`}
+                      style={{ backgroundColor: swatch.color }}
+                    >
+                      {active && <Check size={16} className="text-white" aria-hidden />}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
             <Switch
               checked={density === 'compact'}

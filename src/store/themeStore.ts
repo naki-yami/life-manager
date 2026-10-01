@@ -5,6 +5,24 @@ import { persistOptions } from './persist';
 import { asRecord } from './normalize';
 
 export type ThemeMode = 'light' | 'dark' | 'system';
+
+/** 主题色预设（U6）：indigo 是默认（不写 data-accent 属性），其余是 CSS 里的覆盖块 */
+export type AccentId = 'indigo' | 'teal' | 'green' | 'orange' | 'pink' | 'violet';
+
+export const ACCENT_IDS: AccentId[] = ['indigo', 'teal', 'green', 'orange', 'pink', 'violet'];
+
+export const ACCENT_LABELS: Record<AccentId, string> = {
+  indigo: '靛蓝',
+  teal: '青',
+  green: '绿',
+  orange: '橙',
+  pink: '粉',
+  violet: '紫',
+};
+
+export function isAccentId(value: unknown): value is AccentId {
+  return typeof value === 'string' && (ACCENT_IDS as string[]).includes(value);
+}
 /** 三种模式解析之后一定是亮或暗，组件只需要关心这个 */
 export type ResolvedTheme = 'light' | 'dark';
 
@@ -16,6 +34,9 @@ export function isThemeMode(value: unknown): value is ThemeMode {
 
 interface ThemeState {
   themeMode: ThemeMode;
+  /** 主题色预设；indigo 表示不挂 data-accent 属性（用默认令牌） */
+  accent: AccentId;
+  setAccent: (accent: AccentId) => void;
   setThemeMode: (mode: ThemeMode) => void;
   /** 在亮/暗之间切换；当前是「跟随系统」时，按系统解析结果取反 */
   toggleTheme: () => void;
@@ -23,12 +44,16 @@ interface ThemeState {
   setTheme: (theme: ResolvedTheme) => void;
 }
 
-const defaultState: { themeMode: ThemeMode } = { themeMode: 'system' };
+const defaultState: { themeMode: ThemeMode; accent: AccentId } = {
+  themeMode: 'system',
+  accent: 'indigo',
+};
 
 export const useThemeStore = create<ThemeState>()(
   persist(
     (set) => ({
       ...defaultState,
+      setAccent: (accent) => set({ accent }),
       setThemeMode: (themeMode) => set({ themeMode }),
       toggleTheme: () =>
         set((state) => {
@@ -37,15 +62,18 @@ export const useThemeStore = create<ThemeState>()(
         }),
       setTheme: (theme) => set({ themeMode: theme }),
     }),
-    persistOptions<ThemeState, Pick<ThemeState, 'themeMode'>>({
+    persistOptions<ThemeState, Pick<ThemeState, 'themeMode' | 'accent'>>({
       name: STORAGE_KEYS.theme,
-      partialize: (state) => ({ themeMode: state.themeMode }),
+      partialize: (state) => ({ themeMode: state.themeMode, accent: state.accent }),
       // 兼容 v2 存下来的二态 { theme: 'light' | 'dark' }，非法值挡回默认
       normalize: (persisted) => {
         const raw = asRecord(persisted);
-        if (isThemeMode(raw.themeMode)) return { themeMode: raw.themeMode };
-        if (isThemeMode(raw.theme)) return { themeMode: raw.theme };
-        return { themeMode: defaultState.themeMode };
+        const themeMode = isThemeMode(raw.themeMode)
+          ? { themeMode: raw.themeMode }
+          : isThemeMode(raw.theme)
+            ? { themeMode: raw.theme }
+            : { themeMode: defaultState.themeMode };
+        return { ...themeMode, accent: isAccentId(raw.accent) ? raw.accent : defaultState.accent };
       },
     }),
   ),

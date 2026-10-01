@@ -90,6 +90,52 @@
   --lm-shadow-overlay: 0 24px 64px rgba(17, 24, 39, 0.24);
 }
 
+
+/* 主题色 · teal（亮色）：白字按钮与白底文字都过 AA */
+[data-accent='teal'] {
+  --lm-accent: #0b7285;
+  --lm-accent-strong: #095c6b;
+  --lm-accent-soft: rgba(11, 114, 133, 0.1);
+  --lm-accent-contrast: #ffffff;
+  --lm-accent-ring: rgba(11, 114, 133, 0.28);
+}
+
+/* 主题色 · green（亮色）：白字按钮与白底文字都过 AA */
+[data-accent='green'] {
+  --lm-accent: #237032;
+  --lm-accent-strong: #1d5e2a;
+  --lm-accent-soft: rgba(35, 112, 50, 0.1);
+  --lm-accent-contrast: #ffffff;
+  --lm-accent-ring: rgba(35, 112, 50, 0.28);
+}
+
+/* 主题色 · orange（亮色）：白字按钮与白底文字都过 AA */
+[data-accent='orange'] {
+  --lm-accent: #b8440c;
+  --lm-accent-strong: #9c3b0a;
+  --lm-accent-soft: rgba(194, 65, 12, 0.1);
+  --lm-accent-contrast: #ffffff;
+  --lm-accent-ring: rgba(194, 65, 12, 0.28);
+}
+
+/* 主题色 · pink（亮色）：白字按钮与白底文字都过 AA */
+[data-accent='pink'] {
+  --lm-accent: #a61e4d;
+  --lm-accent-strong: #8f1942;
+  --lm-accent-soft: rgba(166, 30, 77, 0.1);
+  --lm-accent-contrast: #ffffff;
+  --lm-accent-ring: rgba(166, 30, 77, 0.28);
+}
+
+/* 主题色 · violet（亮色）：白字按钮与白底文字都过 AA */
+[data-accent='violet'] {
+  --lm-accent: #5f3dc4;
+  --lm-accent-strong: #5235ad;
+  --lm-accent-soft: rgba(95, 61, 196, 0.1);
+  --lm-accent-contrast: #ffffff;
+  --lm-accent-ring: rgba(95, 61, 196, 0.28);
+}
+
 .dark {
   color-scheme: dark;
 
@@ -187,4 +233,50 @@
   --lm-page-pad: 14px;
   --lm-section-gap: 12px;
   --lm-row-pad-y: 6px;
+}
+
+
+/* 主题色 · teal（暗色）：组合器带 .dark，优先级压过 .dark 本身 */
+[data-accent='teal'].dark {
+  --lm-accent: #66d9e8;
+  --lm-accent-strong: #99e9f2;
+  --lm-accent-soft: rgba(102, 217, 232, 0.16);
+  --lm-accent-contrast: #10121a;
+  --lm-accent-ring: rgba(102, 217, 232, 0.32);
+}
+
+/* 主题色 · green（暗色）：组合器带 .dark，优先级压过 .dark 本身 */
+[data-accent='green'].dark {
+  --lm-accent: #8ce99a;
+  --lm-accent-strong: #b2f2bb;
+  --lm-accent-soft: rgba(140, 233, 154, 0.16);
+  --lm-accent-contrast: #10121a;
+  --lm-accent-ring: rgba(140, 233, 154, 0.32);
+}
+
+/* 主题色 · orange（暗色）：组合器带 .dark，优先级压过 .dark 本身 */
+[data-accent='orange'].dark {
+  --lm-accent: #ffa94d;
+  --lm-accent-strong: #ffc078;
+  --lm-accent-soft: rgba(255, 169, 77, 0.16);
+  --lm-accent-contrast: #10121a;
+  --lm-accent-ring: rgba(255, 169, 77, 0.32);
+}
+
+/* 主题色 · pink（暗色）：组合器带 .dark，优先级压过 .dark 本身 */
+[data-accent='pink'].dark {
+  --lm-accent: #f783ac;
+  --lm-accent-strong: #faa2c1;
+  --lm-accent-soft: rgba(247, 131, 172, 0.16);
+  --lm-accent-contrast: #10121a;
+  --lm-accent-ring: rgba(247, 131, 172, 0.32);
+}
+
+/* 主题色 · violet（暗色）：组合器带 .dark，优先级压过 .dark 本身 */
+[data-accent='violet'].dark {
+  --lm-accent: #b197fc;
+  --lm-accent-strong: #d0bfff;
+  --lm-accent-soft: rgba(177, 151, 252, 0.16);
+  --lm-accent-contrast: #10121a;
+  --lm-accent-ring: rgba(177, 151, 252, 0.32);
 }

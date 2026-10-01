@@ -200,6 +200,56 @@ describe('设计令牌 · 文字对比度', () => {
   });
 });
 
+describe('设计令牌 · 主题色预设', () => {
+  /** 每套预设都要过一遍「主色参与」的文字组合：按钮文字、正文链接、浅底徽章 */
+  const ACCENT_PAIRS: Pair[] = TEXT_PAIRS.filter((pair) =>
+    [pair.fg, pair.bg].some((token) => token.startsWith('--lm-accent')),
+  );
+
+  const PALETTES: Array<{ accent: string; light: string; dark: string }> = [
+    { accent: 'teal', light: "[data-accent='teal']", dark: "[data-accent='teal'].dark" },
+    { accent: 'green', light: "[data-accent='green']", dark: "[data-accent='green'].dark" },
+    { accent: 'orange', light: "[data-accent='orange']", dark: "[data-accent='orange'].dark" },
+    { accent: 'pink', light: "[data-accent='pink']", dark: "[data-accent='pink'].dark" },
+    { accent: 'violet', light: "[data-accent='violet']", dark: "[data-accent='violet'].dark" },
+  ];
+
+  it.each(
+    PALETTES.flatMap((palette) => [
+      { accent: palette.accent, selector: palette.light, base: ':root', mode: '亮色' },
+      { accent: palette.accent, selector: palette.dark, base: '.dark', mode: '暗色' },
+    ]),
+  )('$accent（$mode）下主色相关组合达到 WCAG AA（4.5:1）', ({ selector, base }) => {
+    const failures = ACCENT_PAIRS.flatMap((pair) => {
+      // accent 令牌从色板覆盖块读；底色类令牌（bg-surface / canvas）仍在基础层
+      const accentToken = (name: string): string =>
+        name.startsWith('--lm-accent') ? tokenOf(selector, name) : tokenOf(base, name);
+      const foreground = parseColor(accentToken(pair.fg));
+      const raw = parseColor(accentToken(pair.bg));
+      const background =
+        raw[3] < 1
+          ? composite(raw, parseColor(accentToken(pair.over ?? '--lm-bg-canvas')))
+          : raw;
+      const ratio = contrastRatio(foreground, background);
+      return ratio >= 4.5 ? [] : [`${pair.name}：${ratio.toFixed(2)}:1`];
+    });
+
+    expect(failures).toEqual([]);
+  });
+
+  it('每套预设都真的覆盖了主色令牌（防手滑漏写某套）', () => {
+    for (const palette of PALETTES) {
+      for (const selector of [palette.light, palette.dark]) {
+        expect(tokenOf(selector, '--lm-accent')).toBeTruthy();
+        expect(tokenOf(selector, '--lm-accent-strong')).toBeTruthy();
+        expect(tokenOf(selector, '--lm-accent-soft')).toBeTruthy();
+        expect(tokenOf(selector, '--lm-accent-contrast')).toBeTruthy();
+        expect(tokenOf(selector, '--lm-accent-ring')).toBeTruthy();
+      }
+    }
+  });
+});
+
 describe('设计令牌 · 图表分类色板', () => {
   const SERIES = [1, 2, 3, 4, 5, 6, 7, 8] as const;
   const seriesToken = (selector: string, index: number): string => `--lm-chart-${index}`;

@@ -75,6 +75,27 @@ describe('themeStore', () => {
     expect(useThemeStore.getState().themeMode).toBe('light');
   });
 
+  it('主题色（U6）：默认靛蓝，设置后持久化，非法值挡回默认', async () => {
+    expect(useThemeStore.getState().accent).toBe('indigo');
+
+    useThemeStore.getState().setAccent('teal');
+    expect(useThemeStore.getState().accent).toBe('teal');
+    await vi.waitFor(() => {
+      expect(persistedState(STORAGE_KEYS.theme)?.accent).toBe('teal');
+    });
+
+    // normalize：脏 accent 挡回 indigo（rehydrate 是异步的，要等）
+    localStorage.setItem(
+      STORAGE_KEYS.theme,
+      JSON.stringify({ state: { themeMode: 'dark', accent: 'rainbow' }, version: 11 }),
+    );
+    void useThemeStore.persist.rehydrate();
+    await vi.waitFor(() => {
+      expect(useThemeStore.getState().accent).toBe('indigo');
+      expect(useThemeStore.getState().themeMode).toBe('dark');
+    });
+  });
+
   it('当前是「跟随系统」时，toggle 按系统解析结果取反', () => {
     mockSystemPrefersDark(true);
     useThemeStore.setState({ themeMode: 'system' });

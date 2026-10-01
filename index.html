@@ -53,6 +53,11 @@
           if (dark) root.classList.add('dark');
           root.style.colorScheme = dark ? 'dark' : 'light';
 
+          var ACCENTS = ['indigo', 'teal', 'green', 'orange', 'pink', 'violet'];
+          if (theme.accent && ACCENTS.indexOf(theme.accent) !== -1 && theme.accent !== 'indigo') {
+            root.setAttribute('data-accent', theme.accent);
+          }
+
           var ui = readState(UI_KEY);
           if (ui && ui.density === 'compact') root.setAttribute('data-density', 'compact');
         } catch (error) {

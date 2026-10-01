@@ -22,6 +22,7 @@ export function useResolvedTheme(): ResolvedTheme {
  */
 export function useTheme() {
   const themeMode = useThemeStore((state) => state.themeMode);
+  const accent = useThemeStore((state) => state.accent);
   const setThemeMode = useThemeStore((state) => state.setThemeMode);
   const toggleTheme = useThemeStore((state) => state.toggleTheme);
   const setTheme = useThemeStore((state) => state.setTheme);
@@ -32,6 +33,13 @@ export function useTheme() {
     root.classList.toggle('dark', theme === 'dark');
     root.style.colorScheme = theme;
   }, [theme]);
+
+  // 主题色预设：indigo 是默认令牌，不挂属性；其余挂上让 tokens.css 的覆盖块生效
+  useEffect(() => {
+    const root = document.documentElement;
+    if (accent === 'indigo') delete root.dataset.accent;
+    else root.dataset.accent = accent;
+  }, [accent]);
 
   return {
     /** 用户选择的模式：light / dark / system */
