@@ -63,20 +63,24 @@ export const BarChart: React.FC<BarChartProps> = ({
         {...cursor.containerProps}
         role="img"
         aria-label={`${label}：合计 ${formatValue(total)}，${BAR_PEAK_LABEL[bucket]} ${peakWithDate(data, formatValue, formatDate)}`}
-        className={`flex items-end gap-1 ${CHART_FOCUS_RING}`}
+        className={`flex items-end justify-between gap-1 ${CHART_FOCUS_RING}`}
         style={{ height }}
       >
         {data.map((point, index) => (
           <span
             key={point.date}
-            title={`${point.date} · ${formatValue(point.value)}`}
-            className={`min-w-0 flex-1 rounded-t-sm ${
-              point.value > 0 ? CHART_BAR[tone] : 'bg-inset'
-            } ${index === cursor.index ? 'ring-2 ring-line-focus' : ''}`}
-            style={{
-              height: point.value > 0 ? `${Math.max(4, (point.value / scale) * 100)}%` : '2px',
-            }}
-          />
+            className="flex h-full max-w-16 min-w-0 flex-1 items-end rounded-sm bg-heat-0"
+          >
+            <span
+              title={`${point.date} · ${formatValue(point.value)}`}
+              className={`w-full rounded-t-sm ${
+                point.value > 0 ? CHART_BAR[tone] : 'bg-inset'
+              } ${index === cursor.index ? 'ring-2 ring-line-focus' : ''}`}
+              style={{
+                height: point.value > 0 ? `${Math.max(4, (point.value / scale) * 100)}%` : '2px',
+              }}
+            />
+          </span>
         ))}
       </div>
       <div className="mt-1.5 flex items-center justify-between text-2xs text-content-tertiary">

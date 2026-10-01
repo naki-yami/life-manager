@@ -80,6 +80,35 @@ describe('BarChart', () => {
     expect(items[2]).toHaveTextContent('2026-01-08：4 个');
   });
 
+  it('每天都有一个看得见的柱槽，空的那几天也数得出来', () => {
+    const data = [
+      { date: '2026-01-06', value: 0 },
+      { date: '2026-01-07', value: 3 },
+    ];
+    const { container } = render(<BarChart data={data} label="每日完成任务数" />);
+
+    const tracks = container.querySelectorAll('[role="img"] > span');
+    expect(tracks).toHaveLength(2);
+    // 空桶自己的柱子只留一条细线，但柱槽得看得见 ——
+    // 否则稀疏的图看起来就像凭空浮着一个色块，读不出总共有几个桶
+    expect(tracks[0]).toHaveClass('bg-heat-0');
+    expect(tracks[0]?.querySelector('span')?.style.height).toBe('2px');
+    expect(tracks[1]?.querySelector('span')?.style.height).toBe('100%');
+  });
+
+  it('桶少的时候柱子不会被拉成色块，柱槽等宽铺开', () => {
+    const data = [
+      { date: '2026-01-06', value: 1 },
+      { date: '2026-01-07', value: 2 },
+    ];
+    const { container } = render(<BarChart data={data} label="每周完成任务数" />);
+
+    expect(container.querySelector('[role="img"]')).toHaveClass('justify-between');
+    const tracks = container.querySelectorAll('[role="img"] > span');
+    expect(tracks).toHaveLength(2);
+    tracks.forEach((track) => expect(track).toHaveClass('max-w-16'));
+  });
+
   it('序列全为 0 时，描述里的最高值也是 0，不许拿缩放下限凑数', () => {
     // 回归：早先 BarChart 把 Math.max(1, ...values) 既当缩放下限又当峰值，
     // 空活动的一周会被读成「合计 0 个，单日最高 1 个」，自相矛盾。
@@ -355,6 +384,20 @@ describe('StackedBar', () => {
     const items = container.querySelectorAll('figcaption li');
     expect(items).toHaveLength(2);
     expect(items[1]).toHaveTextContent('2026-01-07：任务 2，训练 1，合计 3');
+  });
+
+  it('没有活动的那些天也留一个柱槽，读得出总共有几天', () => {
+    const { container } = render(
+      <StackedBar
+        dates={['2026-01-06', '2026-01-07']}
+        series={[{ name: '任务', values: [0, 2] }]}
+        label="活动构成"
+      />,
+    );
+
+    const columns = container.querySelectorAll('[role="img"] > div');
+    expect(columns[0]).toHaveClass('bg-heat-0');
+    expect(columns[0]?.querySelector('span')?.className).toContain('bg-inset');
   });
 
   it('键盘读点显示当天各序列的值', async () => {

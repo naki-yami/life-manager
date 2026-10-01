@@ -74,7 +74,7 @@ export const StackedBar: React.FC<StackedBarProps> = ({
         {...cursor.containerProps}
         role="img"
         aria-label={`${label}：合计 ${formatValue(grandTotal)}，${STACKED_PEAK_LABEL[bucket]} ${peakWithDate(dailyTotals, formatValue, formatDate)}`}
-        className={`flex items-end gap-1 ${CHART_FOCUS_RING}`}
+        className={`flex items-end justify-between gap-1 ${CHART_FOCUS_RING}`}
         style={{ height }}
       >
         {dates.map((date, index) => (
@@ -83,7 +83,7 @@ export const StackedBar: React.FC<StackedBarProps> = ({
             title={`${date} · ${series
               .map((item) => `${item.name} ${formatValue(item.values[index] ?? 0)}`)
               .join('，')}`}
-            className={`flex h-full min-w-0 flex-1 flex-col justify-end overflow-hidden rounded-t-sm ${
+            className={`flex h-full max-w-16 min-w-0 flex-1 flex-col justify-end overflow-hidden rounded-sm bg-heat-0 ${
               index === activeIndex ? 'ring-2 ring-line-focus' : ''
             }`}
           >
