@@ -65,8 +65,12 @@
 会让这四处都得加「排除子页」的判断。
 
 所以 `navItems.ts` 另外导出 `MODULE_TABS`：宿主路径 → 子页 `{ path, label, icon }[]`。它同时供
-三处使用 —— 签条渲染、顶栏标题、读屏播报（后两处让播报念「读书」而不是「书房」）。`NavItem`
-接口**不动**。
+三处使用 —— 签条渲染、顶栏标题、读屏播报（后两处让播报念「读书」而不是「书房」）。
+
+`NavItem` 的既有字段语义**不动**，只加了一个可选 `host`（实施时的补充）：`path` 仍然是「点一下
+去哪儿」，合并后的宿主把它指向默认子页 `/study/books`（§2.3 定的节奏），于是激活态不能再拿
+`path` 当范围用 —— 否则停在 `/study/writing` 时侧栏里的「书房」会灭掉。`host` 就是宿主用来圈
+范围的模块前缀，`isNavItemActive` 相应地从「收路径字符串」改成「收导航项」。
 
 当前项从 `location.pathname` 精确匹配得出；点击走 `navigate(path)`（**push**，与侧栏、底部 Tab
 点击一致）。底层复用既有 `SegmentedControl`（`src/components/ui/SegmentedControl.tsx:24`），
@@ -83,8 +87,8 @@
 
 | 函数 | 位置 | 现状 | 嵌套后 |
 | --- | --- | --- | --- |
-| `isNavItemActive` | `navItems.ts:163-166` | `pathname === path \|\| pathname.startsWith(path + '/')` | ✅ **已支持子路径激活，侧栏高亮不用改** |
-| `findNavItem` | `navItems.ts:158-160` | `item.path === pathname` **精确匹配** | ⚠️ `/study/books` 会返回 `undefined`，**需归约到宿主**后再查 |
+| `isNavItemActive` | `navItems.ts:163-166` | `pathname === path \|\| pathname.startsWith(path + '/')` | ⚠️ 前缀逻辑本身够用，但**签名要改**：收导航项、按 `item.host ?? item.path` 取范围。宿主 `path` 指向子页之后，再拿 `path` 当范围，`/study/writing` 下的「书房」会灭掉 |
+| `findNavItem` | `navItems.ts:158-160` | `item.path === pathname` **精确匹配** | ⚠️ `/study/books` 会返回 `undefined`，**需归约到宿主**后再查（实施：复用 `isNavItemActive` 找出命中项，取范围最长的那条） |
 
 `findNavItem` 的归约方式：按 `NAV_ITEMS` 中**最长前缀匹配**，或直接取 `pathname.split('/')[1]`
 拼成宿主路径。前者更稳（不依赖路径只分一层）。

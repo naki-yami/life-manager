@@ -35,7 +35,7 @@ export const NavList: React.FC<NavListProps> = ({ collapsed = false, onNavigate 
               </p>
             )}
             {items.map((item) => {
-              const active = isNavItemActive(pathname, item.path);
+              const active = isNavItemActive(pathname, item);
               const Icon = item.icon;
 
               const button = (

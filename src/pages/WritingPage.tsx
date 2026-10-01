@@ -175,7 +175,7 @@ export const WritingPage: React.FC = () => {
   };
 
   // 命令面板搜到本页的稿件时，直接打开编辑器
-  usePaletteFocus('/writing', openEditor);
+  usePaletteFocus('/study/writing', openEditor);
 
   const handleSaveContent = (): void => {
     if (!editorId) return;

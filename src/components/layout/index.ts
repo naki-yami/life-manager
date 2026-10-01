@@ -17,7 +17,14 @@ export type { PageSkeletonProps } from './PageSkeleton';
 export { CommandPalette, CommandPaletteProvider } from './CommandPalette';
 export type { CommandItem } from './CommandPalette';
 export { useCommandPalette } from './commandPaletteContext';
-export { NAV_ITEMS, MODULE_TABS, findNavItem, findModuleTab, isNavItemActive } from './navItems';
+export {
+  NAV_ITEMS,
+  MODULE_TABS,
+  findNavItem,
+  findModuleTab,
+  findLocationLabel,
+  isNavItemActive,
+} from './navItems';
 export type { NavItem, ModuleTab } from './navItems';
 export { ModuleTabs } from './ModuleTabs';
 export type { ModuleTabsProps } from './ModuleTabs';

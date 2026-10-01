@@ -8,7 +8,13 @@ import { NavList, Sidebar } from './Sidebar';
 import { PageHeader } from './PageHeader';
 import { Toolbar } from './Toolbar';
 import { ListEmptyState } from './ListEmptyState';
-import { NAV_ITEMS, findNavItem, isNavItemActive } from './navItems';
+import {
+  NAV_ITEMS,
+  findLocationLabel,
+  findNavItem,
+  isNavItemActive,
+  type NavItem,
+} from './navItems';
 import { useUiStore } from '../../store/uiStore';
 import { Header } from './Header';
 import { CommandPaletteProvider } from './CommandPalette';
@@ -25,6 +31,13 @@ beforeEach(() => {
   document.documentElement.classList.remove('dark');
   document.documentElement.removeAttribute('data-density');
 });
+
+/** 按落点取导航项；取不到就当场炸，省掉一串非空断言 */
+const itemAt = (path: string): NavItem => {
+  const item = NAV_ITEMS.find((candidate) => candidate.path === path);
+  if (!item) throw new Error(`没有这个导航项：${path}`);
+  return item;
+};
 
 describe('navItems', () => {
   it('每个导航项都有唯一的路径', () => {
@@ -57,18 +70,61 @@ describe('navItems', () => {
   });
 
   it('根路径只在自己身上激活', () => {
-    expect(isNavItemActive('/', '/')).toBe(true);
-    expect(isNavItemActive('/tasks', '/')).toBe(false);
+    expect(isNavItemActive('/', itemAt('/'))).toBe(true);
+    expect(isNavItemActive('/tasks', itemAt('/'))).toBe(false);
   });
 
   it('子路径也算激活，但不会误伤前缀相同的其他路径', () => {
-    expect(isNavItemActive('/books/123', '/books')).toBe(true);
-    expect(isNavItemActive('/bookshelf', '/books')).toBe(false);
+    expect(isNavItemActive('/tasks/123', itemAt('/tasks'))).toBe(true);
+    expect(isNavItemActive('/taskshelf', itemAt('/tasks'))).toBe(false);
   });
 
   it('findNavItem 能找到对应项', () => {
     expect(findNavItem('/games')?.label).toBe('游戏娱乐');
     expect(findNavItem('/nope')).toBeUndefined();
+  });
+
+  it('阶段一的收敛节奏：主导航 13 条 → 12 条', () => {
+    expect(NAV_ITEMS.filter((item) => item.group === 'main')).toHaveLength(12);
+  });
+
+  it('读书与写作合成「书房」一条，两个子页都点亮它', () => {
+    const study = itemAt('/study/books');
+
+    expect(study).toMatchObject({ label: '书房', host: '/study', group: 'main' });
+    // 合并后关键词要覆盖两组，否则命令面板搜「写作」找不到这个模块
+    for (const word of ['读书', '写作', 'reading', 'writing']) {
+      expect(study.keywords).toContain(word);
+    }
+
+    expect(isNavItemActive('/study/books', study)).toBe(true);
+    expect(isNavItemActive('/study/writing', study)).toBe(true);
+    // 范围靠 host 圈，前缀相同的别的路径不会被误点亮
+    expect(isNavItemActive('/bookshelf', study)).toBe(false);
+  });
+
+  it('读书 / 写作不再各自占一条导航项，旧路径也归约不到它们', () => {
+    const paths = NAV_ITEMS.map((item) => item.path);
+
+    expect(paths).not.toContain('/books');
+    expect(paths).not.toContain('/writing');
+    expect(findNavItem('/books')).toBeUndefined();
+    expect(findNavItem('/writing')).toBeUndefined();
+  });
+
+  it('嵌套路由归约到宿主：子页也能查到导航项，不再静默降级', () => {
+    expect(findNavItem('/study/books')?.label).toBe('书房');
+    expect(findNavItem('/study/writing')?.label).toBe('书房');
+    // 宿主自己也要能查到，ModuleTabs 靠它取组名
+    expect(findNavItem('/study')?.label).toBe('书房');
+  });
+
+  it('顶栏标题取最深的子页名，别笼统地念「书房」', () => {
+    expect(findLocationLabel('/study/books')).toBe('读书');
+    expect(findLocationLabel('/study/writing')).toBe('写作');
+    expect(findLocationLabel('/study')).toBe('书房');
+    expect(findLocationLabel('/tasks')).toBe('今日计划');
+    expect(findLocationLabel('/nope')).toBeUndefined();
   });
 });
 
@@ -93,7 +149,15 @@ describe('NavList', () => {
       'aria-current',
       'page',
     );
-    expect(screen.getByRole('button', { name: '读书' })).not.toHaveAttribute('aria-current');
+    expect(screen.getByRole('button', { name: '书房' })).not.toHaveAttribute('aria-current');
+  });
+
+  it('停在子页时仍点亮「书房」，且侧栏里没有独立的读书 / 写作', () => {
+    renderList('/study/writing');
+
+    expect(screen.getByRole('button', { name: '书房' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.queryByRole('button', { name: '读书' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '写作' })).not.toBeInTheDocument();
   });
 
   it('点击后跳转到目标路由', async () => {
@@ -101,20 +165,20 @@ describe('NavList', () => {
       <MemoryRouter initialEntries={['/']}>
         <Routes>
           <Route path="/" element={<NavList />} />
-          <Route path="/books" element={<div>读书页面</div>} />
+          <Route path="/study/books" element={<div>读书页面</div>} />
         </Routes>
       </MemoryRouter>,
     );
 
-    await userEvent.click(screen.getByRole('button', { name: '读书' }));
+    await userEvent.click(screen.getByRole('button', { name: '书房' }));
     expect(screen.getByText('读书页面')).toBeInTheDocument();
   });
 
   it('收起时隐藏文字，改用 aria-label 保留可访问名称', () => {
     renderList('/', true);
-    const button = screen.getByRole('button', { name: '读书' });
-    expect(button).toHaveAttribute('aria-label', '读书');
-    expect(button).not.toHaveTextContent('读书');
+    const button = screen.getByRole('button', { name: '书房' });
+    expect(button).toHaveAttribute('aria-label', '书房');
+    expect(button).not.toHaveTextContent('书房');
   });
 
   it('点击后回调 onNavigate，供抽屉关闭自己', async () => {
@@ -125,7 +189,7 @@ describe('NavList', () => {
       </MemoryRouter>,
     );
 
-    await userEvent.click(screen.getByRole('button', { name: '读书' }));
+    await userEvent.click(screen.getByRole('button', { name: '书房' }));
     expect(onNavigate).toHaveBeenCalledTimes(1);
   });
 });
@@ -154,7 +218,7 @@ const renderLayout = (path = '/') =>
         <Routes>
           <Route path="/" element={<div>首页内容</div>} />
           <Route path="/tasks" element={<div>任务内容</div>} />
-          <Route path="/books" element={<div>读书内容</div>} />
+          <Route path="/study/books" element={<div>读书内容</div>} />
         </Routes>
       </Layout>
     </MemoryRouter>,
@@ -167,6 +231,16 @@ describe('Layout', () => {
     expect(within(screen.getByRole('banner')).getByText('今日计划')).toBeInTheDocument();
   });
 
+  it('停在子页时顶栏念子页名，描述仍跟着宿主走', () => {
+    renderLayout('/study/books');
+
+    const banner = within(screen.getByRole('banner'));
+    expect(banner.getByText('读书')).toBeInTheDocument();
+    expect(banner.getByText('读书与写作：在读进度、书摘笔记与稿件字数')).toBeInTheDocument();
+    // 念的是「读书」，不是笼统的宿主名
+    expect(banner.queryByText('书房')).not.toBeInTheDocument();
+  });
+
   it('窄屏汉堡按钮能打开导航抽屉，选中后自动关闭', async () => {
     renderLayout('/');
 
@@ -174,7 +248,7 @@ describe('Layout', () => {
     const drawer = screen.getByRole('dialog', { name: '导航' });
     expect(drawer).toBeInTheDocument();
 
-    await userEvent.click(within(drawer).getByRole('button', { name: '读书' }));
+    await userEvent.click(within(drawer).getByRole('button', { name: '书房' }));
 
     expect(screen.queryByRole('dialog', { name: '导航' })).not.toBeInTheDocument();
     expect(screen.getByText('读书内容')).toBeInTheDocument();
@@ -230,8 +304,8 @@ describe('BottomTabBar', () => {
     for (const label of ['首页总览', '今日计划', '习惯养成', '统计']) {
       expect(within(bar()).getByRole('button', { name: label })).toBeInTheDocument();
     }
-    // 读书不在 Tab 上，只能从抽屉进
-    expect(within(bar()).queryByRole('button', { name: '读书' })).not.toBeInTheDocument();
+    // 书房不在 Tab 上，只能从抽屉进
+    expect(within(bar()).queryByRole('button', { name: '书房' })).not.toBeInTheDocument();
 
     const more = within(bar()).getByRole('button', { name: '更多' });
     expect(more).toHaveAttribute('aria-expanded', 'false');
@@ -266,7 +340,7 @@ describe('BottomTabBar', () => {
   });
 
   it('当前页面不在 Tab 上时点亮「更多」，它本身不是页面所以不带 aria-current', () => {
-    renderLayout('/books');
+    renderLayout('/study/books');
 
     const more = within(bar()).getByRole('button', { name: '更多' });
     expect(more).toHaveClass('text-accent');
@@ -287,7 +361,7 @@ const renderLayoutWithToasts = (path = '/') =>
           <Routes>
             <Route path="/" element={<div>首页内容</div>} />
             <Route path="/tasks" element={<div>任务内容</div>} />
-            <Route path="/books" element={<div>读书内容</div>} />
+            <Route path="/study/books" element={<div>读书内容</div>} />
           </Routes>
         </Layout>
       </ToastProvider>
@@ -471,7 +545,7 @@ describe('Layout 无障碍', () => {
     const status = screen.getByRole('status');
     expect(status).toBeEmptyDOMElement();
 
-    await userEvent.click(screen.getAllByRole('button', { name: '读书' })[0]!);
+    await userEvent.click(screen.getAllByRole('button', { name: '书房' })[0]!);
 
     await waitFor(() => expect(status).toHaveTextContent('读书已打开'));
   });

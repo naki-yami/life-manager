@@ -288,7 +288,7 @@ export const BooksPage: React.FC = () => {
     setNoteBookId(bookId);
   };
 
-  usePaletteFocus('/books', openNotes);
+  usePaletteFocus('/study/books', openNotes);
 
   const sessionMinutes = typeof sessionForm.minutes === 'number' ? sessionForm.minutes : 0;
   const canSaveSession = Boolean(sessionForm.bookId) && sessionMinutes > 0;

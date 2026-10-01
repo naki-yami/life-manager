@@ -25,7 +25,7 @@ describe('BooksPage 从命令面板打开', () => {
     render(<BooksPage />);
 
     act(() => {
-      requestPaletteFocus('/books', bookId('置身事内'));
+      requestPaletteFocus('/study/books', bookId('置身事内'));
     });
 
     expect(screen.getByRole('dialog', { name: '《置身事内》的笔记' })).toBeInTheDocument();
@@ -35,7 +35,7 @@ describe('BooksPage 从命令面板打开', () => {
     render(<BooksPage />);
 
     act(() => {
-      requestPaletteFocus('/books', 'missing');
+      requestPaletteFocus('/study/books', 'missing');
     });
 
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
@@ -355,7 +355,7 @@ describe('BooksPage 宽屏双栏', () => {
 
     render(<BooksPage />);
     act(() => {
-      requestPaletteFocus('/books', bookId('置身事内'));
+      requestPaletteFocus('/study/books', bookId('置身事内'));
     });
 
     expect(screen.getByRole('complementary', { name: '《置身事内》的笔记' })).toBeInTheDocument();

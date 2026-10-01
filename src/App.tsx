@@ -1,6 +1,6 @@
 import React, { lazy, Suspense } from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
-import { Layout, PageSkeleton } from './components/layout';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { Layout, PageSkeleton, StudyLayout } from './components/layout';
 
 /*
  * 按路由分包：首屏只需要外壳 + 首页，其余页面访问到时再下载。
@@ -51,10 +51,17 @@ const App: React.FC = () => {
           <Routes>
             <Route path="/" element={<HomePage />} />
             <Route path="/tasks" element={<TasksPage />} />
-            <Route path="/books" element={<BooksPage />} />
+            {/* 书房：读书 + 写作共用一个宿主壳，壳里出子页签条（见 MODULE_TABS） */}
+            <Route path="/study" element={<StudyLayout />}>
+              <Route index element={<Navigate to="books" replace />} />
+              <Route path="books" element={<BooksPage />} />
+              <Route path="writing" element={<WritingPage />} />
+            </Route>
+            {/* 旧路径永久保留，书签 / 外部链接 / 历史记录都不碎（决策 #3） */}
+            <Route path="/books" element={<Navigate to="/study/books" replace />} />
             <Route path="/dev" element={<DevPage />} />
             <Route path="/dev/:id" element={<DevProjectPage />} />
-            <Route path="/writing" element={<WritingPage />} />
+            <Route path="/writing" element={<Navigate to="/study/writing" replace />} />
             <Route path="/fitness" element={<FitnessPage />} />
             <Route path="/diet" element={<DietPage />} />
             <Route path="/games" element={<GamesPage />} />

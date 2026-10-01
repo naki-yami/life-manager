@@ -10,7 +10,7 @@ import { useCommandPalette } from './commandPaletteContext';
 import { useTheme } from '../../hooks/useTheme';
 import { useDensity } from '../../hooks/useDensity';
 import { useGlobalShortcuts } from '../../hooks/useShortcuts';
-import { findNavItem } from './navItems';
+import { findLocationLabel } from './navItems';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -31,7 +31,7 @@ const RouteAnnouncer: React.FC = () => {
       isFirstRender.current = false;
       return;
     }
-    setMessage(`${findNavItem(pathname)?.label ?? '页面'}已打开`);
+    setMessage(`${findLocationLabel(pathname) ?? '页面'}已打开`);
   }, [pathname]);
 
   return (

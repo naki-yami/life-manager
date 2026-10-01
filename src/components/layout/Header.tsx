@@ -5,7 +5,7 @@ import { IconButton, Kbd } from '../ui';
 import { ToastContext } from '../ui/toastContext';
 import { useTheme } from '../../hooks/useTheme';
 import { useUiStore } from '../../store/uiStore';
-import { findNavItem } from './navItems';
+import { findLocationLabel, findNavItem } from './navItems';
 import { useCommandPalette } from './commandPaletteContext';
 import type { ThemeMode } from '../../store/themeStore';
 
@@ -66,6 +66,8 @@ export const Header: React.FC<HeaderProps> = ({ onOpenNav }) => {
   };
 
   const current = findNavItem(pathname);
+  // 子页优先：停在 /study/books 时顶栏念「读书」，不念笼统的「书房」
+  const title = findLocationLabel(pathname) ?? 'Life Manager';
   const ThemeIcon = THEME_ICON[themeMode];
   const DensityIcon = density === 'compact' ? Rows4 : Rows3;
 
@@ -86,9 +88,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenNav }) => {
           L
         </div>
         <div className="min-w-0">
-          <p className="truncate text-sm font-semibold text-content">
-            {current?.label ?? 'Life Manager'}
-          </p>
+          <p className="truncate text-sm font-semibold text-content">{title}</p>
           <p className="hidden truncate text-2xs text-content-tertiary sm:block">
             {current?.description ?? '个人生活与工作管理'}
           </p>

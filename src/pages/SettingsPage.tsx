@@ -39,6 +39,7 @@ import {
 import type { SelectOption } from '../components/ui';
 import { PageHeader } from '../components/layout';
 import { useTheme } from '../hooks/useTheme';
+import { mainNavShortcuts } from '../hooks/useShortcuts';
 import { useTaskStore } from '../store/taskStore';
 import { useBookStore } from '../store/bookStore';
 import {
@@ -102,7 +103,6 @@ import { clearAppData, measureAppStorage } from '../store/storage';
 import type { AppStorageUsage } from '../store/storage';
 import { Kbd } from '../components/ui';
 
-/** 快捷键说明表的数据；与 useShortcuts 里真正实现的按键保持一致 */
 /** 主题色色板：展示用取各预设的亮色 accent（U6），暗色下的实际色由 CSS 覆盖块决定 */
 const ACCENT_SWATCHES: Array<{ id: AccentId; label: string; color: string }> = [
   { id: 'indigo', label: '靛蓝', color: '#3b5bdb' },
@@ -113,12 +113,27 @@ const ACCENT_SWATCHES: Array<{ id: AccentId; label: string; color: string }> = [
   { id: 'violet', label: '紫', color: '#5f3dc4' },
 ];
 
+/**
+ * `g` 后接数字那一行的说明。
+ *
+ * 页面清单从 `mainNavShortcuts` 现算 —— 导航收敛、模块改名、顺序调整之后，
+ * 这张表自动跟着变，不用再手工同步（手写过一次，已经对不上了）。
+ */
+function goToShortcutRow(): { keys: string; action: string } {
+  const pages = mainNavShortcuts
+    .slice(0, 9)
+    .map((item, index) => `${index + 1} ${item.label}`)
+    .join('、');
+  return { keys: 'g 后接 1-9', action: `跳转到对应的主页面（${pages}）` };
+}
+
+/** 快捷键说明表；与 useShortcuts 里真正实现的按键保持一致 */
 const SHORTCUT_ROWS: Array<{ keys: string; action: string }> = [
   { keys: 'Ctrl / ⌘ K', action: '打开命令面板（跳转页面、切换外观）' },
   { keys: '/', action: '打开命令面板搜索' },
   { keys: 'n', action: '新建当前模块的条目' },
   { keys: 'Esc', action: '关闭弹层与抽屉' },
-  { keys: 'g 后接 1-9', action: '跳转到对应的主页面（1 首页、2 今日计划、3 读书…）' },
+  goToShortcutRow(),
 ];
 
 /** 把导入结果写回各 store。整对象写入，保留 id / 状态 / 时间戳 / 嵌套数组 */

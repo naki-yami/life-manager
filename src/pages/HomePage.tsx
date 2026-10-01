@@ -453,7 +453,7 @@ export const HomePage: React.FC = () => {
         stat: `${reading} 本在读`,
         detail: `书库共 ${books.length} 本`,
         tone: 'info',
-        path: '/books',
+        path: '/study/books',
       },
       {
         icon: Code2,
@@ -469,7 +469,7 @@ export const HomePage: React.FC = () => {
         stat: `${formatNumber(totalWords)} 字`,
         detail: `稿件共 ${writingProjects.length} 篇`,
         tone: 'success',
-        path: '/writing',
+        path: '/study/writing',
       },
       {
         icon: Dumbbell,

@@ -172,7 +172,7 @@ export function buildEntityIndex(source: EntitySource): SearchableEntity[] {
       keywords: [book.category, ...book.notes.slice(0, 3).map((note) => note.content)],
       tags: book.tags,
       createdAt: book.createdAt,
-      path: '/books',
+      path: '/study/books',
       focusable: true,
     })),
     ...source.devProjects.map<SearchableEntity>((project) => ({
@@ -199,7 +199,7 @@ export function buildEntityIndex(source: EntitySource): SearchableEntity[] {
       keywords: [project.notes],
       tags: project.tags,
       createdAt: project.createdAt,
-      path: '/writing',
+      path: '/study/writing',
       focusable: true,
     })),
     ...source.games.map<SearchableEntity>((game) => ({

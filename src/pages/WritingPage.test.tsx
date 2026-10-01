@@ -32,7 +32,7 @@ describe('WritingPage 从命令面板打开', () => {
     render(<WritingPage />);
 
     act(() => {
-      requestPaletteFocus('/writing', projectOf('周报模板').id);
+      requestPaletteFocus('/study/writing', projectOf('周报模板').id);
     });
 
     expect(screen.getByRole('dialog', { name: '《周报模板》编辑正文' })).toBeInTheDocument();
@@ -42,7 +42,7 @@ describe('WritingPage 从命令面板打开', () => {
     render(<WritingPage />);
 
     act(() => {
-      requestPaletteFocus('/writing', 'missing');
+      requestPaletteFocus('/study/writing', 'missing');
     });
 
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
@@ -409,7 +409,7 @@ describe('WritingPage 宽屏双栏', () => {
 
     render(<WritingPage />);
     act(() => {
-      requestPaletteFocus('/writing', projectOf('长文').id);
+      requestPaletteFocus('/study/writing', projectOf('长文').id);
     });
 
     expect(screen.getByRole('dialog', { name: '《长文》编辑正文' })).toBeInTheDocument();

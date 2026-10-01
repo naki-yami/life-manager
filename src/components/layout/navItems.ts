@@ -18,7 +18,14 @@ import {
 } from 'lucide-react';
 
 export interface NavItem {
+  /** 点击后的落点。合并出的宿主指向默认子页（如 /study/books），侧栏一步到位 */
   path: string;
+  /**
+   * 模块前缀，只有宿主项才有（如 /study）。
+   * 它圈住宿主下的全部子页，决定侧栏高亮与顶栏标题的归属；缺省时等于 path。
+   * 值与 MODULE_TABS 的键是同一个前缀。
+   */
+  host?: string;
   label: string;
   description: string;
   icon: LucideIcon;
@@ -49,11 +56,12 @@ export const NAV_ITEMS: NavItem[] = [
     group: 'main',
   },
   {
-    path: '/books',
-    label: '读书',
-    description: '在读进度、书摘与笔记',
+    path: '/study/books',
+    host: '/study',
+    label: '书房',
+    description: '读书与写作：在读进度、书摘笔记与稿件字数',
     icon: BookOpen,
-    keywords: ['books', 'reading', 'dushu', '阅读'],
+    keywords: ['study', 'shufang', '书房', '读书', '写作', 'reading', 'writing', 'dushu', 'xiezuo'],
     group: 'main',
   },
   {
@@ -64,14 +72,7 @@ export const NAV_ITEMS: NavItem[] = [
     keywords: ['dev', 'code', 'project', 'kaifa', '项目'],
     group: 'main',
   },
-  {
-    path: '/writing',
-    label: '写作',
-    description: '稿件进度与字数统计',
-    icon: PenTool,
-    keywords: ['writing', 'xiezuo', '稿件', '文章'],
-    group: 'main',
-  },
+
   {
     path: '/fitness',
     label: '健身计划',
@@ -184,13 +185,42 @@ export function findModuleTab(pathname: string): ModuleTab | undefined {
   return undefined;
 }
 
-/** 当前路由命中的导航项（仅用于标题等展示，不参与激活态判断） */
-export function findNavItem(pathname: string): NavItem | undefined {
-  return NAV_ITEMS.find((item) => item.path === pathname);
+/** 导航项圈定的路径范围：宿主覆盖它的全部子页，其余就是自己那一页 */
+function navItemScope(item: NavItem): string {
+  return item.host ?? item.path;
 }
 
-/** 侧栏激活态：精确匹配，根路径也要求精确，避免所有页面都点亮首页 */
-export function isNavItemActive(pathname: string, path: string): boolean {
-  if (path === '/') return pathname === '/';
-  return pathname === path || pathname.startsWith(`${path}/`);
+/**
+ * 侧栏与底部 Tab 的激活态。
+ *
+ * 收的是导航项而不是路径字符串 —— 宿主项得按 `host` 匹配，否则停在
+ * `/study/writing` 时「书房」会在侧栏里灭掉。
+ */
+export function isNavItemActive(pathname: string, item: NavItem): boolean {
+  const scope = navItemScope(item);
+  if (scope === '/') return pathname === '/';
+  return pathname === scope || pathname.startsWith(`${scope}/`);
+}
+
+/**
+ * 当前路由归属的导航项，供顶栏标题与读屏播报取名字。
+ *
+ * 按最长前缀取：宿主覆盖自己的全部子页（`/study/books` → 书房），所以嵌套路径
+ * 不会再落空 —— 落空就是标题与播报一起静默降级成「Life Manager / 页面」。
+ */
+export function findNavItem(pathname: string): NavItem | undefined {
+  let best: NavItem | undefined;
+  for (const item of NAV_ITEMS) {
+    if (!isNavItemActive(pathname, item)) continue;
+    if (!best || navItemScope(item).length > navItemScope(best).length) best = item;
+  }
+  return best;
+}
+
+/**
+ * 顶栏标题与读屏播报要念的名字：最深的子页优先（`/study/books` → 「读书」），
+ * 退不到子页再退到导航项。子页清单只有 MODULE_TABS 一份，这里不重复写。
+ */
+export function findLocationLabel(pathname: string): string | undefined {
+  return findModuleTab(pathname)?.label ?? findNavItem(pathname)?.label;
 }

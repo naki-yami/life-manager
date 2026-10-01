@@ -26,7 +26,7 @@ export const BottomTabBar: React.FC<BottomTabBarProps> = ({ onOpenMore, drawerOp
     (item): item is NavItem => item !== undefined,
   );
   /** 当前页面不在 Tab 上，说明入口在抽屉里，把「更多」点亮 */
-  const moreActive = !tabs.some((item) => isNavItemActive(pathname, item.path));
+  const moreActive = !tabs.some((item) => isNavItemActive(pathname, item));
 
   const tabClass = (active: boolean): string =>
     `flex min-w-0 flex-1 flex-col items-center gap-0.5 py-2 text-2xs font-medium transition-colors duration-fast ease-standard focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-line-focus ${
@@ -42,7 +42,7 @@ export const BottomTabBar: React.FC<BottomTabBarProps> = ({ onOpenMore, drawerOp
     >
       {tabs.map((item) => {
         const Icon = item.icon;
-        const active = isNavItemActive(pathname, item.path);
+        const active = isNavItemActive(pathname, item);
         return (
           <button
             key={item.path}

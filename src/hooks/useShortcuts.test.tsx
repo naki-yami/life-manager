@@ -61,6 +61,14 @@ describe('useGlobalShortcuts', () => {
     expect(screen.getByTestId('location')).toHaveTextContent('/tasks');
   });
 
+  it('g 后接 3 进书房：直接落在默认子页', () => {
+    const open = vi.fn();
+    renderHost(open);
+    fireEvent.keyDown(window, { key: 'g' });
+    fireEvent.keyDown(window, { key: '3' });
+    expect(screen.getByTestId('location')).toHaveTextContent('/study/books');
+  });
+
   it('单独按数字不跳转，必须跟在 g 后面', () => {
     const open = vi.fn();
     renderHost(open);

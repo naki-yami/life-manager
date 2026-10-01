@@ -127,7 +127,7 @@ const QUICK_ACTIONS: QuickAction[] = [
   },
   {
     id: 'action:book',
-    path: '/books',
+    path: '/study/books',
     label: '添加书目',
     hint: '打开读书页的新增书籍弹窗',
     icon: BookOpen,
@@ -135,7 +135,7 @@ const QUICK_ACTIONS: QuickAction[] = [
   },
   {
     id: 'action:writing',
-    path: '/writing',
+    path: '/study/writing',
     label: '新建写作项目',
     hint: '打开写作页的新建弹窗',
     icon: PenTool,

@@ -26,7 +26,7 @@ const renderHome = () =>
     <MemoryRouter initialEntries={['/']}>
       <Routes>
         <Route path="/" element={<HomePage />} />
-        <Route path="/books" element={<div>读书页面</div>} />
+        <Route path="/study/books" element={<div>读书页面</div>} />
       </Routes>
     </MemoryRouter>,
   );

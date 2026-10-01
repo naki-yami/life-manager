@@ -160,13 +160,13 @@ describe('buildEntityIndex', () => {
     });
     expect(byId['book:b1']).toMatchObject({
       title: '《置身事内》',
-      path: '/books',
+      path: '/study/books',
       focusable: true,
     });
     expect(byId['book:b1']!.subtitle).toContain('兰小欢');
     // 开发项目有独立路由，直接进详情页
     expect(byId['dev:d1']).toMatchObject({ path: '/dev/d1', focusable: false });
-    expect(byId['writing:w1']).toMatchObject({ path: '/writing', focusable: true });
+    expect(byId['writing:w1']).toMatchObject({ path: '/study/writing', focusable: true });
     expect(byId['writing:w1']!.subtitle).toContain('120 字');
     expect(byId['game:g1']).toMatchObject({ path: '/games', focusable: true });
     expect(byId['game:g1']!.subtitle).toContain('12 小时');

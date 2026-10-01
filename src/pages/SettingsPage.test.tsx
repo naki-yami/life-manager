@@ -157,6 +157,11 @@ describe('SettingsPage', () => {
     expect(screen.getByText('快捷键')).toBeInTheDocument();
     expect(screen.getByText('Ctrl / ⌘ K')).toBeInTheDocument();
     expect(screen.getByText('g 后接 1-9')).toBeInTheDocument();
+    // 页面清单是从 mainNavShortcuts 现算的：导航收敛成「书房」之后这一行自动跟着变，
+    // 不再出现手写的「3 读书」这种对不上的旧文案
+    expect(
+      screen.getByText(/跳转到对应的主页面（1 首页总览、2 今日计划、3 书房/),
+    ).toBeInTheDocument();
   });
 
   it('外观区可以切换主题模式、密度与侧边栏折叠', async () => {
