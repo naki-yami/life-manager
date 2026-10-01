@@ -36,6 +36,7 @@ import { BarChart } from '../components/charts';
 import { useTaskStore } from '../store/taskStore';
 import { useUndoableRemove } from '../hooks/useUndoableRemove';
 import { useMultiSelect } from '../hooks/useMultiSelect';
+import { rowProps, useRovingList } from '../hooks/useRovingList';
 import { dayKeyOf, daysBetween, formatShortDate, todayKey } from '../utils/date';
 import { seriesByWeek } from '../utils/stats';
 import { useEntityList } from '../hooks/useEntityList';
@@ -492,7 +493,15 @@ export const TasksPage: React.FC = () => {
    * 所以筛完之后全选，删的就是筛出来的那批。看板与四象限不出复选框：那两个视图是按位置读的，
    * 每格里塞一个勾选框会打乱它们的阅读节奏，收益不抵复杂度。
    */
-  const selection = useMultiSelect({ ids: visibleTasks.map((task) => task.id) });
+  const visibleTaskIds = useMemo(() => visibleTasks.map((task) => task.id), [visibleTasks]);
+  const selection = useMultiSelect({ ids: visibleTaskIds });
+  /*
+   * 行间键盘导航（U8）：j / k 走行、x 进批量。
+   *
+   * 这一页**不标 data-row-focus**：行里两个模式下的第一个控件都是那个勾选框（完成 / 选中），
+   * 也就是这一行的主操作 —— 标一个会随批量模式消失的「编辑」反而会让 x 之后焦点掉到 body。
+   */
+  const listNav = useRovingList({ ids: visibleTaskIds, onToggleSelect: selection.toggle });
   const [bulkTagModal, setBulkTagModal] = useState(false);
   const [bulkTagDraft, setBulkTagDraft] = useState<string[]>([]);
   const [bulkTagsRemove, setBulkTagsRemove] = useState(false);
@@ -736,13 +745,15 @@ export const TasksPage: React.FC = () => {
             })}
           </div>
         ) : (
-          <ul className="space-y-2">
+          // 列表自己承载行间导航：焦点落在行里时 j / k / x 才生效，离开列表就不管
+          // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions
+          <ul className="space-y-2" onKeyDown={listNav.onKeyDown}>
             {visibleTasks.map((task) => {
               const priority = PRIORITY_BADGE[task.priority];
               const done = task.status === 'completed';
 
               return (
-                <li key={task.id}>
+                <li key={task.id} {...rowProps(task.id)}>
                   <Card className="p-3.5">
                     <div className="flex items-start gap-3">
                       {/*

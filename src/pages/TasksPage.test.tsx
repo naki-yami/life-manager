@@ -648,3 +648,28 @@ describe('TasksPage 批量操作', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 });
+
+describe('TasksPage 行间键盘导航（U8）', () => {
+  it('j / k 在任务之间走，x 就地进批量模式；勾选框换角色也不掉焦点', async () => {
+    const user = userEvent.setup();
+    const store = useTaskStore.getState();
+    store.addTask('写周报', '', 'high', '');
+    store.addTask('回邮件', '', 'low', '');
+    render(<TasksPage />);
+
+    const boxes = screen.getAllByRole('checkbox', { name: /完成|标记/ });
+    expect(boxes).toHaveLength(2);
+
+    // 只聚焦不点击：点勾选框会把任务标记完成，那是另一回事
+    boxes[0]!.focus();
+    await user.keyboard('j');
+    expect(boxes[1]).toHaveFocus();
+
+    // x 之后这一行的勾选框从「完成」换成「选中」，但焦点还在这颗上：
+    // 选中/取消能连着按，不用重新找位置
+    await user.keyboard('x');
+    const selected = screen.getAllByRole('checkbox').find((box) => box === boxes[1]);
+    expect(selected).toBeChecked();
+    expect(boxes[1]).toHaveFocus();
+  });
+});

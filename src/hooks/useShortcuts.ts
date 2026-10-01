@@ -52,6 +52,26 @@ export const isTypingTarget = (target: EventTarget | null): boolean => {
   );
 };
 
+/** 勾选框 / 单选钮这类「按下去有动作，但不吃字符」的输入控件 */
+const NON_TEXT_INPUT_TYPES = new Set(['checkbox', 'radio', 'button', 'submit', 'reset']);
+
+/**
+ * 「正在往输入框里打字」的窄口径。
+ *
+ * `isTypingTarget` 把勾选框、单选钮也算作输入（对全局单键快捷键是对的：焦点在勾选框上时
+ * 按 n，用户多半不是想新建）。列表项的 j / k 不能跟着用宽口径 —— 任务行最自然的「当前行」
+ * 就是那个完成勾选框，宽口径会让 j / k 在最该管用的地方失灵。
+ *
+ * 所以这里只认真正吃字符的控件：文本框、多行框、下拉框、可编辑区。
+ */
+export function isTextEntryTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  if (target.isContentEditable || target.tagName === 'TEXTAREA') return true;
+  if (target.tagName === 'SELECT') return true;
+  if (target.tagName !== 'INPUT') return false;
+  return !NON_TEXT_INPUT_TYPES.has((target as HTMLInputElement).type);
+}
+
 /** g 后接数字跳页面时，两次按键的最大间隔 */
 const G_SEQUENCE_MS = 1200;
 

@@ -620,3 +620,28 @@ describe('BooksPage 批量操作', () => {
     expect(useBookStore.getState().books[0]!.title).toBe('回车添加的书');
   });
 });
+
+describe('BooksPage 行间键盘导航（U8）', () => {
+  it('j / k 在书之间走，x 就地进批量模式 —— 全程不用碰 Tab', async () => {
+    const user = userEvent.setup();
+    useBookStore.getState().addBook('置身事内', '兰小欢', '');
+    useBookStore.getState().addBook('万历十五年', '黄仁宇', '');
+    render(<BooksPage />);
+
+    const notes = screen.getAllByRole('button', { name: /^笔记/ });
+    expect(notes).toHaveLength(2);
+
+    // 只聚焦不点击：点「笔记」会打开笔记面板，焦点会被搬进抽屉
+    notes[0]!.focus();
+    await user.keyboard('j');
+    expect(notes[1]).toHaveFocus();
+
+    await user.keyboard('k');
+    expect(notes[0]).toHaveFocus();
+
+    // x = 选中当前这一行；焦点留在原处，用户接着按 j / x 就能连选
+    await user.keyboard('x');
+    expect(screen.getByRole('checkbox', { name: '选中《置身事内》' })).toBeChecked();
+    expect(notes[0]).toHaveFocus();
+  });
+});

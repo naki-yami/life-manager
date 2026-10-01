@@ -37,6 +37,7 @@ import { ListEmptyState, MasterDetail, PageHeader, Toolbar } from '../components
 import { useBookStore } from '../store/bookStore';
 import { useEntityList } from '../hooks/useEntityList';
 import { useMultiSelect } from '../hooks/useMultiSelect';
+import { ROW_FOCUS_PROP, rowProps, useRovingList } from '../hooks/useRovingList';
 import { useUndoableRemove } from '../hooks/useUndoableRemove';
 import { BarChart } from '../components/charts';
 import { percentOf, seriesByWeek } from '../utils/stats';
@@ -177,7 +178,14 @@ export const BooksPage: React.FC = () => {
   /*
    * 批量操作（F16）。范围是「当前列表里看得见的书」—— 筛过之后全选，动的是筛出来的那批。
    */
-  const selection = useMultiSelect({ ids: shownBooks.map((book) => book.id) });
+  const shownBookIds = useMemo(() => shownBooks.map((book) => book.id), [shownBooks]);
+  const selection = useMultiSelect({ ids: shownBookIds });
+  /*
+   * 行间键盘导航（U8）：j / k 走行、x 进批量。
+   * 没有它的话，键盘用户想够到下面第五本书要按几十次 Tab —— 每一行里都有收藏、标签、
+   * 进度和四个操作按钮。
+   */
+  const listNav = useRovingList({ ids: shownBookIds, onToggleSelect: selection.toggle });
   const [bulkTagModal, setBulkTagModal] = useState(false);
   const [bulkTagDraft, setBulkTagDraft] = useState<string[]>([]);
   const [bulkTagsRemove, setBulkTagsRemove] = useState(false);
@@ -694,9 +702,11 @@ export const BooksPage: React.FC = () => {
             onClearFilters={clearListFilters}
           />
         ) : (
-          <ul className="grid gap-4">
+          // 列表自己承载行间导航：焦点落在行里时 j / k / x 才生效，离开列表就不管
+          // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions
+          <ul className="grid gap-4" onKeyDown={listNav.onKeyDown}>
             {shownBooks.map((book) => (
-              <li key={book.id}>
+              <li key={book.id} {...rowProps(book.id)}>
                 <Card className="p-4">
                   <div className="flex items-start justify-between gap-4">
                     {selection.isActive && (
@@ -864,11 +874,13 @@ export const BooksPage: React.FC = () => {
                         >
                           记阅读
                         </Button>
+                        {/* j / k 落在这一颗上：回车 = 打开这本书的笔记（这一行的主操作） */}
                         <Button
                           size="sm"
                           variant="ghost"
                           icon={<StickyNote size={13} aria-hidden />}
                           onClick={() => openNotes(book.id)}
+                          {...ROW_FOCUS_PROP}
                         >
                           笔记（{book.notes.length}）
                         </Button>

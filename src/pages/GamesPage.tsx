@@ -27,6 +27,7 @@ import { BarChart } from '../components/charts';
 import { useGameStore } from '../store/gameStore';
 import { useEntityList } from '../hooks/useEntityList';
 import { useMultiSelect } from '../hooks/useMultiSelect';
+import { ROW_FOCUS_PROP, rowProps, useRovingList } from '../hooks/useRovingList';
 import { useUndoableRemove } from '../hooks/useUndoableRemove';
 import { normalizeTags } from '../utils/tags';
 import {
@@ -162,7 +163,10 @@ export const GamesPage: React.FC = () => {
   /*
    * 批量操作（F16）。范围是「当前列表里看得见的游戏」—— 筛过之后全选，动的是筛出来的那批。
    */
-  const selection = useMultiSelect({ ids: shownGames.map((game) => game.id) });
+  const shownGameIds = useMemo(() => shownGames.map((game) => game.id), [shownGames]);
+  const selection = useMultiSelect({ ids: shownGameIds });
+  /** 行间键盘导航（U8）：j / k 走行、x 进批量 */
+  const listNav = useRovingList({ ids: shownGameIds, onToggleSelect: selection.toggle });
   const [bulkTagModal, setBulkTagModal] = useState(false);
   const [bulkTagDraft, setBulkTagDraft] = useState<string[]>([]);
   const [bulkTagsRemove, setBulkTagsRemove] = useState(false);
@@ -803,13 +807,15 @@ export const GamesPage: React.FC = () => {
             onClearFilters={clearListFilters}
           />
         ) : (
-          <ul className="grid gap-4 sm:grid-cols-2">
+          // 列表自己承载行间导航：焦点落在行里时 j / k / x 才生效，离开列表就不管
+          // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions
+          <ul className="grid gap-4 sm:grid-cols-2" onKeyDown={listNav.onKeyDown}>
             {shownGames.map((game) => {
               const unlocked = game.achievements.filter(
                 (achievement) => achievement.unlocked,
               ).length;
               return (
-                <li key={game.id}>
+                <li key={game.id} {...rowProps(game.id)}>
                   <Card className="p-4">
                     <div className="flex items-start gap-4">
                       {selection.isActive && (
@@ -943,11 +949,13 @@ export const GamesPage: React.FC = () => {
                           >
                             管理成就
                           </Button>
+                          {/* j / k 落在这一颗上：回车 = 打开这款游戏的笔记 */}
                           <Button
                             size="sm"
                             variant="ghost"
                             icon={<StickyNote size={13} aria-hidden />}
                             onClick={() => openNotes(game)}
+                            {...ROW_FOCUS_PROP}
                           >
                             笔记
                           </Button>

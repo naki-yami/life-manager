@@ -651,3 +651,24 @@ describe('GamesPage 批量操作', () => {
     expect(useGameStore.getState().games).toHaveLength(3);
   });
 });
+
+describe('GamesPage 行间键盘导航（U8）', () => {
+  it('j / k 在游戏之间走，x 就地进批量模式', async () => {
+    const user = userEvent.setup();
+    addGame('星露谷物语');
+    addGame('空洞骑士');
+    render(<GamesPage />);
+
+    const notes = screen.getAllByRole('button', { name: '笔记' });
+    expect(notes).toHaveLength(2);
+
+    // 只聚焦不点击：点「笔记」会打开笔记面板，焦点会被搬进抽屉
+    notes[0]!.focus();
+    await user.keyboard('j');
+    expect(notes[1]).toHaveFocus();
+
+    await user.keyboard('x');
+    expect(screen.getByRole('checkbox', { name: '选中「空洞骑士」' })).toBeChecked();
+    expect(notes[1]).toHaveFocus();
+  });
+});
