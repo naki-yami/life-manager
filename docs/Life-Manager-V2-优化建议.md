@@ -1214,6 +1214,23 @@ F12 一次铺开会同时压上「时间范围 / 每模块独立分析 / 图表�
 
 ---
 
+### V2.1 第二十阶段：主题色可选（U6）+ 弹窗回车提交（U7·第一步）
+
+| 项 | 状态 | 说明 |
+| --- | --- | --- |
+| 主题色预设 | ✅ | teal / green / orange / pink / violet 五套 accent 覆盖块（indigo 默认）：亮块 `[data-accent='x']`、暗块 `[data-accent='x'].dark`（组合器压过 `.dark`）；色值全部过 AA——orange 亮色为此加深到 #b8440c（浅底徽章 4.48 差临门一脚） |
+| 令牌测试 | ✅ | tokens.test 新增 11 例：每套预设 × 亮暗跑「主色参与」的对比组合 + 五令牌覆盖完整性守卫 |
+| 持久化 | ✅ | themeStore 增加 accent（随 `lm:theme` 走，normalize 挡非法值）；useTheme 写 `data-accent`；index.html 首屏内联脚本同步，防换色闪烁 |
+| 设置页 | ✅ | 外观卡新增六宫格色板（aria-pressed + 勾选态） |
+| 弹窗回车提交 | ✅ | 五个新建弹窗（任务/书籍/游戏/项目/写作）body 包 `<form>`；提交按钮放表单树内的 sr-only 节点——多字段表单的隐式提交要求提交按钮在树内，footer 的按钮用 `form=` 关联只覆盖点击路径；footer 按钮去掉 onClick 修掉双提交 |
+| 刻意不做 | ⏸ | 编辑弹窗与其余复杂弹窗（饮食 / 健身的多字段记录）的回车提交归 U8；列表 layout 动画、EmptyState 示例数据仍是零散项 |
+
+**测试**：1342 → **1356**（+11 色板、+2 主题色持久化与回车提交、+1 修日期过期用例时补的动态日期改写）。
+**坑**：`parseColor` 不认 8 位 hex——soft / ring 要写 `rgba()` 而不是 `#RRGGBBAA`；jsdom 的隐式提交
+不认 `form=` 关联的外部按钮，sr-only 树内按钮是标准解法。
+
+---
+
 ### V2.1 真机验证：agent-browser 冒烟（已完成）
 
 用 `agent-browser` 驱动本机 Edge 跑了一遍真实页面（`npm run dev`）的端到端冒烟，重点是 V2.1 新做的存储层、
@@ -1253,11 +1270,10 @@ Edge：在 1280px 的统计页上对「任务完成趋势」「活动热力图�
   （立即 `revokeObjectURL` / 延迟 revoke）各试一次，**同样都失败**，所以这是 CLI 的环境限制，不是
   `downloadBackup()` 的问题。文件名与内容改成在页内截获 blob 验证，均正确。
 
-**顺手记下的两条待办（尚未动手）**
+**顺手记下的两条待办（均已清掉）**
 
-- 新建弹窗没有包 `<form>`，所以在标题框里按回车**不会提交**，键盘用户得 Tab 到「添加」再回车。
-  归入 U7 键盘导航一起做，比单独给每个弹窗打补丁划算。
-- React Router 的 `v7_startTransition` / `v7_relativeSplatPath` 两条 future flag 可以直接开，消掉控制台警告。
+- ~~新建弹窗没有包 `<form>`~~ → 已在「V2.1 第二十阶段」处理（五个新建弹窗支持回车提交）。
+- ~~React Router 两条 future flag~~ → 已在「V2.1 第十一阶段」开启。
 
 ---
 
