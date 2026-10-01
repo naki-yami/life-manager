@@ -57,9 +57,7 @@ export const assert = {
   /** 非空字符串 */
   nonEmpty(value, message) {
     if (typeof value !== 'string' || value.trim() === '') {
-      throw new AssertionError(
-        `${message ?? '期望非空文本'}：实际是 ${JSON.stringify(value)}`,
-      );
+      throw new AssertionError(`${message ?? '期望非空文本'}：实际是 ${JSON.stringify(value)}`);
     }
   },
 
@@ -67,7 +65,9 @@ export const assert = {
   empty(list, message) {
     if (!Array.isArray(list) || list.length !== 0) {
       const sample = Array.isArray(list) ? list.slice(0, 5).join(' | ') : String(list);
-      throw new AssertionError(`${message ?? '期望空数组'}：实际有 ${list?.length} 项（${sample}）`);
+      throw new AssertionError(
+        `${message ?? '期望空数组'}：实际有 ${list?.length} 项（${sample}）`,
+      );
     }
   },
 

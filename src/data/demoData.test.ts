@@ -29,7 +29,6 @@ describe('示例数据', () => {
     games: useGameStore.getState().games,
   });
 
-
   it('空应用时 appIsEmpty 为真，seed 后覆盖各模块且带 demo 前缀', () => {
     expect(appIsEmpty(modules())).toBe(true);
     expect(demoDataExists(modules())).toBe(false);

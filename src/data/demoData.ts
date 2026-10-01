@@ -123,7 +123,10 @@ export function seedDemoData(): void {
     },
   ];
   const taskStore = useTaskStore.getState();
-  taskStore.replaceTasks([...taskStore.tasks.filter((t) => !t.id.startsWith(DEMO_PREFIX)), ...demoTasks]);
+  taskStore.replaceTasks([
+    ...taskStore.tasks.filter((t) => !t.id.startsWith(DEMO_PREFIX)),
+    ...demoTasks,
+  ]);
 
   // ---------- 读书 ----------
   const demoBooks: Book[] = [
@@ -176,7 +179,9 @@ export function seedDemoData(): void {
       status: 'playing',
       hoursPlayed: 12.5,
       progress: 40,
-      achievements: [{ id: 'demo-ach-1', name: '逃出冥界', description: '第一次通关', unlocked: true }],
+      achievements: [
+        { id: 'demo-ach-1', name: '逃出冥界', description: '第一次通关', unlocked: true },
+      ],
       notes: '',
       tags: ['Rogue'],
       rating: 9,
@@ -233,7 +238,17 @@ export function seedDemoData(): void {
       id: 'demo-meal-1',
       date: today,
       type: 'breakfast',
-      items: [{ id: 'demo-food-1', name: '燕麦粥', category: '主食', calories: 320, protein: 12, carbs: 54, fat: 6 }],
+      items: [
+        {
+          id: 'demo-food-1',
+          name: '燕麦粥',
+          category: '主食',
+          calories: 320,
+          protein: 12,
+          carbs: 54,
+          fat: 6,
+        },
+      ],
       totalCalories: 320,
       totalProtein: 12,
       totalCarbs: 54,
@@ -244,7 +259,17 @@ export function seedDemoData(): void {
       id: 'demo-meal-2',
       date: today,
       type: 'lunch',
-      items: [{ id: 'demo-food-2', name: '鸡胸肉饭', category: '蛋白质', calories: 620, protein: 42, carbs: 68, fat: 12 }],
+      items: [
+        {
+          id: 'demo-food-2',
+          name: '鸡胸肉饭',
+          category: '蛋白质',
+          calories: 620,
+          protein: 42,
+          carbs: 68,
+          fat: 12,
+        },
+      ],
       totalCalories: 620,
       totalProtein: 42,
       totalCarbs: 68,

@@ -1,14 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import {
-  Clock,
-  Gamepad2,
-  ListChecks,
-  Plus,
-  Star,
-  StickyNote,
-  Trash2,
-  Trophy,
-} from 'lucide-react';
+import { Clock, Gamepad2, ListChecks, Plus, Star, StickyNote, Trash2, Trophy } from 'lucide-react';
 import {
   Badge,
   Button,
@@ -1011,7 +1002,8 @@ export const GamesPage: React.FC = () => {
               className="w-28"
               value=""
               onChange={(value) => {
-                for (const id of selection.selectedIds) updateGame(id, { platform: value as GamePlatform });
+                for (const id of selection.selectedIds)
+                  updateGame(id, { platform: value as GamePlatform });
               }}
               options={[{ value: '', label: '平台…' }, ...PLATFORM_OPTIONS]}
             />
@@ -1096,7 +1088,7 @@ export const GamesPage: React.FC = () => {
           </>
         }
       >
-                <form
+        <form
           id="game-add-form"
           onSubmit={(event) => {
             event.preventDefault();
@@ -1104,28 +1096,28 @@ export const GamesPage: React.FC = () => {
           }}
         >
           <button type="submit" className="sr-only" tabIndex={-1} aria-hidden="true" />
-<div className="space-y-4">
-          <Input
-            label="游戏名称"
-            value={form.name}
-            onChange={(event) => setForm({ ...form, name: event.target.value })}
-            placeholder="输入游戏名称"
-            required
-          />
-          <Select
-            label="平台"
-            value={form.platform}
-            onChange={(value) => setForm({ ...form, platform: value as GamePlatform })}
-            options={PLATFORM_OPTIONS}
-          />
-          <TagInput
-            label="标签"
-            hint="回车或逗号分隔；标签跨模块通用，可在命令面板里输入 #标签 直接找"
-            value={form.tags}
-            suggestions={tagSuggestions}
-            onChange={(tags) => setForm({ ...form, tags })}
-          />
-        </div>
+          <div className="space-y-4">
+            <Input
+              label="游戏名称"
+              value={form.name}
+              onChange={(event) => setForm({ ...form, name: event.target.value })}
+              placeholder="输入游戏名称"
+              required
+            />
+            <Select
+              label="平台"
+              value={form.platform}
+              onChange={(value) => setForm({ ...form, platform: value as GamePlatform })}
+              options={PLATFORM_OPTIONS}
+            />
+            <TagInput
+              label="标签"
+              hint="回车或逗号分隔；标签跨模块通用，可在命令面板里输入 #标签 直接找"
+              value={form.tags}
+              suggestions={tagSuggestions}
+              onChange={(tags) => setForm({ ...form, tags })}
+            />
+          </div>
         </form>
       </Modal>
 

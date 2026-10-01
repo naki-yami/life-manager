@@ -23,7 +23,10 @@ export function registerKeyboardCases() {
     assert.ok(await session.exists(PANEL), 'Ctrl+K 之后命令面板应当出现');
 
     // 输入一个什么都不会匹配的字符串：应当落到「跳转」组，不该崩
-    await session.fill(`${PANEL} input[role="combobox"], ${PANEL} input`, 'zzzz-不存在的关键词-qqq');
+    await session.fill(
+      `${PANEL} input[role="combobox"], ${PANEL} input`,
+      'zzzz-不存在的关键词-qqq',
+    );
     await delay(400);
 
     assert.empty(session.pageErrors, '面板里输入乱码后出现异常');

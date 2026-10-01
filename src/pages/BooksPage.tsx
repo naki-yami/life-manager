@@ -944,7 +944,7 @@ export const BooksPage: React.FC = () => {
           </>
         }
       >
-                <form
+        <form
           id="book-add-form"
           onSubmit={(event) => {
             event.preventDefault();
@@ -952,34 +952,34 @@ export const BooksPage: React.FC = () => {
           }}
         >
           <button type="submit" className="sr-only" tabIndex={-1} aria-hidden="true" />
-<div className="space-y-4">
-          <Input
-            label="书名"
-            value={form.title}
-            onChange={(event) => setForm({ ...form, title: event.target.value })}
-            placeholder="输入书名"
-            required
-          />
-          <Input
-            label="作者"
-            value={form.author}
-            onChange={(event) => setForm({ ...form, author: event.target.value })}
-            placeholder="输入作者"
-          />
-          <Input
-            label="分类"
-            value={form.category}
-            onChange={(event) => setForm({ ...form, category: event.target.value })}
-            placeholder="如：技术、文学、历史"
-          />
-          <TagInput
-            label="标签"
-            hint="回车或逗号分隔；标签跨模块通用，可在命令面板里输入 #标签 直接找"
-            value={form.tags}
-            suggestions={tagSuggestions}
-            onChange={(tags) => setForm({ ...form, tags })}
-          />
-        </div>
+          <div className="space-y-4">
+            <Input
+              label="书名"
+              value={form.title}
+              onChange={(event) => setForm({ ...form, title: event.target.value })}
+              placeholder="输入书名"
+              required
+            />
+            <Input
+              label="作者"
+              value={form.author}
+              onChange={(event) => setForm({ ...form, author: event.target.value })}
+              placeholder="输入作者"
+            />
+            <Input
+              label="分类"
+              value={form.category}
+              onChange={(event) => setForm({ ...form, category: event.target.value })}
+              placeholder="如：技术、文学、历史"
+            />
+            <TagInput
+              label="标签"
+              hint="回车或逗号分隔；标签跨模块通用，可在命令面板里输入 #标签 直接找"
+              value={form.tags}
+              suggestions={tagSuggestions}
+              onChange={(tags) => setForm({ ...form, tags })}
+            />
+          </div>
         </form>
       </Modal>
 

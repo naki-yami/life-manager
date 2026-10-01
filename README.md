@@ -95,13 +95,13 @@ scripts/       构建产物体积预算、PWA 图标生成等小工具
 
 ## 质量门
 
-| 命令                | 作用                                       |
-| ------------------- | ------------------------------------------ |
-| `npm run typecheck` | TypeScript 全量类型检查（`tsc -b`）        |
-| `npm run lint`      | ESLint（含 `jsx-a11y` 全量规则）           |
-| `npm run test`      | vitest 单元与组件测试（1300+ 条）          |
-| `npm run build`     | 生产构建                                   |
-| `npm run size`      | 首屏 gzip 体积预算（≤ 300KB，构建后跑）    |
+| 命令                | 作用                                        |
+| ------------------- | ------------------------------------------- |
+| `npm run typecheck` | TypeScript 全量类型检查（`tsc -b`）         |
+| `npm run lint`      | ESLint（含 `jsx-a11y` 全量规则）            |
+| `npm run test`      | vitest 单元与组件测试（1300+ 条）           |
+| `npm run build`     | 生产构建                                    |
+| `npm run size`      | 首屏 gzip 体积预算（≤ 300KB，构建后跑）     |
 | `npm run e2e`       | 真浏览器冒烟（21 条，需本机 Edge，不进 CI） |
 
 CI（`.github/workflows/ci.yml`）按 `typecheck → lint → test → build → size` 顺序跑。

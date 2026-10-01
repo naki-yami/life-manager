@@ -266,10 +266,7 @@ describe('SettingsPage', () => {
     const { blobs, anchorClick } = stubDownload();
 
     renderSettings();
-    await userEvent.selectOptions(
-      screen.getByLabelText('选择要导出的模块'),
-      'books',
-    );
+    await userEvent.selectOptions(screen.getByLabelText('选择要导出的模块'), 'books');
     await userEvent.click(formatButton(/CSV/));
 
     expect(anchorClick).toHaveBeenCalledTimes(1);
@@ -571,7 +568,14 @@ describe('SettingsPage', () => {
     render(
       <MemoryRouter initialEntries={['/settings']}>
         <Routes>
-          <Route path="/settings" element={<ToastProvider><SettingsPage /></ToastProvider>} />
+          <Route
+            path="/settings"
+            element={
+              <ToastProvider>
+                <SettingsPage />
+              </ToastProvider>
+            }
+          />
         </Routes>
       </MemoryRouter>,
     );

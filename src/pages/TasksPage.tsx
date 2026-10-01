@@ -762,7 +762,9 @@ export const TasksPage: React.FC = () => {
                         <input
                           type="checkbox"
                           checked={done}
-                          aria-label={done ? `标记「${task.title}」为待办` : `完成「${task.title}」`}
+                          aria-label={
+                            done ? `标记「${task.title}」为待办` : `完成「${task.title}」`
+                          }
                           onChange={() => toggleWithUndo(task)}
                           style={{ accentColor: 'var(--lm-accent)' }}
                           className="mt-1 h-4 w-4 shrink-0 cursor-pointer rounded-sm border-line transition-transform duration-fast active:scale-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-line-focus"
@@ -957,7 +959,9 @@ export const TasksPage: React.FC = () => {
               className="w-32"
               value=""
               onChange={(value) =>
-                applyToSelected({ dueDate: value === 'today' ? todayKey() : value === 'clear' ? '' : value })
+                applyToSelected({
+                  dueDate: value === 'today' ? todayKey() : value === 'clear' ? '' : value,
+                })
               }
               options={[
                 { value: '', label: '截止日…' },

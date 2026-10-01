@@ -527,7 +527,9 @@ describe('TasksPage 批量操作', () => {
     await userEvent.click(screen.getByRole('button', { name: '全选' }));
 
     // 「3」在统计卡里也有，从操作条里读才不歧义
-    expect(within(screen.getByRole('toolbar', { name: '批量操作' })).getByText('3')).toBeInTheDocument();
+    expect(
+      within(screen.getByRole('toolbar', { name: '批量操作' })).getByText('3'),
+    ).toBeInTheDocument();
   });
 
   it('批量改优先级对选中的每一条都生效', async () => {

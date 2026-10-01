@@ -1139,8 +1139,8 @@ export const FitnessPage: React.FC = () => {
             <div className="rounded border border-line-subtle bg-inset p-3">
               <p className="text-xs text-content-tertiary">
                 动作清单将从这条记录里取（
-                {records.find((item) => item.id === planFromRecordId)?.exercises.length ?? 0} 个动作）。
-                重量不会带过来，模板只记动作、组数与次数。
+                {records.find((item) => item.id === planFromRecordId)?.exercises.length ?? 0}{' '}
+                个动作）。 重量不会带过来，模板只记动作、组数与次数。
               </p>
             </div>
           ) : (
@@ -1468,23 +1468,23 @@ export const FitnessPage: React.FC = () => {
             exerciseMuscle === 'all' &&
             exerciseEquipment === 'all' &&
             recentExercises.length > 0 && (
-            <div>
-              <p className="mb-1.5 text-sm font-medium text-content-secondary">最近使用</p>
-              <div className="flex flex-wrap gap-1.5">
-                {recentExercises.map((exercise) => (
-                  <button
-                    key={exercise.name}
-                    type="button"
-                    onClick={() => fillFromExerciseLibrary(exercise)}
-                    className="inline-flex items-center gap-1 rounded-full bg-inset px-3 py-1 text-xs text-content-secondary transition-colors duration-fast ease-standard hover:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-line-focus"
-                  >
-                    {exercise.name}
-                    <span className="text-2xs text-content-tertiary">{exercise.muscleGroup}</span>
-                  </button>
-                ))}
+              <div>
+                <p className="mb-1.5 text-sm font-medium text-content-secondary">最近使用</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {recentExercises.map((exercise) => (
+                    <button
+                      key={exercise.name}
+                      type="button"
+                      onClick={() => fillFromExerciseLibrary(exercise)}
+                      className="inline-flex items-center gap-1 rounded-full bg-inset px-3 py-1 text-xs text-content-secondary transition-colors duration-fast ease-standard hover:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-line-focus"
+                    >
+                      {exercise.name}
+                      <span className="text-2xs text-content-tertiary">{exercise.muscleGroup}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
           <ul className="max-h-64 divide-y divide-line-subtle overflow-y-auto rounded border border-line-subtle">
             {visibleExercises.length === 0 ? (

@@ -4,9 +4,10 @@ import { useMultiSelect } from './useMultiSelect';
 
 const A = ['t1', 't2', 't3', 't4'];
 
-const setup = (ids: readonly string[] = A) => renderHook(({ list }) => useMultiSelect({ ids: list }), {
-  initialProps: { list: ids },
-});
+const setup = (ids: readonly string[] = A) =>
+  renderHook(({ list }) => useMultiSelect({ ids: list }), {
+    initialProps: { list: ids },
+  });
 
 describe('useMultiSelect', () => {
   it('初始没选中，也不在批量模式', () => {

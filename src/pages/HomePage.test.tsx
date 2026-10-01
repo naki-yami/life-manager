@@ -607,5 +607,4 @@ describe('HomePage 目标达成卡片', () => {
     expect(screen.getByText(/1 次 \/ 4 次/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '管理目标' })).toBeInTheDocument();
   });
-
 });

@@ -90,7 +90,6 @@
   --lm-shadow-overlay: 0 24px 64px rgba(17, 24, 39, 0.24);
 }
 
-
 /* 主题色 · teal（亮色）：白字按钮与白底文字都过 AA */
 [data-accent='teal'] {
   --lm-accent: #0b7285;
@@ -234,7 +233,6 @@
   --lm-section-gap: 12px;
   --lm-row-pad-y: 6px;
 }
-
 
 /* 主题色 · teal（暗色）：组合器带 .dark，优先级压过 .dark 本身 */
 [data-accent='teal'].dark {

@@ -15,7 +15,12 @@ beforeEach(() => {
     water: {},
     templates: [],
   });
-  useLibraryStore.setState({ customFoods: [], customExercises: [], recentFoodNames: [], recentExerciseNames: [] });
+  useLibraryStore.setState({
+    customFoods: [],
+    customExercises: [],
+    recentFoodNames: [],
+    recentExerciseNames: [],
+  });
 });
 
 const today = todayKey();
@@ -333,7 +338,9 @@ describe('DietPage', () => {
     render(<DietPage />);
     await userEvent.click(screen.getByRole('button', { name: '把「燕麦」存成模板' }));
 
-    await userEvent.click(screen.getByRole('button', { name: `用模板「早餐 · 燕麦」记录到 ${today}` }));
+    await userEvent.click(
+      screen.getByRole('button', { name: `用模板「早餐 · 燕麦」记录到 ${today}` }),
+    );
     const dialog = screen.getByRole('dialog', { name: '记录饮食' });
     await userEvent.click(within(dialog).getByRole('button', { name: '保存' }));
 

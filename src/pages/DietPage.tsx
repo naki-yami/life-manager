@@ -674,10 +674,7 @@ export const DietPage: React.FC = () => {
       */}
       {view === 'day' && templates.length > 0 && (
         <Card>
-          <CardHeader
-            title="常吃组合"
-            subtitle="点一下就按这一天的日期铺开，之后还能在表单里改"
-          />
+          <CardHeader title="常吃组合" subtitle="点一下就按这一天的日期铺开，之后还能在表单里改" />
           <CardBody>
             <ul className="flex flex-wrap gap-2">
               {templates.map((template) => (
@@ -691,9 +688,7 @@ export const DietPage: React.FC = () => {
                     >
                       {template.name}
                       <span className="ml-1.5 text-2xs text-content-tertiary">
-                        {formatNumber(
-                          template.items.reduce((sum, item) => sum + item.calories, 0),
-                        )}{' '}
+                        {formatNumber(template.items.reduce((sum, item) => sum + item.calories, 0))}{' '}
                         kcal
                       </span>
                     </button>
@@ -994,7 +989,9 @@ export const DietPage: React.FC = () => {
                     className="inline-flex items-center gap-1 rounded-full bg-inset px-3 py-1 text-xs text-content-secondary transition-colors duration-fast ease-standard hover:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-line-focus"
                   >
                     {food.name}
-                    <span className="text-2xs text-content-tertiary tabular">{food.calories} kcal</span>
+                    <span className="text-2xs text-content-tertiary tabular">
+                      {food.calories} kcal
+                    </span>
                   </button>
                 ))}
               </div>

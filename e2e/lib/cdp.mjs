@@ -252,13 +252,27 @@ export async function openSession(endpoint, target) {
     /** 派发一次真实的鼠标左键点击（真事件流，不是 DOM 的 .click()） */
     async mouseClick(x, y) {
       await send('Input.dispatchMouseEvent', {
-        type: 'mouseMoved', x, y, button: 'none', buttons: 0,
+        type: 'mouseMoved',
+        x,
+        y,
+        button: 'none',
+        buttons: 0,
       });
       await send('Input.dispatchMouseEvent', {
-        type: 'mousePressed', x, y, button: 'left', clickCount: 1, buttons: 1,
+        type: 'mousePressed',
+        x,
+        y,
+        button: 'left',
+        clickCount: 1,
+        buttons: 1,
       });
       await send('Input.dispatchMouseEvent', {
-        type: 'mouseReleased', x, y, button: 'left', clickCount: 1, buttons: 0,
+        type: 'mouseReleased',
+        x,
+        y,
+        button: 'left',
+        clickCount: 1,
+        buttons: 0,
       });
     },
 
@@ -289,17 +303,32 @@ export async function openSession(endpoint, target) {
       const stepY = dy / steps;
 
       // 先 hover 一下：让 dnd-kit / 浏览器的 pointer 状态与真鼠标一致
-      await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y, button: 'none', buttons: 0 });
+      await send('Input.dispatchMouseEvent', {
+        type: 'mouseMoved',
+        x,
+        y,
+        button: 'none',
+        buttons: 0,
+      });
       await delay(60);
 
       await send('Input.dispatchMouseEvent', {
-        type: 'mousePressed', x, y, button: 'left', clickCount: 1, buttons: 1,
+        type: 'mousePressed',
+        x,
+        y,
+        button: 'left',
+        clickCount: 1,
+        buttons: 1,
       });
       await delay(beforeMs);
 
       // 头两步小步走，稳稳跨过 4px 的激活阈值
       await send('Input.dispatchMouseEvent', {
-        type: 'mouseMoved', x: x + Math.sign(dx) * 2, y: y + Math.sign(dy) * 6, button: 'left', buttons: 1,
+        type: 'mouseMoved',
+        x: x + Math.sign(dx) * 2,
+        y: y + Math.sign(dy) * 6,
+        button: 'left',
+        buttons: 1,
       });
       await delay(70);
 
@@ -316,7 +345,12 @@ export async function openSession(endpoint, target) {
 
       const to = { x: Math.round(x + dx), y: Math.round(y + dy) };
       await send('Input.dispatchMouseEvent', {
-        type: 'mouseReleased', x: to.x, y: to.y, button: 'left', clickCount: 1, buttons: 0,
+        type: 'mouseReleased',
+        x: to.x,
+        y: to.y,
+        button: 'left',
+        clickCount: 1,
+        buttons: 0,
       });
       await delay(700);
 

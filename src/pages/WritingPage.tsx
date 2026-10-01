@@ -515,7 +515,7 @@ export const WritingPage: React.FC = () => {
           </>
         }
       >
-                <form
+        <form
           id="writing-add-form"
           onSubmit={(event) => {
             event.preventDefault();
@@ -523,28 +523,28 @@ export const WritingPage: React.FC = () => {
           }}
         >
           <button type="submit" className="sr-only" tabIndex={-1} aria-hidden="true" />
-<div className="space-y-4">
-          <Input
-            label="标题"
-            value={form.title}
-            onChange={(event) => setForm({ ...form, title: event.target.value })}
-            placeholder="输入标题"
-            required
-          />
-          <Select
-            label="类型"
-            value={form.type}
-            onChange={(value) => setForm({ ...form, type: value as WritingType })}
-            options={TYPE_OPTIONS}
-          />
-          <TagInput
-            label="标签"
-            hint="回车或逗号分隔；标签跨模块通用，可在命令面板里输入 #标签 直接找"
-            value={form.tags}
-            suggestions={tagSuggestions}
-            onChange={(tags) => setForm({ ...form, tags })}
-          />
-        </div>
+          <div className="space-y-4">
+            <Input
+              label="标题"
+              value={form.title}
+              onChange={(event) => setForm({ ...form, title: event.target.value })}
+              placeholder="输入标题"
+              required
+            />
+            <Select
+              label="类型"
+              value={form.type}
+              onChange={(value) => setForm({ ...form, type: value as WritingType })}
+              options={TYPE_OPTIONS}
+            />
+            <TagInput
+              label="标签"
+              hint="回车或逗号分隔；标签跨模块通用，可在命令面板里输入 #标签 直接找"
+              value={form.tags}
+              suggestions={tagSuggestions}
+              onChange={(tags) => setForm({ ...form, tags })}
+            />
+          </div>
         </form>
       </Modal>
 

@@ -818,7 +818,7 @@ export const DevPage: React.FC = () => {
           </>
         }
       >
-                <form
+        <form
           id="dev-project-add-form"
           onSubmit={(event) => {
             event.preventDefault();
@@ -826,25 +826,25 @@ export const DevPage: React.FC = () => {
           }}
         >
           <button type="submit" className="sr-only" tabIndex={-1} aria-hidden="true" />
-<div className="space-y-4">
-          <Input
-            label="项目名称"
-            value={projectForm.name}
-            onChange={(event) => setProjectForm({ ...projectForm, name: event.target.value })}
-            placeholder="输入项目名称"
-            required
-          />
-          <Input
-            label="描述"
-            value={projectForm.description}
-            onChange={(event) =>
-              setProjectForm({ ...projectForm, description: event.target.value })
-            }
-            placeholder="项目描述（可选）"
-            multiline
-            rows={3}
-          />
-        </div>
+          <div className="space-y-4">
+            <Input
+              label="项目名称"
+              value={projectForm.name}
+              onChange={(event) => setProjectForm({ ...projectForm, name: event.target.value })}
+              placeholder="输入项目名称"
+              required
+            />
+            <Input
+              label="描述"
+              value={projectForm.description}
+              onChange={(event) =>
+                setProjectForm({ ...projectForm, description: event.target.value })
+              }
+              placeholder="项目描述（可选）"
+              multiline
+              rows={3}
+            />
+          </div>
         </form>
       </Modal>
       <Modal

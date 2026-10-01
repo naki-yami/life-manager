@@ -210,96 +210,100 @@ export function registerDataCases() {
     await session.evaluate(`localStorage.removeItem('tasks-storage'); 1`);
   });
 
-  test('v12-migration', 'v11 的旧档升到 v12：补出空的动作清单与餐次模板，旧数据不丢', async (ctx) => {
-    const { session, baseUrl } = ctx;
+  test(
+    'v12-migration',
+    'v11 的旧档升到 v12：补出空的动作清单与餐次模板，旧数据不丢',
+    async (ctx) => {
+      const { session, baseUrl } = ctx;
 
-    /*
-     * 这条盯的是升级路径，不是「能不能读」。
-     *
-     * 真实场景是：用户机器上躺着一份 v11 的 lm:fitness 与 lm:diet，装上 v12 之后
-     * 首次打开。migrateState 只补根级字段，所以 templates / exercises 这两个新字段
-     * 会由 normalize 层在读到记录时补齐。整条链路上任何一环漏了，用户看到的就是
-     * 「模板区不见了」或者「训练计划点开是空的」—— 而旧数据本身必须一个不少。
-     *
-     * 刻意写 v11 而不是当前版本：版本号对得上就不会走 migrate，等于什么都没测。
-     */
-    await session.goto(`${baseUrl}/`, { waitMs: 1500 });
+      /*
+       * 这条盯的是升级路径，不是「能不能读」。
+       *
+       * 真实场景是：用户机器上躺着一份 v11 的 lm:fitness 与 lm:diet，装上 v12 之后
+       * 首次打开。migrateState 只补根级字段，所以 templates / exercises 这两个新字段
+       * 会由 normalize 层在读到记录时补齐。整条链路上任何一环漏了，用户看到的就是
+       * 「模板区不见了」或者「训练计划点开是空的」—— 而旧数据本身必须一个不少。
+       *
+       * 刻意写 v11 而不是当前版本：版本号对得上就不会走 migrate，等于什么都没测。
+       */
+      await session.goto(`${baseUrl}/`, { waitMs: 1500 });
 
-    const fitnessV11 = {
-      state: {
-        plans: [
-          {
-            id: 'p-legacy',
-            name: 'E2E 旧版推日',
-            description: 'v11 建的，当时还没有动作清单',
-            createdAt: '2026-01-01T00:00:00.000Z',
-          },
-        ],
-        records: [],
-      },
-      version: 11,
-    };
-    const dietV11 = {
-      state: {
-        records: [
-          {
-            id: 'd-legacy',
-            date: '2026-01-01',
-            type: 'breakfast',
-            items: [{ id: 'it1', name: 'E2E 旧版燕麦', category: '主食', calories: 300 }],
-            totalCalories: 300,
-            createdAt: '2026-01-01T00:00:00.000Z',
-          },
-        ],
-        goals: { calories: 2000, protein: 80 },
-        water: {},
-      },
-      version: 11,
-    };
+      const fitnessV11 = {
+        state: {
+          plans: [
+            {
+              id: 'p-legacy',
+              name: 'E2E 旧版推日',
+              description: 'v11 建的，当时还没有动作清单',
+              createdAt: '2026-01-01T00:00:00.000Z',
+            },
+          ],
+          records: [],
+        },
+        version: 11,
+      };
+      const dietV11 = {
+        state: {
+          records: [
+            {
+              id: 'd-legacy',
+              date: '2026-01-01',
+              type: 'breakfast',
+              items: [{ id: 'it1', name: 'E2E 旧版燕麦', category: '主食', calories: 300 }],
+              totalCalories: 300,
+              createdAt: '2026-01-01T00:00:00.000Z',
+            },
+          ],
+          goals: { calories: 2000, protein: 80 },
+          water: {},
+        },
+        version: 11,
+      };
 
-    const seeded = await session.evaluate(
-      `(() => {
+      const seeded = await session.evaluate(
+        `(() => {
         localStorage.removeItem('lm:fitness');
         localStorage.removeItem('lm:diet');
         localStorage.setItem('fitness-storage', ${JSON.stringify(JSON.stringify(fitnessV11))});
         localStorage.setItem('diet-storage', ${JSON.stringify(JSON.stringify(dietV11))});
         return true;
       })()`,
-    );
-    assert.ok(seeded, 'v11 旧档的播种');
+      );
+      assert.ok(seeded, 'v11 旧档的播种');
 
-    // 整页刷新让模块重新求值，迁移与 hydrate 才有机会跑
-    await session.goto(`${baseUrl}/fitness`, { waitMs: 2000 });
-    session.clearErrors();
+      // 整页刷新让模块重新求值，迁移与 hydrate 才有机会跑
+      await session.goto(`${baseUrl}/fitness`, { waitMs: 2000 });
+      session.clearErrors();
 
-    const fitness = await readState(session, 'lm:fitness');
-    assert.ok(fitness, 'lm:fitness 应当已落到 IndexedDB');
-    const plan = (fitness.plans ?? []).find((p) => p.id === 'p-legacy');
-    assert.ok(plan, 'v11 的训练计划必须原样保留');
-    assert.equal(plan.name, 'E2E 旧版推日', '计划名不该被改写');
-    assert.equal(plan.description, 'v11 建的，当时还没有动作清单', '说明不该被改写');
-    // v12 新增字段：补成空数组而不是 undefined，否则渲染层 plan.exercises.length 会炸
-    assert.ok(Array.isArray(plan.exercises), '新补的动作清单应当是数组');
-    assert.equal(plan.exercises.length, 0, '旧计划没有动作，补出来就该是空的');
+      const fitness = await readState(session, 'lm:fitness');
+      assert.ok(fitness, 'lm:fitness 应当已落到 IndexedDB');
+      const plan = (fitness.plans ?? []).find((p) => p.id === 'p-legacy');
+      assert.ok(plan, 'v11 的训练计划必须原样保留');
+      assert.equal(plan.name, 'E2E 旧版推日', '计划名不该被改写');
+      assert.equal(plan.description, 'v11 建的，当时还没有动作清单', '说明不该被改写');
+      // v12 新增字段：补成空数组而不是 undefined，否则渲染层 plan.exercises.length 会炸
+      assert.ok(Array.isArray(plan.exercises), '新补的动作清单应当是数组');
+      assert.equal(plan.exercises.length, 0, '旧计划没有动作，补出来就该是空的');
 
-    await session.goto(`${baseUrl}/diet`, { waitMs: 2000 });
-    const diet = await readState(session, 'lm:diet');
-    assert.ok(diet, 'lm:diet 应当已落到 IndexedDB');
-    assert.ok(Array.isArray(diet.templates), '新补的餐次模板应当是数组');
-    assert.equal(diet.templates.length, 0, '旧档没有模板，补出来就该是空的');
-    const record = (diet.records ?? []).find((r) => r.id === 'd-legacy');
-    assert.ok(record, 'v11 的饮食记录必须原样保留');
-    assert.equal(record.totalCalories, 300, '旧记录的热量不该丢');
+      await session.goto(`${baseUrl}/diet`, { waitMs: 2000 });
+      const diet = await readState(session, 'lm:diet');
+      assert.ok(diet, 'lm:diet 应当已落到 IndexedDB');
+      assert.ok(Array.isArray(diet.templates), '新补的餐次模板应当是数组');
+      assert.equal(diet.templates.length, 0, '旧档没有模板，补出来就该是空的');
+      const record = (diet.records ?? []).find((r) => r.id === 'd-legacy');
+      assert.ok(record, 'v11 的饮食记录必须原样保留');
+      assert.equal(record.totalCalories, 300, '旧记录的热量不该丢');
 
-    // 界面上也要能看见旧数据，别只活在库里
-    const bodyText = await session.text('#main-content');
-    assert.includes(bodyText, '早餐', '饮食页应当渲染出旧记录所在的餐次');
-    assert.empty(session.pageErrors, '升级路径上不该有未捕获异常');
+      // 界面上也要能看见旧数据，别只活在库里
+      const bodyText = await session.text('#main-content');
+      assert.includes(bodyText, '早餐', '饮食页应当渲染出旧记录所在的餐次');
+      assert.empty(session.pageErrors, '升级路径上不该有未捕获异常');
 
-    await session.evaluate(
-      `localStorage.removeItem('fitness-storage'); localStorage.removeItem('diet-storage'); 1`,
-    );
-  });
+      await session.evaluate(
+        `localStorage.removeItem('fitness-storage'); localStorage.removeItem('diet-storage'); 1`,
+      );
+    },
+  );
 
   test('meal-template-prefill', '一餐存成模板后，点一下就能按今天预填进表单', async (ctx) => {
     const { session, baseUrl } = ctx;
@@ -630,8 +634,18 @@ export function registerDataCases() {
     // 拖之前 lm:ui 可能还没写过（zustand persist 只在该 store 首次变更时落盘），
     // 这时不算失败 —— 拿默认布局当 before。defaults 与 uiStore 的 DEFAULT_DASHBOARD 对齐。
     const DEFAULT_ORDER = [
-      'stats', 'timeline', 'capture', 'focus', 'todos', 'memos',
-      'habits', 'body', 'journal', 'goals', 'activity', 'modules',
+      'stats',
+      'timeline',
+      'capture',
+      'focus',
+      'todos',
+      'memos',
+      'habits',
+      'body',
+      'journal',
+      'goals',
+      'activity',
+      'modules',
     ];
 
     await session.goto(`${baseUrl}/`, { waitMs: 2000 });
@@ -643,10 +657,7 @@ export function registerDataCases() {
 
     const stored = await readOrder();
     const before = stored ?? DEFAULT_ORDER;
-    assert.ok(
-      before.length > 1,
-      `拖之前应当能确定布局顺序，实际 ${JSON.stringify(before)}`,
-    );
+    assert.ok(before.length > 1, `拖之前应当能确定布局顺序，实际 ${JSON.stringify(before)}`);
     // 默认顺序的首项是 stats（见 uiStore 的 DEFAULT_DASHBOARD）；断言它存在才好说"被拖动了"
     const movingId = before[0];
     const neighbourId = before[1];
@@ -690,11 +701,7 @@ export function registerDataCases() {
     // 刷新后顺序得保持 —— 不然只是内存态变了一下
     await session.goto(`${baseUrl}/`, { waitMs: 2000 });
     const reloaded = await readOrder();
-    assert.equal(
-      (reloaded ?? []).join(','),
-      after.join(','),
-      '刷新后布局顺序应当保持',
-    );
+    assert.equal((reloaded ?? []).join(','), after.join(','), '刷新后布局顺序应当保持');
 
     assert.empty(session.pageErrors, '这条链路里不该有未捕获异常');
   });

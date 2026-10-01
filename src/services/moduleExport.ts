@@ -68,7 +68,8 @@ const num = (value: number | undefined | null, digits = 1): string => {
   return String(Math.round(value * 10 ** digits) / 10 ** digits);
 };
 
-const timestamp = (value: string | undefined): string => (value ? value.slice(0, 16).replace('T', ' ') : '');
+const timestamp = (value: string | undefined): string =>
+  value ? value.slice(0, 16).replace('T', ' ') : '';
 
 // ---------------------------------------------------------------- 登记表
 
@@ -115,12 +116,20 @@ function cellText(value: unknown): string {
   return String(value);
 }
 
-const column = <T>(label: string, value: (item: T) => unknown): ModuleColumn<T> => ({ label, value });
+const column = <T>(label: string, value: (item: T) => unknown): ModuleColumn<T> => ({
+  label,
+  value,
+});
 
 /** 子项摘要，例如动作清单、食物清单、成就个数 */
 const summarize = (items: Array<Record<string, unknown>>, keys: string[]): string =>
   items
-    .map((item) => keys.map((key) => cellText(item[key])).filter(Boolean).join('×'))
+    .map((item) =>
+      keys
+        .map((key) => cellText(item[key]))
+        .filter(Boolean)
+        .join('×'),
+    )
     .filter(Boolean)
     .join('；');
 
@@ -272,7 +281,9 @@ export const MODULE_EXPORTS: { [K in BackupModule]: ModuleExportSpec<RecordOf<K>
     title: (habit) => habit.name,
     columns: [
       column('习惯', (habit) => habit.name),
-      column('类型', (habit) => (habit.kind === 'binary' ? '做到即完成' : `数量（目标 ${habit.target}）`)),
+      column('类型', (habit) =>
+        habit.kind === 'binary' ? '做到即完成' : `数量（目标 ${habit.target}）`,
+      ),
       column('单位', (habit) => habit.unit),
       column('节奏', (habit) => label(habit.schedule.kind)),
       column('打卡天数', (habit) => String(Object.keys(habit.logs).length)),
@@ -424,10 +435,7 @@ export function exportModuleJson(
   );
 }
 
-export function exportModuleCsv(
-  module: BackupModule,
-  records: unknown[],
-): string {
+export function exportModuleCsv(module: BackupModule, records: unknown[]): string {
   const spec = assertTabular<unknown>(module);
   const { headers, rows } = rowsOf(spec, records);
   return toCsv(headers, rows);

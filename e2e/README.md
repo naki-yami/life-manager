@@ -81,7 +81,7 @@ test('my-case', '一句话说清这条用例在验什么', async (ctx) => {
   const h1 = await session.text('h1');
   assert.equal(h1, '习惯养成', '习惯页的标题');
 
-  await shot('habits');   // 可选，落 .runtime/e2e-shots/
+  await shot('habits'); // 可选，落 .runtime/e2e-shots/
 });
 ```
 
@@ -104,12 +104,12 @@ localStorage，然后整页重载。所以「上一条用例留下的数据」�
 ### 常用手法
 
 ```js
-await session.goto(url);                     // 导航 + 等 load + 停顿
-await session.text('h1');                    // 文本（trim 过），找不到返回 null
+await session.goto(url); // 导航 + 等 load + 停顿
+await session.text('h1'); // 文本（trim 过），找不到返回 null
 await session.clickByLabel('完成「写周报」'); // 按 aria-label 点（最稳，不受文案改动影响）
-await session.clickByText('添加任务');        // 按按钮文本点
+await session.clickByText('添加任务'); // 按按钮文本点
 await session.fill('[role="dialog"] input', '值'); // 写受控输入框（自动处理 React 的 setter）
-await session.key('k', { modifiers: 2 });    // Ctrl+K；modifiers 2 = Ctrl, 8 = Meta(⌘)
+await session.key('k', { modifiers: 2 }); // Ctrl+K；modifiers 2 = Ctrl, 8 = Meta(⌘)
 await session.count('[role="dialog"] button');
 await session.exists(PANEL);
 

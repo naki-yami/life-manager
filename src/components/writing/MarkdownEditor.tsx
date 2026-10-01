@@ -100,28 +100,31 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
    */
   const charWidthRef = useRef<{ key: string; width: number }>({ key: '', width: 0 });
 
-  const measureCharWidth = useCallback((textarea: HTMLTextAreaElement, style: CSSStyleDeclaration) => {
-    const key = `${style.fontSize}|${style.fontFamily}`;
-    const cached = charWidthRef.current;
-    if (cached.key === key && cached.width > 0) return cached.width;
+  const measureCharWidth = useCallback(
+    (textarea: HTMLTextAreaElement, style: CSSStyleDeclaration) => {
+      const key = `${style.fontSize}|${style.fontFamily}`;
+      const cached = charWidthRef.current;
+      if (cached.key === key && cached.width > 0) return cached.width;
 
-    const probe = document.createElement('span');
-    probe.textContent = '中'.repeat(20);
-    // 必须 inline-block + 不换行，否则文本会被折行、量出来的宽度就废了
-    probe.style.cssText =
-      'position:absolute;left:-9999px;top:-9999px;white-space:pre;visibility:hidden;';
-    probe.style.fontSize = style.fontSize;
-    probe.style.fontFamily = style.fontFamily;
-    probe.style.fontWeight = style.fontWeight;
-    probe.style.letterSpacing = style.letterSpacing;
-    document.body.appendChild(probe);
-    const width = probe.getBoundingClientRect().width / 20 / 2;
-    probe.remove();
+      const probe = document.createElement('span');
+      probe.textContent = '中'.repeat(20);
+      // 必须 inline-block + 不换行，否则文本会被折行、量出来的宽度就废了
+      probe.style.cssText =
+        'position:absolute;left:-9999px;top:-9999px;white-space:pre;visibility:hidden;';
+      probe.style.fontSize = style.fontSize;
+      probe.style.fontFamily = style.fontFamily;
+      probe.style.fontWeight = style.fontWeight;
+      probe.style.letterSpacing = style.letterSpacing;
+      document.body.appendChild(probe);
+      const width = probe.getBoundingClientRect().width / 20 / 2;
+      probe.remove();
 
-    const resolved = width > 0 ? width : Number.parseFloat(style.fontSize) / 2;
-    charWidthRef.current = { key, width: resolved };
-    return resolved;
-  }, []);
+      const resolved = width > 0 ? width : Number.parseFloat(style.fontSize) / 2;
+      charWidthRef.current = { key, width: resolved };
+      return resolved;
+    },
+    [],
+  );
 
   /** 打字机滚动：把光标所在的那一**视觉行**钉在可视区中线上（长行折行也认） */
   const keepCaretCentered = useCallback((): void => {

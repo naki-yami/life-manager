@@ -270,7 +270,12 @@ describe('版本迁移', () => {
       JSON.stringify({
         state: {
           plans: [
-            { id: 'old-plan', name: '推日', description: '胸肩三头', createdAt: '2026-01-01T00:00:00.000Z' },
+            {
+              id: 'old-plan',
+              name: '推日',
+              description: '胸肩三头',
+              createdAt: '2026-01-01T00:00:00.000Z',
+            },
           ],
           records: [],
         },

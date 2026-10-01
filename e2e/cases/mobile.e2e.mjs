@@ -76,11 +76,7 @@ export function registerMobileCases() {
     await session.goto(`${baseUrl}/`, { waitMs: 1500 });
     session.clearErrors();
 
-    assert.equal(
-      await session.evaluate('window.innerWidth'),
-      NARROW.width,
-      '窄屏视口的实际宽度',
-    );
+    assert.equal(await session.evaluate('window.innerWidth'), NARROW.width, '窄屏视口的实际宽度');
 
     // 底部 Tab 在，且有 5 项（4 个 Tab + 更多）
     assert.ok(await visible(session, TAB), '窄屏下底部 Tab 应当可见');

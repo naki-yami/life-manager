@@ -130,7 +130,14 @@ describe('exportModuleJson', () => {
       description: '个人管理应用',
       status: 'in-progress',
       tasks: [
-        { id: 'dt-1', title: '修缺陷', status: 'done', priority: 'high', type: 'bug', createdAt: '2026-09-01T00:00:00.000Z' },
+        {
+          id: 'dt-1',
+          title: '修缺陷',
+          status: 'done',
+          priority: 'high',
+          type: 'bug',
+          createdAt: '2026-09-01T00:00:00.000Z',
+        },
       ],
       tags: ['工具'],
       hoursSpent: 12,
@@ -138,7 +145,9 @@ describe('exportModuleJson', () => {
       repoUrl: '',
       archived: false,
       milestones: [{ id: 'ms-1', title: 'v1', done: true, createdAt: '2026-09-01T00:00:00.000Z' }],
-      logs: [{ id: 'log-1', date: '2026-09-02', content: '开工', createdAt: '2026-09-02T00:00:00.000Z' }],
+      logs: [
+        { id: 'log-1', date: '2026-09-02', content: '开工', createdAt: '2026-09-02T00:00:00.000Z' },
+      ],
       createdAt: '2026-09-01T00:00:00.000Z',
     };
     const parsed = parseBackup(exportModuleJson('devProjects', [project]));
@@ -159,7 +168,10 @@ describe('exportModuleJson', () => {
 
 describe('exportModuleCsv', () => {
   it('表头来自登记表，一行一条记录', () => {
-    const text = exportModuleCsv('tasks', [task(), task({ id: 'task-2', title: '买菜', tags: [] })]);
+    const text = exportModuleCsv('tasks', [
+      task(),
+      task({ id: 'task-2', title: '买菜', tags: [] }),
+    ]);
     const lines = text.split('\r\n');
     expect(lines[0]).toBe('标题,状态,优先级,截止日,子任务,重复,标签,创建于');
     expect(lines[1]).toContain('写周报,已完成,高,2026-09-28');
@@ -198,7 +210,11 @@ describe('exportModuleMarkdown', () => {
   });
 
   it('条数与导出时间写进抬头', () => {
-    const md = exportModuleMarkdown('books', [book(), book({ id: 'b2' })], new Date('2026-09-30T08:05:00.000Z'));
+    const md = exportModuleMarkdown(
+      'books',
+      [book(), book({ id: 'b2' })],
+      new Date('2026-09-30T08:05:00.000Z'),
+    );
     expect(md).toContain('共 2 条');
     expect(md).toContain('2026-09-30 08:05');
   });

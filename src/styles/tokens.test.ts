@@ -227,9 +227,7 @@ describe('设计令牌 · 主题色预设', () => {
       const foreground = parseColor(accentToken(pair.fg));
       const raw = parseColor(accentToken(pair.bg));
       const background =
-        raw[3] < 1
-          ? composite(raw, parseColor(accentToken(pair.over ?? '--lm-bg-canvas')))
-          : raw;
+        raw[3] < 1 ? composite(raw, parseColor(accentToken(pair.over ?? '--lm-bg-canvas'))) : raw;
       const ratio = contrastRatio(foreground, background);
       return ratio >= 4.5 ? [] : [`${pair.name}：${ratio.toFixed(2)}:1`];
     });

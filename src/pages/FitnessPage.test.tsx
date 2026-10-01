@@ -493,9 +493,9 @@ describe('FitnessPage', () => {
   });
 
   it('计划可以二次编辑，保存是修正而不是新建', async () => {
-    useFitnessStore.getState().addPlan('推日', '胸肩三头', [
-      { name: '杠铃卧推', sets: 5, reps: 5, weight: 0 },
-    ]);
+    useFitnessStore
+      .getState()
+      .addPlan('推日', '胸肩三头', [{ name: '杠铃卧推', sets: 5, reps: 5, weight: 0 }]);
     render(<FitnessPage />);
 
     await userEvent.click(screen.getByRole('button', { name: '编辑计划「推日」' }));
@@ -517,9 +517,7 @@ describe('FitnessPage', () => {
     render(<FitnessPage />);
     await userEvent.click(screen.getByRole('button', { name: /^训练记录/ }));
 
-    await userEvent.click(
-      screen.getByRole('button', { name: `把 ${todayKey()} 的训练存成模板` }),
-    );
+    await userEvent.click(screen.getByRole('button', { name: `把 ${todayKey()} 的训练存成模板` }));
     const dialog = screen.getByRole('dialog', { name: '存成训练日模板' });
 
     expect(within(dialog).getByText(/重量不会带过来/)).toBeInTheDocument();
