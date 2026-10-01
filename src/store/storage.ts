@@ -20,6 +20,7 @@ import {
   subscribeStorageFailure,
   type StorageFailure,
 } from './storageFailure';
+import { markSaved } from './saveStamp';
 
 /**
  * 应用的存储层：zustand 的持久化后端 + 给备份 / 设置页用的读写入口。
@@ -147,6 +148,8 @@ async function writePersisted(name: string, value: unknown): Promise<void> {
     // JSON.stringify 也可能抛（循环引用），一并兜住，别留成未处理的 rejection
     await writeAppValue(name, JSON.stringify(value));
     clearStorageFailure(name);
+    // 侧栏底部那行「已保存 · 刚刚」读的就是它；写失败时不会走到这里
+    markSaved();
   } catch (error) {
     reportStorageFailure(name, error);
   }

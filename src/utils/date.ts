@@ -144,3 +144,42 @@ export function daysInRange(start: string, end: string): string[] {
   if (span <= 0) return [];
   return Array.from({ length: span }, (_, offset) => addDays(start, offset));
 }
+
+/** 「星期四」。首页页头那行小字要用，和 `formatLongDate` 里的星期保持同一套写法 */
+export function weekdayName(date: Date = new Date()): string {
+  return date.toLocaleDateString('zh-CN', { weekday: 'long' });
+}
+
+/**
+ * ISO 周序号，例如 2026-10-01 → 40。
+ *
+ * 用 ISO 8601 的定义而不是「今年的第几个自然周」：一周从周一算起，
+ * 且第 1 周是**含 1 月 4 日**的那一周 —— 否则跨年那几天会算成第 0 周或第 53 周，
+ * 「第 40 周」这种页头小字会在元旦前后跳一下。
+ */
+export function isoWeekNumber(date: Date = new Date()): number {
+  // 归到当天零点再算，避免时分秒把跨日边界推歪
+  const cursor = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  // 先把游标挪到本周周四：ISO 里「这一周属于哪一年」由它落在哪一年决定
+  cursor.setDate(cursor.getDate() - ((cursor.getDay() + 6) % 7) + 3);
+
+  const firstThursday = new Date(cursor.getFullYear(), 0, 4);
+  firstThursday.setDate(firstThursday.getDate() - ((firstThursday.getDay() + 6) % 7) + 3);
+
+  return 1 + Math.round((cursor.getTime() - firstThursday.getTime()) / (7 * 86_400_000));
+}
+
+/**
+ * 「刚刚 / 3 分钟前 / 09:12」。
+ *
+ * 只服务「最近一次保存」这种一行小字：一小时以内说相对时间（让人确认刚才那次改动
+ * 确实落盘了），超过一小时直接给钟点 —— 「5 小时前」还得自己换算，不如直接看时刻。
+ */
+export function relativeTimeLabel(at: number, now: number = Date.now()): string {
+  const seconds = Math.max(0, Math.round((now - at) / 1000));
+  if (seconds < 45) return '刚刚';
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return `${minutes} 分钟前`;
+  const date = new Date(at);
+  return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+}

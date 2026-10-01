@@ -9,8 +9,17 @@ import { CommandPaletteProvider } from './CommandPalette';
 import { useCommandPalette } from './commandPaletteContext';
 import { useTheme } from '../../hooks/useTheme';
 import { useDensity } from '../../hooks/useDensity';
+import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { useGlobalShortcuts } from '../../hooks/useShortcuts';
 import { findLocationLabel } from './navItems';
+
+/**
+ * 顶栏与侧栏的分界点，和 Tailwind 的 `lg:`（1024px）保持同一个数。
+ *
+ * 两者必须一致：侧栏是靠 `lg:flex` 显示的 CSS 断点，顶栏却是靠这个 JS 查询决定要不要
+ * 渲染 —— 差 1px 就会出现「侧栏在、顶栏也在」的双份导航，或者反过来两样都没有。
+ */
+export const DESKTOP_QUERY = '(min-width: 1024px)';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -59,6 +68,7 @@ const ShortcutBinder: React.FC = () => {
  */
 export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const [navOpen, setNavOpen] = useState(false);
+  const isDesktop = useMediaQuery(DESKTOP_QUERY);
 
   useTheme();
   useDensity();
@@ -74,7 +84,8 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           跳到主内容
         </a>
 
-        <Header onOpenNav={() => setNavOpen(true)} />
+        {/* 桌面端没有顶栏：品牌与那几颗开关都在侧栏里，页面直接从标题区开始 */}
+        {!isDesktop && <Header onOpenNav={() => setNavOpen(true)} />}
 
         <div className="flex min-h-0 flex-1">
           <Sidebar />

@@ -9,7 +9,10 @@ import {
   formatNumber,
   formatShortDate,
   greeting,
+  isoWeekNumber,
+  relativeTimeLabel,
   todayKey,
+  weekdayName,
 } from './date';
 
 describe('date utils', () => {
@@ -113,5 +116,54 @@ describe('greeting', () => {
     expect(greeting(13)).toBe('中午好');
     expect(greeting(16)).toBe('下午好');
     expect(greeting(21)).toBe('晚上好');
+  });
+});
+
+describe('weekdayName', () => {
+  it('用中文念星期，和 formatLongDate 里那截保持一致', () => {
+    expect(weekdayName(new Date(2026, 9, 1))).toBe('星期四');
+    expect(weekdayName(new Date(2026, 9, 4))).toBe('星期日');
+  });
+});
+
+describe('isoWeekNumber', () => {
+  it('按 ISO 8601 算周序号', () => {
+    expect(isoWeekNumber(new Date(2026, 9, 1))).toBe(40);
+    expect(isoWeekNumber(new Date(2026, 0, 1))).toBe(1);
+  });
+
+  it('跨年那几天归到含 1 月 4 日的那一周，不会冒出第 0 周', () => {
+    // 2025-12-29 是周一，属于 2026 年的第 1 周
+    expect(isoWeekNumber(new Date(2025, 11, 29))).toBe(1);
+    // 2027-01-01 是周五，仍算 2026 年的第 53 周
+    expect(isoWeekNumber(new Date(2027, 0, 1))).toBe(53);
+  });
+
+  it('时分秒不参与计算：同一天不同时刻结果一样', () => {
+    expect(isoWeekNumber(new Date(2026, 9, 1, 0, 0))).toBe(
+      isoWeekNumber(new Date(2026, 9, 1, 23, 59)),
+    );
+  });
+});
+
+describe('relativeTimeLabel', () => {
+  const at = new Date(2026, 9, 1, 9, 12, 0).getTime();
+
+  it('一分钟以内说「刚刚」', () => {
+    expect(relativeTimeLabel(at, at)).toBe('刚刚');
+    expect(relativeTimeLabel(at, at + 30_000)).toBe('刚刚');
+  });
+
+  it('一小时以内给分钟数', () => {
+    expect(relativeTimeLabel(at, at + 3 * 60_000)).toBe('3 分钟前');
+    expect(relativeTimeLabel(at, at + 59 * 60_000)).toBe('59 分钟前');
+  });
+
+  it('超过一小时直接给钟点 —— 「5 小时前」还得自己换算', () => {
+    expect(relativeTimeLabel(at, at + 5 * 3_600_000)).toBe('09:12');
+  });
+
+  it('时钟回拨导致的负数不会渲染成「-1 分钟前」', () => {
+    expect(relativeTimeLabel(at, at - 10_000)).toBe('刚刚');
   });
 });

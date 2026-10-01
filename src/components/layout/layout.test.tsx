@@ -17,6 +17,9 @@ import {
   type NavItem,
 } from './navItems';
 import { useUiStore } from '../../store/uiStore';
+import { markSaved, resetSaveStamp } from '../../store/saveStamp';
+import { mockMediaQueries } from '../../test/matchMedia';
+import { DESKTOP_QUERY } from './Layout';
 import { Header } from './Header';
 import { CommandPaletteProvider } from './CommandPalette';
 import { ToastProvider } from '../ui';
@@ -31,6 +34,8 @@ beforeEach(() => {
   useUiStore.setState({ sidebarCollapsed: false, density: 'comfortable' });
   document.documentElement.classList.remove('dark');
   document.documentElement.removeAttribute('data-density');
+  // 「最近一次保存」是模块级单例，不清就会从这个文件的上一条用例漏过来
+  resetSaveStamp();
 });
 
 /** 按落点取导航项；取不到就当场炸，省掉一串非空断言 */
@@ -322,13 +327,19 @@ describe('NavList', () => {
   });
 });
 
+/** 侧栏自带「搜索或跳转」，所以必须和 Layout 里一样套上 Provider */
+const renderSidebar = () =>
+  render(
+    <MemoryRouter initialEntries={['/']}>
+      <CommandPaletteProvider>
+        <Sidebar />
+      </CommandPaletteProvider>
+    </MemoryRouter>,
+  );
+
 describe('Sidebar 折叠', () => {
   it('切换按钮会改写 store 并反映到 data-collapsed', async () => {
-    render(
-      <MemoryRouter initialEntries={['/']}>
-        <Sidebar />
-      </MemoryRouter>,
-    );
+    renderSidebar();
 
     expect(screen.getByTestId('sidebar')).toHaveAttribute('data-collapsed', 'false');
 
@@ -336,6 +347,70 @@ describe('Sidebar 折叠', () => {
 
     expect(useUiStore.getState().sidebarCollapsed).toBe(true);
     expect(screen.getByTestId('sidebar')).toHaveAttribute('data-collapsed', 'true');
+  });
+
+  it('收起后只留一个展开按钮，不再有第二处「收起侧栏」', () => {
+    useUiStore.setState({ sidebarCollapsed: true });
+    renderSidebar();
+
+    expect(screen.getByRole('button', { name: '展开侧栏' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '收起侧栏' })).not.toBeInTheDocument();
+  });
+});
+
+/** 让 persist 那次 `void writePersisted(...)` 的微任务先跑完 */
+const settleStorageWrites = (): Promise<void> =>
+  new Promise((resolve) => {
+    setTimeout(resolve, 0);
+  });
+
+describe('侧栏底部保存状态', () => {
+  it('本次会话还没写过时明说「本次还没有改动」，不含糊地说已保存', async () => {
+    // 上面 beforeEach 给 store 赋值会顺手触发一次异步落盘，先等那个微任务跑完再清零 ——
+    // 否则测到的是它留下的时间戳，而不是这条用例想验的空态
+    await settleStorageWrites();
+    resetSaveStamp();
+
+    renderSidebar();
+
+    expect(screen.getByText('本次还没有改动')).toBeInTheDocument();
+  });
+
+  it('写完一次后显示「已保存 · 刚刚」', () => {
+    markSaved();
+    renderSidebar();
+    expect(screen.getByText('已保存 · 刚刚')).toBeInTheDocument();
+  });
+
+  it('保存状态不是 live region —— 它每半分钟重算一次相对时间，会没完没了地打断读屏', () => {
+    markSaved();
+    renderSidebar();
+    expect(screen.getByText('已保存 · 刚刚')).not.toHaveAttribute('role', 'status');
+  });
+});
+
+describe('桌面端外壳', () => {
+  it('宽屏不再渲染顶栏：品牌、搜索与三颗开关都收进侧栏', () => {
+    mockMediaQueries({ [DESKTOP_QUERY]: true });
+    renderLayout('/tasks');
+
+    // 顶栏整个不渲染，页面从标题区开始 —— 这是这一版外壳最显眼的一处改动
+    expect(screen.queryByRole('banner')).not.toBeInTheDocument();
+
+    const sidebar = screen.getByTestId('sidebar');
+    expect(within(sidebar).getByText('Life Manager')).toBeInTheDocument();
+    expect(within(sidebar).getByText('本地 · 数据只在这台电脑')).toBeInTheDocument();
+    expect(
+      within(sidebar).getByRole('button', { name: '搜索或跳转（快捷键 ⌘K）' }),
+    ).toBeInTheDocument();
+    expect(within(sidebar).getByRole('button', { name: '保存到本地' })).toBeInTheDocument();
+    expect(within(sidebar).getByRole('button', { name: /^密度：/ })).toBeInTheDocument();
+    expect(within(sidebar).getByRole('button', { name: /^主题：/ })).toBeInTheDocument();
+  });
+
+  it('窄屏反过来：顶栏在，侧栏交给 CSS 让位', () => {
+    renderLayout('/tasks');
+    expect(within(screen.getByRole('banner')).getByText('今日计划')).toBeInTheDocument();
   });
 });
 
