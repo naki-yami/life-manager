@@ -21,6 +21,29 @@ describe('Sparkline', () => {
     expect(container.querySelector('polyline')?.getAttribute('class')).toContain('stroke-danger');
     expect(container.querySelector('polygon')?.getAttribute('class')).toContain('fill-danger');
   });
+
+  it('折线四个方向都留白，不贴边被裁', () => {
+    const { container } = render(<Sparkline data={[0, 10, 4]} label="每日趋势" />);
+
+    const pairs = (container.querySelector('polyline')?.getAttribute('points') ?? '')
+      .split(' ')
+      .map((pair) => pair.split(',').map(Number) as [number, number]);
+
+    expect(pairs).toHaveLength(3);
+    expect(Math.min(...pairs.map(([x]) => x))).toBeGreaterThan(0);
+    expect(Math.max(...pairs.map(([x]) => x))).toBeLessThan(100);
+    expect(Math.min(...pairs.map(([, y]) => y))).toBeGreaterThan(0);
+    expect(Math.max(...pairs.map(([, y]) => y))).toBeLessThan(100);
+  });
+
+  it('末端点一个圆点，落在最后一个点的位置上', () => {
+    const { container } = render(<Sparkline data={[0, 10, 4]} label="每日趋势" />);
+
+    // 最后一个点是 4（区间 0..10 里的 40%），归位后落在纵向下沿往上 58% 处
+    const dot = container.querySelector<HTMLElement>('span[aria-hidden]');
+    expect(dot?.style.left).toBe('98%');
+    expect(dot?.style.top).toBe('58%');
+  });
 });
 
 describe('BarChart', () => {
