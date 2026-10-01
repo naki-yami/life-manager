@@ -27,6 +27,7 @@ const renderHome = () =>
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/study/books" element={<div>读书页面</div>} />
+        <Route path="/growth/journal" element={<div>日记页面</div>} />
       </Routes>
     </MemoryRouter>,
   );
@@ -177,6 +178,37 @@ describe('HomePage', () => {
     );
   });
 
+  it('今天卡每行右侧各自交代时间：今天到期 / 已逾期 / 无截止', () => {
+    const store = useTaskStore.getState();
+    store.addTask('今天到期的事', '', 'low', todayKey());
+    store.addTask('拖了很久的事', '', 'medium', '2026-09-01');
+    store.addTask('没截止的事', '', 'low', '');
+
+    renderHome();
+
+    // 逾期那件被挑成「先做这件」，其余两件排在下面的列表里
+    expect(screen.getByText(/已逾期 \d+ 天/)).toBeInTheDocument();
+    expect(screen.getByText('今天到期')).toBeInTheDocument();
+    expect(screen.getByText('无截止')).toBeInTheDocument();
+  });
+
+  it('排了时间盒的那一行摆出「今天 HH:mm · 已排」，优先于截止日期', () => {
+    useTaskStore.getState().addTask('整理复盘', '', 'low', '');
+    const id = useTaskStore.getState().tasks[0]!.id;
+    useTaskStore.getState().setTimebox(id, { date: todayKey(), start: '09:00', minutes: 30 });
+
+    renderHome();
+
+    expect(screen.getByText('今天 09:00 · 已排')).toBeInTheDocument();
+  });
+
+  it('快速加任务那一行挂着一个 Enter 提示', () => {
+    renderHome();
+
+    const card = widgetEl('today');
+    expect(within(card).getByText('Enter')).toBeInTheDocument();
+  });
+
   it('快速添加任务支持 !优先级 与 @日期 语法', async () => {
     renderHome();
 
@@ -254,6 +286,32 @@ describe('HomePage', () => {
     expect(useTaskStore.getState().memos).toHaveLength(0);
   });
 
+  it('备忘卡是列表在前、输入框在后，输入框尾巴上挂一个 Enter 提示', () => {
+    useTaskStore.getState().addMemo('明天问一下体检要不要空腹');
+
+    renderHome();
+
+    const card = widgetEl('memos');
+    const list = within(card).getByRole('list');
+    const input = within(card).getByRole('textbox', { name: '备忘内容' });
+
+    // 样稿里输入框在列表下面，不在上面
+    expect(list.compareDocumentPosition(input) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(within(card).getByText('Enter')).toBeInTheDocument();
+  });
+
+  it('空内容提示出现时把 Enter 胶囊收起来，免得它压在红字上', async () => {
+    renderHome();
+
+    const card = widgetEl('memos');
+    expect(within(card).getByText('Enter')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: '保存备忘' }));
+
+    expect(screen.getByText('先写点什么再保存')).toBeInTheDocument();
+    expect(within(card).queryByText('Enter')).not.toBeInTheDocument();
+  });
+
   it('模块概览展示各模块统计并支持跳转', async () => {
     useBookStore.getState().addBook('深入理解计算机系统', 'Randal', '技术');
     useBookStore.getState().updateBookStatus(useBookStore.getState().books[0]!.id, 'reading');
@@ -271,6 +329,12 @@ describe('HomePage', () => {
     await userEvent.click(screen.getByText('读书'));
     expect(screen.getByText('读书页面')).toBeInTheDocument();
   });
+
+  it('模块概览标题下面写清楚点一下能跳', () => {
+    renderHome();
+
+    expect(screen.getByText('点一下进对应模块')).toBeInTheDocument();
+  });
   it('没有活动数据时不渲染热力图卡片', () => {
     renderHome();
 
@@ -278,7 +342,7 @@ describe('HomePage', () => {
     expect(screen.queryByText('近 30 天活动')).not.toBeInTheDocument();
   });
 
-  it('有活动时展示近 30 天热力图与环比', () => {
+  it('有活动时展示近 30 天热力图与连续天数', () => {
     useTaskStore.getState().addTask('写周报', '', 'high', '');
     useTaskStore.getState().toggleTaskStatus(useTaskStore.getState().tasks[0]!.id);
     useDietStore
@@ -292,11 +356,12 @@ describe('HomePage', () => {
         name: `近 30 天活动热力图：30 天里有 1 天有记录，合计 2，最多的一天 2（${formatShortDate(todayKey())}）`,
       }),
     ).toBeInTheDocument();
-    expect(screen.getByText('近 7 天 2 次，上一周 0 次')).toBeInTheDocument();
-    expect(screen.getByText(/环比/, { selector: 'span' }).textContent).toContain('+100%');
+    expect(screen.getByText('完成任务 / 训练 / 饮食 / 写日记都算一次')).toBeInTheDocument();
+    // 今天有活动、昨天没有 → 连续 1 天
+    expect(screen.getByText('连续 1 天')).toBeInTheDocument();
   });
 
-  it('热力图卡右侧补上合计 / 近 7 天 / 有记录的天数 / 日均', () => {
+  it('热力图卡右侧补上合计 / 近 7 天 / 最长连续 / 有记录的天数', () => {
     useTaskStore.getState().addTask('写周报', '', 'high', '');
     useTaskStore.getState().toggleTaskStatus(useTaskStore.getState().tasks[0]!.id);
     useDietStore
@@ -309,8 +374,8 @@ describe('HomePage', () => {
 
     expect(metric('30 天合计')).toBe('2 次');
     expect(metric('近 7 天')).toBe('2 次');
+    expect(metric('最长连续')).toBe('1 天');
     expect(metric('有记录的天数')).toBe('1 / 30');
-    expect(metric('日均')).toBe('0 次');
   });
 
   it('写一篇日记也算一天的活动，热力图跟着亮起来', () => {
@@ -325,14 +390,34 @@ describe('HomePage', () => {
     ).toBeInTheDocument();
   });
 
-  it('今日心情卡读今天那一条，并带上连续记录天数', () => {
+  it('今日心情卡读今天那一条，把对应那一档点亮，并带上连续记录天数', () => {
     useJournalStore.getState().saveEntry(todayKey(), { mood: 4, tags: [], text: '今天过得不错' });
 
     renderHome();
 
-    expect(screen.getByText('4（不错）')).toBeInTheDocument();
+    expect(screen.getByText('今天已记')).toBeInTheDocument();
+    // 4 档是「不错」，只有它被点亮
+    expect(screen.getByRole('button', { name: '记今天的心情：不错' })).toHaveAttribute(
+      'aria-current',
+      'true',
+    );
+    expect(screen.getByRole('button', { name: '记今天的心情：很好' })).not.toHaveAttribute(
+      'aria-current',
+    );
     expect(screen.getByText('今天过得不错')).toBeInTheDocument();
-    expect(screen.getByText('已连续记录 1 天')).toBeInTheDocument();
+    expect(screen.getByText(/已连续记录 1 天/)).toBeInTheDocument();
+  });
+
+  it('今日心情卡摆出五个情绪档，点一下去日记页', async () => {
+    renderHome();
+
+    for (const label of ['很糟', '不佳', '一般', '不错', '很好']) {
+      expect(screen.getByRole('button', { name: `记今天的心情：${label}` })).toBeInTheDocument();
+    }
+
+    await userEvent.click(screen.getByRole('button', { name: '记今天的心情：很好' }));
+
+    expect(screen.getByText('日记页面')).toBeInTheDocument();
   });
 
   it('今天还没写时，今日心情卡给一句引导而不是空白', () => {
@@ -340,9 +425,10 @@ describe('HomePage', () => {
 
     expect(screen.getByText('今天还没写')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '写今天的日记' })).toBeInTheDocument();
+    expect(screen.getByText(/已连续记录 0 天/)).toBeInTheDocument();
   });
 
-  it('近 7 天完成卡片带环比与迷你趋势，备忘数量挪到列表标题', () => {
+  it('近 7 天完成卡片带环比，备忘数量挪到列表标题', () => {
     useTaskStore.getState().addTask('写周报', '', 'high', '');
     useTaskStore.getState().toggleTaskStatus(useTaskStore.getState().tasks[0]!.id);
 
@@ -352,9 +438,8 @@ describe('HomePage', () => {
     expect(statValue('近 7 天完成')).toBe('1');
     expect(within(card).getByText('+100%')).toBeInTheDocument();
     expect(within(card).getByText('较上一周')).toBeInTheDocument();
-    expect(
-      within(card).getByRole('img', { name: '近 14 天每日完成任务数趋势' }),
-    ).toBeInTheDocument();
+    // 概览统计条里的迷你折线已经撤掉 —— 那是当初自己加的，样稿第 4 格没有
+    expect(within(card).queryByRole('img')).not.toBeInTheDocument();
 
     expect(screen.queryByText('备忘条')).not.toBeInTheDocument();
     expect(screen.getByText('0 条 · 回车即可保存')).toBeInTheDocument();

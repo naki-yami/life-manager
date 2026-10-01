@@ -6,6 +6,7 @@ import {
   Code2,
   Dumbbell,
   Gamepad2,
+  Heart,
   Home,
   LayoutGrid,
   NotebookPen,
@@ -78,7 +79,7 @@ export const NAV_ITEMS: NavItem[] = [
     host: '/health',
     label: '健康',
     description: '健身与饮食：训练记录、身体指标与三餐热量',
-    icon: Dumbbell,
+    icon: Heart,
     // 合并前「健身计划」那一组词（训练 / 体重 / 体脂…）留在宿主上：健身是默认子页，
     // 落点和宿主一致，搜「健身」回车就直接进健身页。饮食那组词归 /health/diet 子页
     // （见 MODULE_TABS）—— 两组词要是都堆在这里，搜「饮食」回车会落在健身页。

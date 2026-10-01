@@ -4,9 +4,9 @@ import {
   BookOpen,
   CheckCircle2,
   Code2,
-  Dumbbell,
   Flame,
   Gamepad2,
+  Heart,
   LayoutDashboard,
   ListPlus,
   ListTodo,
@@ -17,7 +17,6 @@ import {
   Trash2,
   TrendingUp,
   UtensilsCrossed,
-  Zap,
   type LucideIcon,
 } from 'lucide-react';
 import {
@@ -29,6 +28,7 @@ import {
   CheckboxRow,
   IconButton,
   Input,
+  Kbd,
   StatStrip,
 } from '../components/ui';
 import { MetaSeparator, PageHeader } from '../components/layout';
@@ -62,16 +62,16 @@ import {
 } from '../utils/date';
 import {
   activeDays,
-  averageOf,
   changeRate,
   currentStreak,
+  longestStreak,
   seriesByDay,
   splitWindow,
   sumOf,
   sumSeries,
 } from '../utils/stats';
 import { habitAmountOn, habitTarget, pendingHabits, scheduleLabel } from '../utils/habits';
-import { clampMood, formatMood, journalEntryOn, moodTone } from '../utils/journal';
+import { MOOD_LEVELS, clampMood, journalEntryOn, moodLabel } from '../utils/journal';
 import {
   bodyFatOf,
   bodyPoints,
@@ -86,7 +86,7 @@ import { focusSummary } from '../utils/focus';
 import { parseQuickTask } from '../utils/quickParse';
 import { goalProgress, sortGoals, summarizeGoals } from '../utils/goals';
 import type { MetricSnapshot } from '../utils/metrics';
-import type { Priority, Task } from '../types';
+import type { MoodLevel, Priority, Task } from '../types';
 
 const PRIORITY_ORDER: Record<Priority, number> = { high: 0, medium: 1, low: 2 };
 
@@ -126,6 +126,35 @@ const PRIORITY_BADGE: Record<Priority, { tone: 'danger' | 'warning' | 'default';
     medium: { tone: 'warning', label: '中等' },
     low: { tone: 'default', label: '较低' },
   };
+
+/** 五档心情各自的表情；键与 `MOOD_LEVELS` 对齐（1 最糟 → 5 最好）。0 是「没记」，不画 */
+const MOOD_FACES: Record<MoodLevel, string> = {
+  0: '',
+  1: '😞',
+  2: '😐',
+  3: '🙂',
+  4: '😄',
+  5: '🤩',
+};
+
+/**
+ * 「今天」卡里每行右边那截时间说明。
+ *
+ * 时间盒排在截止日期前面 —— 它回答「我打算什么时候做」，比「最晚什么时候做完」更具体。
+ * 两者都没有时明写「无截止」：留空会让人以为是没渲染出来。
+ * `scheduled` 为真表示这条该当胶囊画（「已排」是个状态），其余的当行小字。
+ */
+const whenHintOf = (task: Task, today: string): { text: string; scheduled: boolean } => {
+  if (task.timebox && task.timebox.date === today) {
+    return { text: `今天 ${task.timebox.start} · 已排`, scheduled: true };
+  }
+  if (!task.dueDate) return { text: '无截止', scheduled: false };
+  if (task.dueDate === today) return { text: '今天到期', scheduled: false };
+  if (task.dueDate < today) {
+    return { text: `已逾期 ${daysBetween(task.dueDate, today) ?? 1} 天`, scheduled: false };
+  }
+  return { text: task.dueDate, scheduled: false };
+};
 
 interface ModuleCard {
   icon: LucideIcon;
@@ -226,7 +255,6 @@ export const HomePage: React.FC = () => {
 
   const activityTotal = sumOf(activitySeries.map((point) => point.value));
   const weekActivity = splitWindow(activitySeries.slice(-14));
-  const activityChange = changeRate(weekActivity.current, weekActivity.previous);
   const weekCompletion = splitWindow(completionSeries);
   const completionChange = changeRate(weekCompletion.current, weekCompletion.previous);
 
@@ -321,7 +349,7 @@ export const HomePage: React.FC = () => {
         path: '/study/writing',
       },
       {
-        icon: Dumbbell,
+        icon: Heart,
         label: '健身',
         stat: `累计 ${workoutRecords.length} 次`,
         detail:
@@ -413,16 +441,6 @@ export const HomePage: React.FC = () => {
               tone: 'success',
               icon: <TrendingUp size={16} aria-hidden />,
               trend: { value: completionChange, label: '较上一周' },
-              hint: (
-                <span className="min-w-0 flex-1">
-                  <Sparkline
-                    data={completionSeries.map((point) => point.value)}
-                    label="近 14 天每日完成任务数趋势"
-                    tone="success"
-                    height={24}
-                  />
-                </span>
-              ),
             },
           ]}
         />
@@ -448,22 +466,15 @@ export const HomePage: React.FC = () => {
             {focusTask && (
               <div className="mb-3 flex flex-wrap items-center gap-3 rounded border border-accent-soft bg-accent-soft px-3 py-2">
                 <Badge tone="accent">先做这件</Badge>
-                <Zap size={18} className="shrink-0 text-accent" aria-hidden />
                 <span className="min-w-0 flex-1 truncate text-sm font-medium text-content">
                   {focusTask.title}
                 </span>
                 <Badge tone={PRIORITY_BADGE[focusTask.priority].tone} dot>
                   {PRIORITY_BADGE[focusTask.priority].label}
                 </Badge>
-                {focusTask.dueDate && (
-                  <span className="text-xs text-content-tertiary tabular">
-                    {focusTask.dueDate === today
-                      ? '今天到期'
-                      : focusTask.dueDate < today
-                        ? `已逾期 ${daysBetween(focusTask.dueDate, today) ?? 1} 天`
-                        : focusTask.dueDate}
-                  </span>
-                )}
+                <span className="text-xs text-content-tertiary tabular">
+                  {whenHintOf(focusTask, today).text}
+                </span>
                 <Button
                   size="sm"
                   variant="secondary"
@@ -490,25 +501,36 @@ export const HomePage: React.FC = () => {
               </p>
             ) : (
               <ul className="space-y-1">
-                {restTasks.map((task) => (
-                  <li key={task.id} className="flex items-center gap-3 rounded px-1.5 py-1">
-                    <CheckboxRow
-                      className="min-w-0 flex-1"
-                      checked={task.status === 'completed'}
-                      onChange={() => toggleTaskStatus(task.id)}
-                      label={task.title}
-                    />
-                    <Badge tone={PRIORITY_BADGE[task.priority].tone} dot>
-                      {PRIORITY_BADGE[task.priority].label}
-                    </Badge>
-                  </li>
-                ))}
+                {restTasks.map((task) => {
+                  const when = whenHintOf(task, today);
+                  return (
+                    <li key={task.id} className="flex items-center gap-3 rounded px-1.5 py-1">
+                      <CheckboxRow
+                        className="min-w-0 flex-1"
+                        checked={task.status === 'completed'}
+                        onChange={() => toggleTaskStatus(task.id)}
+                        label={task.title}
+                      />
+                      <Badge tone={PRIORITY_BADGE[task.priority].tone} dot>
+                        {PRIORITY_BADGE[task.priority].label}
+                      </Badge>
+                      {when.scheduled ? (
+                        <Badge tone="default">{when.text}</Badge>
+                      ) : (
+                        <span className="shrink-0 text-xs text-content-tertiary tabular">
+                          {when.text}
+                        </span>
+                      )}
+                    </li>
+                  );
+                })}
               </ul>
             )}
             <div className="mt-3 flex items-start gap-2 border-t border-line-subtle pt-3">
-              <div className="min-w-0 flex-1">
+              <div className="relative min-w-0 flex-1">
                 <Input
                   aria-label="快速添加任务"
+                  className="pr-14"
                   value={quickInput}
                   onChange={(event) => setQuickInput(event.target.value)}
                   onKeyDown={(event) => {
@@ -519,6 +541,9 @@ export const HomePage: React.FC = () => {
                   }}
                   placeholder="加一件事…（写周报 !高 @今天）"
                 />
+                <Kbd className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2">
+                  Enter
+                </Kbd>
               </div>
               <IconButton
                 label="添加任务"
@@ -543,45 +568,22 @@ export const HomePage: React.FC = () => {
         <Card>
           <CardHeader title="快速备忘" subtitle={`${memos.length} 条 · 回车即可保存`} />
           <CardBody>
-            <div className="mb-3 flex items-start gap-2">
-              <div className="min-w-0 flex-1">
-                <Input
-                  aria-label="备忘内容"
-                  value={memoInput}
-                  onChange={(event) => {
-                    setMemoInput(event.target.value);
-                    if (memoError) setMemoError(undefined);
-                  }}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter' && !event.shiftKey) {
-                      event.preventDefault();
-                      handleAddMemo();
-                    }
-                  }}
-                  placeholder="输入备忘内容…"
-                  error={memoError}
-                />
-              </div>
-              <IconButton
-                label="保存备忘"
-                variant="primary"
-                icon={<Send size={16} />}
-                onClick={handleAddMemo}
-              />
-            </div>
-
             {memos.length === 0 ? (
               <p className="flex items-center gap-2 rounded bg-inset px-3 py-2 text-sm text-content-secondary">
                 <NotebookPen size={16} className="shrink-0 text-content-tertiary" aria-hidden />
                 还没有备忘，随手记下临时想法，回车就保存。
               </p>
             ) : (
-              <ul className="max-h-64 space-y-2 overflow-y-auto">
+              <ul className="max-h-64 overflow-y-auto">
                 {memos.slice(0, 10).map((memo) => (
                   <li
                     key={memo.id}
-                    className="group flex items-start gap-2 rounded bg-inset px-3 py-2"
+                    className="group flex items-start gap-2.5 border-t border-line-subtle py-2 first:border-t-0 first:pt-0.5"
                   >
+                    <span
+                      aria-hidden
+                      className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-line-strong"
+                    />
                     <p className="min-w-0 flex-1 text-sm text-content-secondary">{memo.content}</p>
                     <IconButton
                       label={`把备忘「${memo.content}」转为任务`}
@@ -610,6 +612,40 @@ export const HomePage: React.FC = () => {
                 ))}
               </ul>
             )}
+
+            <div className="mt-3 flex items-start gap-2 border-t border-line-subtle pt-3">
+              <div className="relative min-w-0 flex-1">
+                <Input
+                  aria-label="备忘内容"
+                  className={memoError ? undefined : 'pr-14'}
+                  value={memoInput}
+                  onChange={(event) => {
+                    setMemoInput(event.target.value);
+                    if (memoError) setMemoError(undefined);
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' && !event.shiftKey) {
+                      event.preventDefault();
+                      handleAddMemo();
+                    }
+                  }}
+                  placeholder="输入备忘内容…"
+                  error={memoError}
+                />
+                {/* 有错误时下面多出一行红字，绝对定位的胶囊会偏，索性收起来 */}
+                {!memoError && (
+                  <Kbd className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2">
+                    Enter
+                  </Kbd>
+                )}
+              </div>
+              <IconButton
+                label="保存备忘"
+                variant="primary"
+                icon={<Send size={16} />}
+                onClick={handleAddMemo}
+              />
+            </div>
           </CardBody>
         </Card>
       ),
@@ -716,7 +752,7 @@ export const HomePage: React.FC = () => {
         <Card>
           <CardHeader
             title="今日心情"
-            subtitle={todayJournal ? `已连续记录 ${journalStreak} 天` : '今天还没写'}
+            subtitle={todayJournal ? '今天已记' : '今天还没写'}
             action={
               <Button variant="ghost" size="sm" onClick={() => navigate('/growth/journal')}>
                 {todayJournal ? '去写日记' : '写今天的日记'}
@@ -724,24 +760,33 @@ export const HomePage: React.FC = () => {
             }
           />
           <CardBody>
-            {todayJournal ? (
-              <div className="space-y-2">
-                <div className="flex flex-wrap items-center gap-2">
-                  {clampMood(todayJournal.mood) === 0 ? (
-                    <Badge tone="default">未记心情</Badge>
-                  ) : (
-                    <Badge tone={moodTone(todayJournal.mood)}>
-                      {formatMood(clampMood(todayJournal.mood))}
-                    </Badge>
-                  )}
-                </div>
-                {todayJournal.text && (
-                  <p className="line-clamp-2 text-sm text-content-secondary">{todayJournal.text}</p>
-                )}
-              </div>
-            ) : (
-              <p className="text-sm text-content-secondary">
-                写几句，再挑一个心情档位就行 —— 攒起来是一条能回看的曲线。
+            <div className="flex items-center gap-1.5">
+              {MOOD_LEVELS.map((level) => {
+                const active = todayJournal ? clampMood(todayJournal.mood) === level : false;
+                return (
+                  <button
+                    key={level}
+                    type="button"
+                    aria-label={`记今天的心情：${moodLabel(level)}`}
+                    aria-current={active ? 'true' : undefined}
+                    onClick={() => navigate('/growth/journal')}
+                    className={`grid h-8 w-8 place-items-center rounded-lg text-base transition-colors duration-fast ease-standard ${
+                      active
+                        ? 'bg-accent-soft ring-1 ring-inset ring-accent-ring'
+                        : 'bg-inset hover:bg-accent-soft'
+                    }`}
+                  >
+                    <span aria-hidden>{MOOD_FACES[level]}</span>
+                  </button>
+                );
+              })}
+            </div>
+            <p className="mt-2.5 text-xs text-content-tertiary">
+              挑一档就行 —— 攒起来是一条能回看的曲线。已连续记录 {journalStreak} 天。
+            </p>
+            {todayJournal?.text && (
+              <p className="mt-2 line-clamp-2 text-sm text-content-secondary">
+                {todayJournal.text}
               </p>
             )}
           </CardBody>
@@ -777,13 +822,8 @@ export const HomePage: React.FC = () => {
           <Card>
             <CardHeader
               title="近 30 天活动"
-              subtitle={`近 7 天 ${weekActivity.current} 次，上一周 ${weekActivity.previous} 次`}
-              action={
-                <Badge tone={activityChange >= 0 ? 'success' : 'default'}>
-                  环比 {activityChange >= 0 ? '+' : ''}
-                  {activityChange}%
-                </Badge>
-              }
+              subtitle="完成任务 / 训练 / 饮食 / 写日记都算一次"
+              action={<Badge tone={streak > 0 ? 'success' : 'default'}>连续 {streak} 天</Badge>}
             />
             <CardBody className="flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-8">
               <Heatmap data={activitySeries} label="近 30 天活动热力图" />
@@ -791,13 +831,10 @@ export const HomePage: React.FC = () => {
                 {[
                   { label: '30 天合计', value: `${activityTotal} 次` },
                   { label: '近 7 天', value: `${weekActivity.current} 次` },
+                  { label: '最长连续', value: `${longestStreak(activitySeries)} 天` },
                   {
                     label: '有记录的天数',
                     value: `${activeDays(activitySeries).length} / ${activitySeries.length}`,
-                  },
-                  {
-                    label: '日均',
-                    value: `${averageOf(activitySeries.map((point) => point.value))} 次`,
                   },
                 ].map((item) => (
                   <div key={item.label}>
@@ -817,7 +854,10 @@ export const HomePage: React.FC = () => {
       title: '模块概览',
       content: (
         <section>
-          <h2 className="mb-3 text-lg font-semibold text-content">模块概览</h2>
+          <div className="mb-3">
+            <h2 className="text-lg font-semibold text-content">模块概览</h2>
+            <p className="mt-0.5 text-xs text-content-tertiary">点一下进对应模块</p>
+          </div>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {moduleCards.map((module) => {
               const Icon = module.icon;
