@@ -679,15 +679,13 @@ export function registerDataCases() {
     // 这时不算失败 —— 拿默认布局当 before。defaults 与 uiStore 的 DEFAULT_DASHBOARD 对齐。
     const DEFAULT_ORDER = [
       'stats',
-      'timeline',
-      'capture',
       'focus',
-      'todos',
+      'today',
       'memos',
       'habits',
-      'body',
       'journal',
       'goals',
+      'body',
       'activity',
       'modules',
     ];

@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it } from 'vitest';
@@ -17,7 +17,7 @@ import { useFocusStore } from '../store/focusStore';
 import { useGoalStore } from '../store/goalStore';
 import { useJournalStore } from '../store/journalStore';
 import { DASHBOARD_WIDGET_IDS, DEFAULT_DASHBOARD, useUiStore } from '../store/uiStore';
-import { ToastProvider } from '../components/ui';
+
 import { STORAGE_KEYS } from '../utils/storageKeys';
 import { formatShortDate, todayKey } from '../utils/date';
 
@@ -132,16 +132,19 @@ describe('HomePage', () => {
     expect(screen.getByText(/今天有 2 件事待办，其中 1 件紧急/)).toBeInTheDocument();
   });
 
-  it('今日聚焦自动挑出最该先做的一件，并可一键完成', async () => {
+  it('今天卡片自动挑出最该先做的一件，并可一键完成', async () => {
     const store = useTaskStore.getState();
     store.addTask('今天的事', '', 'low', todayKey());
     store.addTask('逾期的高优', '', 'high', '2026-09-01');
     renderHome();
 
-    const focusCard = screen.getByText('今日聚焦').closest('div')!.parentElement!.parentElement!;
-    expect(within(focusCard).getByText('逾期的高优')).toBeInTheDocument();
+    // 「先做这件」单独摆一行在最上面，下面的列表里就不该再出现一次
+    const focusRow = screen.getByText('先做这件').closest('div')!;
+    expect(within(focusRow).getByText('逾期的高优')).toBeInTheDocument();
+    expect(screen.getAllByText('逾期的高优')).toHaveLength(1);
+    expect(screen.getByText(/已逾期 \d+ 天/)).toBeInTheDocument();
 
-    await userEvent.click(within(focusCard).getByRole('button', { name: '一键完成' }));
+    await userEvent.click(screen.getByRole('button', { name: '一键完成' }));
     expect(useTaskStore.getState().tasks.find((task) => task.title === '逾期的高优')!.status).toBe(
       'completed',
     );
@@ -183,11 +186,14 @@ describe('HomePage', () => {
 
   it('列表里的勾选会把任务标记为已完成', async () => {
     useTaskStore.getState().addTask('写周报', '', 'high', '');
+    useTaskStore.getState().addTask('买牛奶', '', 'low', '');
     renderHome();
 
-    await userEvent.click(screen.getByRole('checkbox', { name: '写周报' }));
+    // 最该先做的那件单独摆在「先做这件」那一行，列表里只剩另一件
+    await userEvent.click(screen.getByRole('checkbox', { name: '买牛奶' }));
 
-    expect(useTaskStore.getState().tasks[0]!.status).toBe('completed');
+    const tasks = useTaskStore.getState().tasks;
+    expect(tasks.find((task) => task.title === '买牛奶')!.status).toBe('completed');
   });
 
   it('待办为空时给出空态', () => {
@@ -316,7 +322,7 @@ describe('HomePage 仪表盘', () => {
     useUiStore.setState({
       dashboard: [
         { id: 'modules', size: 'lg', hidden: false },
-        { id: 'capture', size: 'md', hidden: false },
+        { id: 'memos', size: 'sm', hidden: false },
       ],
     });
 
@@ -325,14 +331,14 @@ describe('HomePage 仪表盘', () => {
     const items = dashboardItems();
     expect(items).toHaveLength(2);
     expect(items[0]).toHaveTextContent('模块概览');
-    expect(items[1]).toHaveTextContent('快速添加任务');
+    expect(items[1]).toHaveTextContent('快速备忘');
   });
 
   it('档位决定卡片进哪一列：小档进辅列、中档进主列、宽档通栏', () => {
     useUiStore.setState({
       dashboard: [
-        { id: 'todos', size: 'sm', hidden: false },
-        { id: 'capture', size: 'md', hidden: false },
+        { id: 'memos', size: 'sm', hidden: false },
+        { id: 'today', size: 'md', hidden: false },
         { id: 'stats', size: 'lg', hidden: false },
       ],
     });
@@ -340,10 +346,10 @@ describe('HomePage 仪表盘', () => {
     renderHome();
 
     // 分栏容器：窄屏一列，宽屏 12 栏
-    expect(columnEl('capture').parentElement).toHaveClass('grid-cols-1', 'lg:grid-cols-12');
+    expect(columnEl('today').parentElement).toHaveClass('grid-cols-1', 'lg:grid-cols-12');
 
-    expect(columnEl('todos')).toHaveClass('lg:col-span-4');
-    expect(columnEl('capture')).toHaveClass('lg:col-span-8');
+    expect(columnEl('memos')).toHaveClass('lg:col-span-4');
+    expect(columnEl('today')).toHaveClass('lg:col-span-8');
     // 宽档不参与分栏，自己独占一段
     expect(columnEl('stats')).toHaveClass('grid-cols-1');
     expect(columnEl('stats')).not.toHaveClass('lg:col-span-8');
@@ -352,18 +358,18 @@ describe('HomePage 仪表盘', () => {
   it('同一列里卡片的顺序就是用户排的顺序', () => {
     useUiStore.setState({
       dashboard: [
-        { id: 'todos', size: 'md', hidden: false },
-        { id: 'capture', size: 'md', hidden: false },
+        { id: 'today', size: 'md', hidden: false },
+        { id: 'memos', size: 'md', hidden: false },
       ],
     });
 
     renderHome();
 
     expect(
-      within(columnEl('todos'))
+      within(columnEl('today'))
         .getAllByTestId('dashboard-widget')
         .map((item) => item.dataset.widget),
-    ).toEqual(['todos', 'capture']);
+    ).toEqual(['today', 'memos']);
   });
 
   it('「编辑布局」进入编辑态：出现拖拽手柄与宽度控件，没数据的卡片也显示出来', async () => {
@@ -378,17 +384,13 @@ describe('HomePage 仪表盘', () => {
 
     const exit = screen.getByRole('button', { name: '完成编辑' });
     expect(exit).toHaveAttribute('aria-pressed', 'true');
-    expect(
-      screen.getByRole('button', { name: '拖动「快速添加任务」调整顺序' }),
-    ).toBeInTheDocument();
-    expect(screen.getByRole('group', { name: '「今日待办」的宽度' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '拖动「今天」调整顺序' })).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: '「今天」的宽度' })).toBeInTheDocument();
     // 编辑态渲染占位卡，否则用户没法把一张暂时没数据的卡片拖走或隐藏
     expect(screen.getByText('近 30 天活动暂无数据')).toBeInTheDocument();
 
     await userEvent.click(exit);
-    expect(
-      screen.queryByRole('button', { name: '拖动「快速添加任务」调整顺序' }),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '拖动「今天」调整顺序' })).not.toBeInTheDocument();
   });
 
   it('隐藏卡片后内容消失、写进 lm:ui，还能从「已隐藏」里点回来', async () => {
@@ -418,25 +420,25 @@ describe('HomePage 仪表盘', () => {
     await userEvent.click(screen.getByRole('button', { name: '编辑布局' }));
 
     await userEvent.click(
-      within(screen.getByRole('group', { name: '「快速添加任务」的宽度' })).getByRole('button', {
+      within(screen.getByRole('group', { name: '「今天」的宽度' })).getByRole('button', {
         name: '宽',
       }),
     );
 
-    expect(useUiStore.getState().dashboard.find((widget) => widget.id === 'capture')?.size).toBe(
+    expect(useUiStore.getState().dashboard.find((widget) => widget.id === 'today')?.size).toBe(
       'lg',
     );
 
     // 改成宽档之后它不再跟别人并排，而是自己独占一行
-    expect(columnEl('capture')).toHaveClass('grid-cols-1');
-    expect(columnEl('capture')).not.toHaveClass('lg:col-span-8');
+    expect(columnEl('today')).toHaveClass('grid-cols-1');
+    expect(columnEl('today')).not.toHaveClass('lg:col-span-8');
   });
 
   it('「恢复默认布局」把顺序、宽度、隐藏一起还原', async () => {
     useUiStore.setState({
       dashboard: [
-        { id: 'todos', size: 'sm', hidden: true },
-        { id: 'capture', size: 'sm', hidden: false },
+        { id: 'today', size: 'sm', hidden: true },
+        { id: 'goals', size: 'sm', hidden: false },
       ],
     });
 
@@ -530,98 +532,6 @@ describe('HomePage 仪表盘', () => {
     expect(
       screen.getByText('所有卡片都被隐藏了，点右上角「编辑布局」可以恢复。'),
     ).toBeInTheDocument();
-  });
-});
-
-describe('HomePage 今日时间轴', () => {
-  it('把今天到期的任务排上时间轴，并从盒子上开始专注', async () => {
-    useTaskStore.getState().addTask('写周报', '', 'high', todayKey());
-    renderHome();
-
-    expect(screen.getByRole('heading', { name: '今日时间轴' })).toBeInTheDocument();
-    expect(screen.getByText('待排（1）')).toBeInTheDocument();
-
-    fireEvent.change(screen.getByLabelText('把「写周报」排到'), { target: { value: '09:00' } });
-
-    const task = useTaskStore.getState().tasks[0]!;
-    expect(task.timebox).toEqual({ date: todayKey(), start: '09:00', minutes: 60 });
-    expect(screen.getByText('09:00–10:00')).toBeInTheDocument();
-    expect(screen.getByText('待排（0）')).toBeInTheDocument();
-
-    await userEvent.click(screen.getByRole('button', { name: '开始专注：写周报' }));
-    expect(useFocusStore.getState().active).toMatchObject({
-      entityId: task.id,
-      target: 'task',
-      plannedMinutes: 60,
-    });
-  });
-
-  it('结束专注会把时长写进对应模块的流水', async () => {
-    useBookStore.getState().addBook('人类简史', '尤瓦尔', '历史');
-    const bookId = useBookStore.getState().books[0]!.id;
-    useBookStore.getState().updateBookStatus(bookId, 'reading');
-
-    useFocusStore.getState().startFocus({
-      entityId: bookId,
-      title: '人类简史',
-      target: 'book',
-      mode: 'stopwatch',
-      plannedMinutes: 25,
-    });
-    // 假装这一轮已经跑了 30 分钟
-    useFocusStore.setState({
-      active: {
-        ...useFocusStore.getState().active!,
-        startedAt: new Date(Date.now() - 30 * 60_000).toISOString(),
-      },
-    });
-
-    renderHome();
-    await userEvent.click(screen.getByRole('button', { name: '结束并记录' }));
-
-    expect(useFocusStore.getState().active).toBeNull();
-    const session = useFocusStore.getState().sessions[0]!;
-    expect(session.minutes).toBeGreaterThanOrEqual(30);
-    expect(session.posted).toBe(true);
-
-    const reading = useBookStore.getState().sessions;
-    expect(reading).toHaveLength(1);
-    expect(reading[0]).toMatchObject({ bookId, minutes: session.minutes });
-  });
-
-  it('没有可排的任务时时间轴给出空态，而不是崩掉', () => {
-    renderHome();
-
-    expect(screen.getByText('今天该排的都排上了。')).toBeInTheDocument();
-    expect(screen.getByText('目前没有可以专注的对象')).toBeInTheDocument();
-  });
-
-  it('任务专注结束后可以顺手把它勾掉', async () => {
-    useTaskStore.getState().addTask('写周报', '', 'high', todayKey());
-    const taskId = useTaskStore.getState().tasks[0]!.id;
-    useFocusStore.getState().startFocus({
-      entityId: taskId,
-      title: '写周报',
-      target: 'task',
-      mode: 'stopwatch',
-      plannedMinutes: 25,
-    });
-
-    // 这条要验证提示里的「标记完成」，所以得带上 ToastProvider
-    render(
-      <MemoryRouter initialEntries={['/']}>
-        <ToastProvider>
-          <Routes>
-            <Route path="/" element={<HomePage />} />
-          </Routes>
-        </ToastProvider>
-      </MemoryRouter>,
-    );
-
-    await userEvent.click(screen.getByRole('button', { name: '结束并记录' }));
-    await userEvent.click(await screen.findByRole('button', { name: '标记完成' }));
-
-    expect(useTaskStore.getState().tasks[0]!.status).toBe('completed');
   });
 });
 

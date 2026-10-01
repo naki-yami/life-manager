@@ -31,13 +31,11 @@ import {
   IconButton,
   Input,
   StatStrip,
-  useOptionalToast,
 } from '../components/ui';
 import { PageHeader } from '../components/layout';
 import { DashboardGrid, type DashboardWidgetView } from '../components/dashboard';
 import { GoalProgressList } from '../components/goals';
-import { DayTimeline, type TimelineEntry } from '../components/timeline/DayTimeline';
-import { FocusTimer, type FocusOption } from '../components/timeline/FocusTimer';
+import { FocusCard } from '../components/timeline/FocusCard';
 import { useUndoableRemove } from '../hooks/useUndoableRemove';
 import { Heatmap, Sparkline } from '../components/charts';
 import { useTaskStore } from '../store/taskStore';
@@ -80,14 +78,7 @@ import {
   latestPoint,
   weightOf,
 } from '../utils/body';
-import { postFocusSession } from '../services/focusPost';
-import {
-  FOCUS_TARGET_LABELS,
-  POMODORO_MINUTES,
-  focusSummary,
-  formatFocusDuration,
-  timeboxedTasks,
-} from '../utils/focus';
+
 import { parseQuickTask } from '../utils/quickParse';
 import { goalProgress, sortGoals, summarizeGoals } from '../utils/goals';
 import type { MetricSnapshot } from '../utils/metrics';
@@ -151,7 +142,6 @@ export const HomePage: React.FC = () => {
     toggleTaskStatus,
     replaceMemos,
     addTask,
-    setTimebox,
     replaceTasks,
   } = useTaskStore();
   const undoableRemove = useUndoableRemove();
@@ -170,11 +160,6 @@ export const HomePage: React.FC = () => {
   const goals = useGoalStore((state) => state.goals);
 
   const focusSessions = useFocusStore((state) => state.sessions);
-  const activeFocus = useFocusStore((state) => state.active);
-  const startFocus = useFocusStore((state) => state.startFocus);
-  const cancelFocus = useFocusStore((state) => state.cancelFocus);
-  const finishFocus = useFocusStore((state) => state.finishFocus);
-  const toast = useOptionalToast();
 
   // 仪表盘排布存在 lm:ui 里，这里只读出来渲染
   const dashboard = useUiStore((state) => state.dashboard);
@@ -247,6 +232,8 @@ export const HomePage: React.FC = () => {
   const todayTasks = pendingTasks.slice(0, 5);
 
   const focusTask = focusPick(pendingTasks, today);
+  /** 列表里去掉已经单独摆在最上面的那一件，免得同一件事出现两次 */
+  const restTasks = todayTasks.filter((task) => task.id !== focusTask?.id);
 
   const dueTodayTasks = tasks.filter((task) => task.dueDate === today);
   const dueTodayDone = dueTodayTasks.filter((task) => task.status === 'completed').length;
@@ -285,155 +272,11 @@ export const HomePage: React.FC = () => {
   ]);
   const goalSummary = summarizeGoals(goalProgressList);
 
-  /** 今日时间轴上已排的任务（已按开始时间排好） */
-  const planEntries = useMemo<TimelineEntry[]>(
-    () =>
-      timeboxedTasks(tasks, today).map(({ task, timebox }) => ({
-        id: task.id,
-        title: task.title,
-        start: timebox.start,
-        minutes: timebox.minutes,
-        done: task.status === 'completed',
-      })),
-    [tasks, today],
-  );
-
-  /**
-   * 还没排进今天的任务：今天到期、已经逾期，或干脆没定截止日期。
-   * 未来的任务不往这里塞 —— 时间轴说的是「今天做什么」，不是「以后做什么」。
-   */
-  const planCandidates = useMemo(
-    () =>
-      tasks
-        .filter(
-          (task) =>
-            task.status === 'pending' &&
-            task.timebox?.date !== today &&
-            (!task.dueDate || task.dueDate <= today),
-        )
-        .map((task) => ({ id: task.id, title: task.title })),
-    [tasks, today],
-  );
-
-  /**
-   * 可专注的对象：待办任务，加上「正在做」的那几类实体 ——
-   * 已经读完的书、归档的项目不该出现在这里占位置。
-   */
-  const focusOptions = useMemo<FocusOption[]>(
-    () => [
-      ...tasks
-        .filter((task) => task.status === 'pending')
-        .map((task) => ({
-          key: `task:${task.id}`,
-          title: task.title,
-          target: 'task' as const,
-          entityId: task.id,
-          group: FOCUS_TARGET_LABELS.task,
-        })),
-      ...devProjects
-        .filter((project) => project.status === 'in-progress')
-        .map((project) => ({
-          key: `dev:${project.id}`,
-          title: project.name,
-          target: 'dev' as const,
-          entityId: project.id,
-          group: FOCUS_TARGET_LABELS.dev,
-        })),
-      ...books
-        .filter((book) => book.status === 'reading')
-        .map((book) => ({
-          key: `book:${book.id}`,
-          title: book.title,
-          target: 'book' as const,
-          entityId: book.id,
-          group: FOCUS_TARGET_LABELS.book,
-        })),
-      ...games
-        .filter((game) => game.status === 'playing')
-        .map((game) => ({
-          key: `game:${game.id}`,
-          title: game.name,
-          target: 'game' as const,
-          entityId: game.id,
-          group: FOCUS_TARGET_LABELS.game,
-        })),
-    ],
-    [tasks, devProjects, books, games],
-  );
-
-  /** 今天已经专注了几次、多久，写在卡片副标题上 */
-  const todayFocus = useMemo(() => focusSummary(focusSessions, today), [focusSessions, today]);
-
   const handleAddQuickTask = (): void => {
     const parsed = parseQuickTask(quickInput, today);
     if (!parsed.title) return;
     addTask(parsed.title, '', parsed.priority, parsed.dueDate);
     setQuickInput('');
-  };
-
-  /**
-   * 排进时间轴。新建的盒子给 1 小时 —— 比 30 分钟更接近「一件事」的实际体量，
-   * 长了短了都能用盒子上的 ± 按钮就地调。
-   */
-  const handleSchedule = (taskId: string, start: string): void => {
-    const task = tasks.find((item) => item.id === taskId);
-    if (!task) return;
-    setTimebox(taskId, { date: today, start, minutes: task.timebox?.minutes ?? 60 });
-  };
-
-  const handleResizeBox = (taskId: string, minutes: number): void => {
-    const task = tasks.find((item) => item.id === taskId);
-    if (!task?.timebox) return;
-    setTimebox(taskId, { ...task.timebox, minutes });
-  };
-
-  const handleRemoveBox = (taskId: string): void => setTimebox(taskId, null);
-
-  /** 从时间轴的盒子上直接开始番茄钟，计划时长就取这个盒子排的时长 */
-  const handleFocusBox = (taskId: string): void => {
-    const task = tasks.find((item) => item.id === taskId);
-    if (!task) return;
-    startFocus({
-      entityId: task.id,
-      title: task.title,
-      target: 'task',
-      mode: 'pomodoro',
-      plannedMinutes: task.timebox?.minutes ?? POMODORO_MINUTES,
-    });
-  };
-
-  /**
-   * 结束专注。
-   *
-   * 任务是「勾完成」而不是「记时长」，所以只提示不写流水；
-   * 开发 / 读书 / 游戏走 focusPost 回填，回填结果（成功、对象已删）都要告诉用户 ——
-   * 默默不写才是最糟的结果。
-   */
-  const handleFinishFocus = (): void => {
-    const session = finishFocus();
-    if (!session) return;
-    const duration = formatFocusDuration(session.minutes);
-    if (session.target === 'task') {
-      const task = tasks.find((item) => item.id === session.entityId);
-      const undone = task?.status === 'pending' ? task : undefined;
-      toast?.toast({
-        tone: 'info',
-        title: `本次专注 ${duration}`,
-        description: undone
-          ? '任务不写时长流水 —— 顺手把它勾掉？'
-          : '任务不写时长流水，做完直接勾掉任务即可。',
-        action: undone
-          ? { label: '标记完成', onClick: () => toggleTaskStatus(undone.id) }
-          : undefined,
-      });
-      return;
-    }
-    const outcome = postFocusSession(session);
-    toast?.toast({
-      tone: outcome.ok ? 'success' : 'warning',
-      title: `本次专注 ${duration}`,
-      description: outcome.message,
-    });
   };
 
   const moduleCards = useMemo<ModuleCard[]>(() => {
@@ -580,50 +423,85 @@ export const HomePage: React.FC = () => {
       ),
     },
     {
-      id: 'timeline',
-      title: '今日时间轴',
+      id: 'today',
+      title: '今天',
       content: (
         <Card>
           <CardHeader
-            title="今日时间轴"
+            title="今天"
             subtitle={
-              todayFocus.count > 0
-                ? `今天已专注 ${todayFocus.count} 次、共 ${formatFocusDuration(todayFocus.minutes)}`
-                : '把任务排到时间轴上，再从盒子里直接开始专注'
+              focusTask ? '先做最该先做的一件，剩下的排在下面' : `${pendingTasks.length} 个待完成`
+            }
+            action={
+              <Button variant="ghost" size="sm" onClick={() => navigate('/tasks')}>
+                查看全部
+              </Button>
             }
           />
           <CardBody>
-            <div className="mb-4">
-              <FocusTimer
-                active={activeFocus}
-                options={focusOptions}
-                onStart={startFocus}
-                onFinish={handleFinishFocus}
-                onCancel={cancelFocus}
+            {focusTask && (
+              <div className="mb-3 flex flex-wrap items-center gap-3 rounded border border-accent-soft bg-accent-soft px-3 py-2">
+                <Badge tone="accent">先做这件</Badge>
+                <Zap size={18} className="shrink-0 text-accent" aria-hidden />
+                <span className="min-w-0 flex-1 truncate text-sm font-medium text-content">
+                  {focusTask.title}
+                </span>
+                <Badge tone={PRIORITY_BADGE[focusTask.priority].tone} dot>
+                  {PRIORITY_BADGE[focusTask.priority].label}
+                </Badge>
+                {focusTask.dueDate && (
+                  <span className="text-xs text-content-tertiary tabular">
+                    {focusTask.dueDate === today
+                      ? '今天到期'
+                      : focusTask.dueDate < today
+                        ? `已逾期 ${daysBetween(focusTask.dueDate, today) ?? 1} 天`
+                        : focusTask.dueDate}
+                  </span>
+                )}
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  icon={<CheckCircle2 size={14} aria-hidden />}
+                  onClick={() => {
+                    const snapshot = tasks;
+                    toggleTaskStatus(focusTask.id);
+                    undoableRemove({
+                      message: `已完成「${focusTask.title}」`,
+                      description: '点「撤销」可以还原。',
+                      snapshot,
+                      restore: replaceTasks,
+                    });
+                  }}
+                >
+                  一键完成
+                </Button>
+              </div>
+            )}
+            {todayTasks.length === 0 ? (
+              <EmptyState
+                icon={<CheckCircle2 size={20} aria-hidden />}
+                title="待办清空了"
+                description="今天的任务都处理完了，下面直接加一件就行。"
+                className="py-6"
               />
-            </div>
-            <DayTimeline
-              label={`${today} 的时间轴`}
-              entries={planEntries}
-              candidates={planCandidates}
-              onSchedule={handleSchedule}
-              onResize={handleResizeBox}
-              onRemove={handleRemoveBox}
-              onFocus={handleFocusBox}
-              activeId={activeFocus?.entityId ?? null}
-            />
-          </CardBody>
-        </Card>
-      ),
-    },
-    {
-      id: 'capture',
-      title: '快速添加任务',
-      content: (
-        <Card>
-          <CardHeader title="快速添加任务" subtitle="支持语法：写周报 !高 @今天" />
-          <CardBody>
-            <div className="flex items-start gap-2">
+            ) : (
+              <ul className="space-y-1">
+                {restTasks.map((task) => (
+                  <li key={task.id} className="flex items-center gap-3 rounded px-1.5 py-1">
+                    <CheckboxRow
+                      className="min-w-0 flex-1"
+                      checked={task.status === 'completed'}
+                      onChange={() => toggleTaskStatus(task.id)}
+                      label={task.title}
+                    />
+                    <Badge tone={PRIORITY_BADGE[task.priority].tone} dot>
+                      {PRIORITY_BADGE[task.priority].label}
+                    </Badge>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <div className="mt-3 flex items-start gap-2 border-t border-line-subtle pt-3">
               <div className="min-w-0 flex-1">
                 <Input
                   aria-label="快速添加任务"
@@ -635,7 +513,7 @@ export const HomePage: React.FC = () => {
                       handleAddQuickTask();
                     }
                   }}
-                  placeholder="写周报 !高 @今天（!高/!中/!低 设优先级，@今天/@明天/@日期 设截止）"
+                  placeholder="加一件事…（写周报 !高 @今天）"
                 />
               </div>
               <IconButton
@@ -651,96 +529,8 @@ export const HomePage: React.FC = () => {
     },
     {
       id: 'focus',
-      title: '今日聚焦',
-      content: focusTask ? (
-        <Card>
-          <CardHeader
-            title="今日聚焦"
-            subtitle="按逾期、今天到期与优先级自动挑出的最该先做的一件"
-            action={<Badge tone="accent">先做这件</Badge>}
-          />
-          <CardBody>
-            <div className="flex flex-wrap items-center gap-3">
-              <Zap size={18} className="shrink-0 text-accent" aria-hidden />
-              <span className="min-w-0 flex-1 truncate text-sm font-medium text-content">
-                {focusTask.title}
-              </span>
-              <Badge tone={PRIORITY_BADGE[focusTask.priority].tone} dot>
-                {PRIORITY_BADGE[focusTask.priority].label}
-              </Badge>
-              {focusTask.dueDate && (
-                <span className="text-xs text-content-tertiary tabular">
-                  {focusTask.dueDate === today
-                    ? '今天到期'
-                    : focusTask.dueDate < today
-                      ? `已逾期 ${daysBetween(focusTask.dueDate, today) ?? 1} 天`
-                      : focusTask.dueDate}
-                </span>
-              )}
-              <Button
-                size="sm"
-                variant="secondary"
-                icon={<CheckCircle2 size={14} aria-hidden />}
-                onClick={() => {
-                  const snapshot = tasks;
-                  toggleTaskStatus(focusTask.id);
-                  undoableRemove({
-                    message: `已完成「${focusTask.title}」`,
-                    description: '点「撤销」可以还原。',
-                    snapshot,
-                    restore: replaceTasks,
-                  });
-                }}
-              >
-                一键完成
-              </Button>
-            </div>
-          </CardBody>
-        </Card>
-      ) : null,
-    },
-    {
-      id: 'todos',
-      title: '今日待办',
-      content: (
-        <Card>
-          <CardHeader
-            title="今日待办"
-            subtitle={`${pendingTasks.length} 个待完成`}
-            action={
-              <Button variant="ghost" size="sm" onClick={() => navigate('/tasks')}>
-                查看全部
-              </Button>
-            }
-          />
-          <CardBody>
-            {todayTasks.length === 0 ? (
-              <EmptyState
-                icon={<CheckCircle2 size={20} aria-hidden />}
-                title="待办清空了"
-                description="今天的任务都处理完了，可以去「今日计划」添加新的。"
-                className="py-6"
-              />
-            ) : (
-              <ul className="space-y-1">
-                {todayTasks.map((task) => (
-                  <li key={task.id} className="flex items-center gap-3 rounded px-1.5 py-1">
-                    <CheckboxRow
-                      className="min-w-0 flex-1"
-                      checked={task.status === 'completed'}
-                      onChange={() => toggleTaskStatus(task.id)}
-                      label={task.title}
-                    />
-                    <Badge tone={PRIORITY_BADGE[task.priority].tone} dot>
-                      {PRIORITY_BADGE[task.priority].label}
-                    </Badge>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </CardBody>
-        </Card>
-      ),
+      title: '专注',
+      content: <FocusCard />,
     },
     {
       id: 'memos',

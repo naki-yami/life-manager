@@ -7,14 +7,14 @@ import type { DashboardWidget } from '../../store/uiStore';
 
 const widgets: DashboardWidget[] = [
   { id: 'stats', size: 'lg', hidden: false },
-  { id: 'capture', size: 'md', hidden: false },
+  { id: 'today', size: 'md', hidden: false },
   { id: 'focus', size: 'sm', hidden: false },
   { id: 'memos', size: 'sm', hidden: true },
 ];
 
 const views: DashboardWidgetView[] = [
   { id: 'stats', title: '概览统计', content: <p>统计内容</p> },
-  { id: 'capture', title: '快速添加任务', content: <p>添加内容</p> },
+  { id: 'today', title: '今天', content: <p>添加内容</p> },
   { id: 'focus', title: '今日聚焦', content: null },
   { id: 'memos', title: '快速备忘', content: <p>备忘内容</p> },
 ];
@@ -60,7 +60,7 @@ describe('DashboardGrid', () => {
     setup({
       widgets: [
         { id: 'stats', size: 'lg', hidden: false },
-        { id: 'capture', size: 'md', hidden: false },
+        { id: 'today', size: 'md', hidden: false },
         { id: 'memos', size: 'sm', hidden: false },
       ],
     });
@@ -78,7 +78,7 @@ describe('DashboardGrid', () => {
     setup({
       widgets: [
         { id: 'stats', size: 'lg', hidden: false },
-        { id: 'capture', size: 'md', hidden: false },
+        { id: 'today', size: 'md', hidden: false },
       ],
     });
 
@@ -93,7 +93,7 @@ describe('DashboardGrid', () => {
    */
   it('同段的卡片没数据被跳过时，同段另一张卡照旧占满，不会空出半边', () => {
     const pair: DashboardWidget[] = [
-      { id: 'capture', size: 'md', hidden: false },
+      { id: 'today', size: 'md', hidden: false },
       { id: 'focus', size: 'sm', hidden: false },
     ];
 
@@ -140,7 +140,7 @@ describe('DashboardGrid', () => {
     setup({
       widgets: [
         { id: 'stats', size: 'lg', hidden: false },
-        { id: 'capture', size: 'md', hidden: false },
+        { id: 'today', size: 'md', hidden: false },
         { id: 'memos', size: 'sm', hidden: false },
         { id: 'focus', size: 'sm', hidden: false },
       ],
@@ -168,7 +168,7 @@ describe('DashboardGrid', () => {
 
     expect(screen.getByRole('button', { name: '拖动「概览统计」调整顺序' })).toBeInTheDocument();
 
-    const sizeGroup = screen.getByRole('group', { name: '「快速添加任务」的宽度' });
+    const sizeGroup = screen.getByRole('group', { name: '「今天」的宽度' });
     expect(within(sizeGroup).getByRole('button', { name: '中' })).toHaveAttribute(
       'aria-pressed',
       'true',
@@ -183,11 +183,11 @@ describe('DashboardGrid', () => {
     const props = setup({ editing: true });
 
     await userEvent.click(
-      within(screen.getByRole('group', { name: '「快速添加任务」的宽度' })).getByRole('button', {
+      within(screen.getByRole('group', { name: '「今天」的宽度' })).getByRole('button', {
         name: '宽',
       }),
     );
-    expect(props.onResize).toHaveBeenCalledWith('capture', 'lg');
+    expect(props.onResize).toHaveBeenCalledWith('today', 'lg');
 
     await userEvent.click(screen.getByRole('button', { name: '隐藏「今日聚焦」' }));
     expect(props.onHide).toHaveBeenCalledWith('focus', true);

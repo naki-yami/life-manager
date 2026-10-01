@@ -12,15 +12,13 @@ export type Density = 'comfortable' | 'compact';
  */
 export type DashboardWidgetId =
   | 'stats'
-  | 'timeline'
-  | 'capture'
+  | 'today'
   | 'focus'
-  | 'todos'
   | 'memos'
   | 'habits'
-  | 'body'
   | 'journal'
   | 'goals'
+  | 'body'
   | 'activity'
   | 'modules';
 
@@ -35,15 +33,13 @@ export interface DashboardWidget {
 
 export const DASHBOARD_WIDGET_IDS: readonly DashboardWidgetId[] = [
   'stats',
-  'timeline',
-  'capture',
   'focus',
-  'todos',
+  'today',
   'memos',
   'habits',
-  'body',
   'journal',
   'goals',
+  'body',
   'activity',
   'modules',
 ];
@@ -51,22 +47,26 @@ export const DASHBOARD_WIDGET_IDS: readonly DashboardWidgetId[] = [
 export const DASHBOARD_WIDGET_SIZES: readonly DashboardWidgetSize[] = ['sm', 'md', 'lg'];
 
 /**
- * 默认排布：统计整行 → 今日时间轴整行（时间轴 + 专注计时）→ 快速添加 + 今日聚焦
- * → 待办 + 备忘 → 习惯 + 身体指标 → 今日心情 + 目标达成 → 热力图 → 模块概览
+ * 默认排布：统计整行 → 底下一整段双列 ——
+ * 主列（左，8 栏）今天是主角，往下是习惯、目标、近 30 天活动、模块概览；
+ * 辅列（右，4 栏）专注、快速备忘、今日心情、身体指标。
+ *
+ * 只有统计条是通栏，其余全在这一段里：通栏卡会把两列「切断」，短的那一列
+ * 只能空着等长的那一列排完，页面上就出现一块填不满的空白（老首页「一会儿左、
+ * 一会儿右、中间还空一块」的观感就是这么来的）。整段一起排，两列各自堆叠、
+ * 互不挤位，也就没有谁在等谁。
  */
 export const DEFAULT_DASHBOARD: readonly DashboardWidget[] = [
   { id: 'stats', size: 'lg', hidden: false },
-  { id: 'timeline', size: 'lg', hidden: false },
-  { id: 'capture', size: 'md', hidden: false },
   { id: 'focus', size: 'sm', hidden: false },
-  { id: 'todos', size: 'md', hidden: false },
+  { id: 'today', size: 'md', hidden: false },
   { id: 'memos', size: 'sm', hidden: false },
   { id: 'habits', size: 'md', hidden: false },
-  { id: 'body', size: 'sm', hidden: false },
   { id: 'journal', size: 'sm', hidden: false },
   { id: 'goals', size: 'md', hidden: false },
-  { id: 'activity', size: 'lg', hidden: false },
-  { id: 'modules', size: 'lg', hidden: false },
+  { id: 'body', size: 'sm', hidden: false },
+  { id: 'activity', size: 'md', hidden: false },
+  { id: 'modules', size: 'md', hidden: false },
 ];
 
 const defaultSizeOf = (id: DashboardWidgetId): DashboardWidgetSize =>
@@ -80,6 +80,11 @@ const isWidgetId = (value: unknown): value is DashboardWidgetId =>
  *
  * 补全这一步是「以后新增卡片」的兼容路径 —— 老的持久化数据里没有新卡片，
  * 读出来也能自己长出来，而不是要用户手动点一次「恢复默认」。
+ *
+ * 补进来的卡片落在**最后一个「默认排在它前面」的老卡片之后**，而不是一律甩到末尾：
+ * 老数据里没有它，就没有「用户把它排在哪儿」这回事，按默认排布落座才符合直觉
+ * （新增的「今天」应该贴在上头，而不是掉到模块概览后面去）；同时只在某张老卡片
+ * **之后**插，不去挤用户特意拖到最前面的那几张。
  */
 export function normalizeDashboard(value: unknown): DashboardWidget[] {
   const raw = Array.isArray(value) ? value : [];
@@ -99,10 +104,24 @@ export function normalizeDashboard(value: unknown): DashboardWidget[] {
 
   for (const id of DASHBOARD_WIDGET_IDS) {
     if (seen.has(id)) continue;
-    result.push({ id, size: defaultSizeOf(id), hidden: false });
+    const rank = defaultRank(id);
+    let at = 0;
+    for (let index = result.length - 1; index >= 0; index -= 1) {
+      if (defaultRank(result[index]!.id) < rank) {
+        at = index + 1;
+        break;
+      }
+    }
+    result.splice(at, 0, { id, size: defaultSizeOf(id), hidden: false });
   }
 
   return result;
+}
+
+/** 卡片在默认排布里的位置；不在默认排布里的一律排到最后 */
+function defaultRank(id: DashboardWidgetId): number {
+  const index = DEFAULT_DASHBOARD.findIndex((item) => item.id === id);
+  return index < 0 ? Number.MAX_SAFE_INTEGER : index;
 }
 
 /** 把 activeId 挪到 overId 原来的位置；找不到任一项时原样返回 */

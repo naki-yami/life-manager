@@ -46,21 +46,18 @@ describe('normalizeDashboard', () => {
     expect(widgets.every((widget) => widget.hidden === false)).toBe(true);
   });
 
-  it('丢掉认不出的 id 与重复项，保留用户自己的顺序', () => {
+  it('丢掉认不出的 id 与重复项', () => {
     const widgets = normalizeDashboard([
-      { id: 'modules', size: 'lg', hidden: false },
+      { id: 'stats', size: 'lg', hidden: false },
       { id: '未来才有的卡片' },
-      { id: 'modules', size: 'sm', hidden: true },
+      { id: 'stats', size: 'sm', hidden: true },
       'not-an-object',
       null,
     ]);
 
-    expect(idsOf(widgets)).toEqual([
-      'modules',
-      ...DASHBOARD_WIDGET_IDS.filter((id) => id !== 'modules'),
-    ]);
+    expect(idsOf(widgets)).toEqual([...DASHBOARD_WIDGET_IDS]);
     // 重复项被丢掉，保留的是先出现的那条（尺寸没被后一条覆盖）
-    expect(sizeOf(widgets, 'modules')).toBe('lg');
+    expect(sizeOf(widgets, 'stats')).toBe('lg');
   });
 
   it('尺寸与隐藏标记坏了就退回默认值，不影响其它字段', () => {
@@ -81,23 +78,31 @@ describe('normalizeDashboard', () => {
     });
   });
 
-  it('持久化数据里缺的新卡片会自动补在末尾', () => {
-    const widgets = normalizeDashboard([{ id: 'todos', size: 'md', hidden: false }]);
+  it('持久化数据里缺的卡片按默认排布补进来，不是一律甩到末尾', () => {
+    const widgets = normalizeDashboard([{ id: 'today', size: 'md', hidden: false }]);
 
-    expect(idsOf(widgets)).toEqual([
-      'todos',
-      ...DASHBOARD_WIDGET_IDS.filter((id) => id !== 'todos'),
-    ]);
+    expect(idsOf(widgets)).toEqual([...DASHBOARD_WIDGET_IDS]);
     // 补出来的卡片用默认档位，且默认可见
-    expect(sizeOf(widgets, 'capture')).toBe('md');
-    expect(hiddenOf(widgets, 'capture')).toBe(false);
+    expect(sizeOf(widgets, 'focus')).toBe('sm');
+    expect(hiddenOf(widgets, 'focus')).toBe(false);
+  });
+
+  it('补卡片时不动用户自己挪过的先后', () => {
+    // 老数据里用户把模块概览拖到了统计前面；「今天」默认排在统计之后
+    const widgets = normalizeDashboard([
+      { id: 'modules', size: 'lg', hidden: false },
+      { id: 'stats', size: 'lg', hidden: false },
+    ]);
+    const ids = idsOf(widgets);
+
+    expect(ids).toHaveLength(DASHBOARD_WIDGET_IDS.length);
+    expect(ids.indexOf('modules')).toBeLessThan(ids.indexOf('stats'));
+    // 补在最后一张「默认排在它前面」的卡片之后，而不是插到最前头去
+    expect(ids.indexOf('today')).toBeGreaterThan(ids.indexOf('stats'));
   });
 
   it('归一化是幂等的：跑两次结果一致', () => {
-    const once = normalizeDashboard([
-      { id: 'capture', size: 'sm', hidden: true },
-      { id: '不认识' },
-    ]);
+    const once = normalizeDashboard([{ id: 'today', size: 'sm', hidden: true }, { id: '不认识' }]);
 
     expect(normalizeDashboard(once)).toEqual(once);
   });
@@ -119,16 +124,14 @@ describe('uiStore 仪表盘', () => {
     useUiStore.getState().moveDashboardWidget('stats', 'focus');
 
     expect(idsOf(useUiStore.getState().dashboard)).toEqual([
-      'timeline',
-      'capture',
       'focus',
       'stats',
-      'todos',
+      'today',
       'memos',
       'habits',
-      'body',
       'journal',
       'goals',
+      'body',
       'activity',
       'modules',
     ]);
@@ -144,11 +147,11 @@ describe('uiStore 仪表盘', () => {
   });
 
   it('setWidgetSize 与 setWidgetHidden 只动目标卡片', () => {
-    useUiStore.getState().setWidgetSize('capture', 'lg');
+    useUiStore.getState().setWidgetSize('today', 'lg');
     useUiStore.getState().setWidgetHidden('memos', true);
 
     const dashboard = useUiStore.getState().dashboard;
-    expect(sizeOf(dashboard, 'capture')).toBe('lg');
+    expect(sizeOf(dashboard, 'today')).toBe('lg');
     expect(hiddenOf(dashboard, 'memos')).toBe(true);
     expect(dashboard.find((widget) => widget.id === 'stats')).toEqual({
       id: 'stats',
@@ -169,12 +172,12 @@ describe('uiStore 仪表盘', () => {
 
   it('排布会跟着侧栏 / 密度一起写进 lm:ui', async () => {
     useUiStore.getState().setWidgetSize('focus', 'lg');
-    useUiStore.getState().setWidgetHidden('todos', true);
+    useUiStore.getState().setWidgetHidden('goals', true);
 
     await vi.waitFor(() => {
       const persisted = persistedDashboard();
       expect(persisted.find((widget) => widget.id === 'focus')?.size).toBe('lg');
-      expect(persisted.find((widget) => widget.id === 'todos')?.hidden).toBe(true);
+      expect(persisted.find((widget) => widget.id === 'goals')?.hidden).toBe(true);
     });
   });
 

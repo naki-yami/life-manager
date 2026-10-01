@@ -34,6 +34,7 @@ import {
 } from '../components/ui';
 import { ListEmptyState, MasterDetail, PageHeader, Toolbar } from '../components/layout';
 import { BarChart } from '../components/charts';
+import { PlanBoard } from '../components/timeline/PlanBoard';
 import { useTaskStore } from '../store/taskStore';
 import { useUndoableRemove } from '../hooks/useUndoableRemove';
 import { useMultiSelect } from '../hooks/useMultiSelect';
@@ -569,6 +570,8 @@ export const TasksPage: React.FC = () => {
         }
       />
 
+      <PlanBoard />
+
       {tasks.length > 0 && (
         <Card>
           <CardHeader title="今日进度" subtitle="按截止日期是今天的任务统计" />
@@ -748,7 +751,7 @@ export const TasksPage: React.FC = () => {
         ) : (
           // 列表自己承载行间导航：焦点落在行里时 j / k / x 才生效，离开列表就不管
           // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions
-          <ul className="space-y-2" onKeyDown={listNav.onKeyDown}>
+          <ul className="space-y-2" aria-label="任务列表" onKeyDown={listNav.onKeyDown}>
             {visibleTasks.map((task) => {
               const priority = PRIORITY_BADGE[task.priority];
               const done = task.status === 'completed';

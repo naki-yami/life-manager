@@ -4,6 +4,8 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { TasksPage } from './TasksPage';
 import { ToastProvider } from '../components/ui';
+import { useBookStore } from '../store/bookStore';
+import { useFocusStore } from '../store/focusStore';
 import { useTaskStore } from '../store/taskStore';
 import { addDays, todayKey } from '../utils/date';
 import { requestPaletteFocus, resetPaletteFocus } from '../hooks/usePaletteFocus';
@@ -42,6 +44,9 @@ describe('TasksPage 从命令面板打开', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 });
+
+/** 主列表。时间轴上的「待排」也会印一遍任务标题，断言得限定在列表里 */
+const list = () => within(screen.getByRole('list', { name: '任务列表' }));
 
 const seed = () => {
   const store = useTaskStore.getState();
@@ -93,8 +98,8 @@ describe('TasksPage', () => {
 
     await userEvent.type(screen.getByRole('textbox', { name: '搜索' }), '马上');
 
-    expect(screen.getAllByRole('checkbox')).toHaveLength(1);
-    expect(screen.getByText('紧急任务')).toBeInTheDocument();
+    expect(list().getAllByRole('checkbox')).toHaveLength(1);
+    expect(list().getByText('紧急任务')).toBeInTheDocument();
   });
 
   it('搜索无结果时提示可以清除筛选', async () => {
@@ -203,7 +208,7 @@ describe('TasksPage', () => {
 
     const titles = useTaskStore.getState().tasks.map((task) => task.title);
     expect(titles).toEqual(['低优先级', '紧急任务', '中等任务']);
-    expect(screen.getByText('中等任务')).toBeInTheDocument();
+    expect(list().getByText('中等任务')).toBeInTheDocument();
   });
 
   it('勾选完成后出现撤销提示，撤销会恢复待办', async () => {
@@ -228,9 +233,9 @@ describe('TasksPage', () => {
 
     await userEvent.selectOptions(screen.getByRole('combobox', { name: '按优先级筛选' }), 'low');
 
-    expect(screen.getAllByRole('checkbox')).toHaveLength(1);
-    expect(screen.getByText('低优先级')).toBeInTheDocument();
-    expect(screen.queryByText('紧急任务')).not.toBeInTheDocument();
+    expect(list().getAllByRole('checkbox')).toHaveLength(1);
+    expect(list().getByText('低优先级')).toBeInTheDocument();
+    expect(list().queryByText('紧急任务')).not.toBeInTheDocument();
   });
 
   it('看板视图把任务分到待办与已完成两列', async () => {
@@ -379,8 +384,8 @@ describe('TasksPage 标签', () => {
 
     await userEvent.type(screen.getByRole('textbox', { name: '搜索' }), '#财务');
 
-    expect(screen.getByText('整理发票')).toBeInTheDocument();
-    expect(screen.queryByText('写周报')).not.toBeInTheDocument();
+    expect(list().getByText('整理发票')).toBeInTheDocument();
+    expect(list().queryByText('写周报')).not.toBeInTheDocument();
   });
 });
 describe('TasksPage 宽屏双栏', () => {
@@ -398,7 +403,7 @@ describe('TasksPage 宽屏双栏', () => {
     render(<TasksPage />);
 
     expect(within(panel()).getByText('还没有选中任务')).toBeInTheDocument();
-    expect(screen.getByText('中等任务')).toBeInTheDocument();
+    expect(list().getByText('中等任务')).toBeInTheDocument();
   });
 
   it('点「编辑」在右栏就地改，不再弹对话框，列表也还在', async () => {
@@ -410,7 +415,7 @@ describe('TasksPage 宽屏双栏', () => {
 
     // 焦点没被搬进对话框，列表也没被遮住
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-    expect(screen.getByText('紧急任务')).toBeInTheDocument();
+    expect(list().getByText('紧急任务')).toBeInTheDocument();
 
     const titleInput = within(panel()).getByLabelText(/^标题/);
     expect(titleInput).toHaveValue('中等任务');
@@ -688,5 +693,99 @@ describe('TasksPage 行间键盘导航（U8）', () => {
     const selected = screen.getAllByRole('checkbox').find((box) => box === boxes[1]);
     expect(selected).toBeChecked();
     expect(boxes[1]).toHaveFocus();
+  });
+});
+
+describe('TasksPage 今日时间轴', () => {
+  // 时间轴是自成一体的：数据全从 store 里读，所以这两条也要一起复位
+  beforeEach(() => {
+    useBookStore.setState({ books: [], sessions: [] });
+    useFocusStore.setState({ sessions: [], active: null });
+  });
+
+  it('把今天到期的任务排上时间轴，并从盒子上开始专注', async () => {
+    useTaskStore.getState().addTask('写周报', '', 'high', todayKey());
+    render(<TasksPage />);
+
+    expect(screen.getByRole('heading', { name: '今日时间轴' })).toBeInTheDocument();
+    expect(screen.getByText('待排（1）')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('把「写周报」排到'), { target: { value: '09:00' } });
+
+    const task = useTaskStore.getState().tasks[0]!;
+    expect(task.timebox).toEqual({ date: todayKey(), start: '09:00', minutes: 60 });
+    expect(screen.getByText('09:00–10:00')).toBeInTheDocument();
+    expect(screen.getByText('待排（0）')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: '开始专注：写周报' }));
+    expect(useFocusStore.getState().active).toMatchObject({
+      entityId: task.id,
+      target: 'task',
+      plannedMinutes: 60,
+    });
+  });
+
+  it('结束专注会把时长写进对应模块的流水', async () => {
+    useBookStore.getState().addBook('人类简史', '尤瓦尔', '历史');
+    const bookId = useBookStore.getState().books[0]!.id;
+    useBookStore.getState().updateBookStatus(bookId, 'reading');
+
+    useFocusStore.getState().startFocus({
+      entityId: bookId,
+      title: '人类简史',
+      target: 'book',
+      mode: 'stopwatch',
+      plannedMinutes: 25,
+    });
+    // 假装这一轮已经跑了 30 分钟
+    useFocusStore.setState({
+      active: {
+        ...useFocusStore.getState().active!,
+        startedAt: new Date(Date.now() - 30 * 60_000).toISOString(),
+      },
+    });
+
+    render(<TasksPage />);
+    await userEvent.click(screen.getByRole('button', { name: '结束并记录' }));
+
+    expect(useFocusStore.getState().active).toBeNull();
+    const session = useFocusStore.getState().sessions[0]!;
+    expect(session.minutes).toBeGreaterThanOrEqual(30);
+    expect(session.posted).toBe(true);
+
+    const reading = useBookStore.getState().sessions;
+    expect(reading).toHaveLength(1);
+    expect(reading[0]).toMatchObject({ bookId, minutes: session.minutes });
+  });
+
+  it('没有可排的任务时时间轴给出空态，而不是崩掉', () => {
+    render(<TasksPage />);
+
+    expect(screen.getByText('今天该排的都排上了。')).toBeInTheDocument();
+    expect(screen.getByText('目前没有可以专注的对象')).toBeInTheDocument();
+  });
+
+  it('任务专注结束后可以顺手把它勾掉', async () => {
+    useTaskStore.getState().addTask('写周报', '', 'high', todayKey());
+    const taskId = useTaskStore.getState().tasks[0]!.id;
+    useFocusStore.getState().startFocus({
+      entityId: taskId,
+      title: '写周报',
+      target: 'task',
+      mode: 'stopwatch',
+      plannedMinutes: 25,
+    });
+
+    // 这条要验证提示里的「标记完成」，所以得带上 ToastProvider
+    render(
+      <ToastProvider>
+        <TasksPage />
+      </ToastProvider>,
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: '结束并记录' }));
+    await userEvent.click(await screen.findByRole('button', { name: '标记完成' }));
+
+    expect(useTaskStore.getState().tasks[0]!.status).toBe('completed');
   });
 });
