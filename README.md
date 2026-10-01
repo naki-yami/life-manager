@@ -4,6 +4,21 @@
 > 成长（习惯 + 目标 + 日记）、统计与复盘，加上首页总览与游戏娱乐。
 > 没有账号、没有后端、没有网络请求 —— 数据只存在你自己的浏览器里，导出来就是一个 JSON 文件。
 
+## 当前版本：v1.0.0
+
+第一个完整版本。八个主模块全部可用，`docs/Life-Manager-V2-优化建议.md` 里 V2.0 / V2.1 / V2.2
+三组验收逐条打勾。定版时的读数：
+
+| 项           | 读数                                              |
+| ------------ | ------------------------------------------------- |
+| 单元与组件   | `npm test` **1455 条 / 91 个文件**全过            |
+| 真浏览器冒烟 | `npm run e2e` **32 条**全过（本机 Edge，不进 CI） |
+| 首屏体积     | gzip **164.5 KB**（预算 300 KB）                  |
+| 静态检查     | `tsc -b` / `eslint` / `prettier --check` 全绿     |
+
+**这一版明确没做**（都记在优化建议里，附了理由）：各页排序公用件、开发页「归档」维度、
+库条目的收藏、列表 layout 动画、EmptyState 示例数据、图表跨点位的一句话摘要。
+
 ## 为什么是「纯本地」
 
 个人数据（读了什么书、写了多少字、练了什么、吃了什么）不需要经过别人的服务器。所以这个项目：
@@ -100,10 +115,10 @@ scripts/       构建产物体积预算、PWA 图标生成等小工具
 | `npm run typecheck`    | TypeScript 全量类型检查（`tsc -b`）         |
 | `npm run lint`         | ESLint（含 `jsx-a11y` 全量规则）            |
 | `npm run format:check` | Prettier 全仓格式检查                       |
-| `npm run test`         | vitest 单元与组件测试（1400+ 条）           |
+| `npm run test`         | vitest 单元与组件测试（1455 条）            |
 | `npm run build`        | 生产构建                                    |
 | `npm run size`         | 首屏 gzip 体积预算（≤ 300KB，构建后跑）     |
-| `npm run e2e`          | 真浏览器冒烟（30 条，需本机 Edge，不进 CI） |
+| `npm run e2e`          | 真浏览器冒烟（32 条，需本机 Edge，不进 CI） |
 
 CI（`.github/workflows/ci.yml`）按 `typecheck → lint → format:check → test → build → size` 顺序跑。
 `npm run e2e` 只在本地跑 —— 它驱动本机 Edge，CI runner 上没有，详见 `e2e/README.md`。
