@@ -111,4 +111,20 @@ describe('.github/workflows/ci.yml', () => {
     expect(workflow).toContain('node-version: 22');
     expect(workflow).toContain('cache: npm');
   });
+
+  it('只用官方 actions，并钉在带大版本号的 tag 上', () => {
+    const refs = [...workflow.matchAll(/uses:\s*(\S+)/g)].map((match) => match[1]);
+    expect(refs.length).toBeGreaterThan(0);
+    for (const ref of refs) {
+      // 不引第三方 action（供应链面越小越好），也不跟分支（@main 会静默漂移）
+      expect(ref).toMatch(/^actions\/[\w-]+@v\d+$/);
+    }
+  });
+
+  it('两个 action 都在当前主版本上', () => {
+    // 这条写死是有意的：升主版本时这里会红，逼人确认一遍再改。
+    // v4 打的是 Node 20，跑起来会被弃用警告刷屏（v5 起改用 Node 24）。
+    const refs = [...workflow.matchAll(/uses:\s*(\S+)/g)].map((match) => match[1]);
+    expect(refs).toEqual(['actions/checkout@v7', 'actions/setup-node@v7']);
+  });
 });
