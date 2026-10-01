@@ -39,6 +39,40 @@ describe('MasterDetail', () => {
     expect(props.onCloseDetail).toHaveBeenCalled();
   });
 
+  it('窄屏关掉详情抽屉后，焦点回到打开它的那条书目', async () => {
+    const user = userEvent.setup();
+    // 真实用法：点列表里的一行 → 抽屉滑出 → 关掉。焦点得回到那一行，
+    // 否则键盘用户下一步按 Tab 是从整页开头重新走一遍
+    const BooksHarness: React.FC = () => {
+      const [open, setOpen] = React.useState(false);
+      return (
+        <MasterDetail
+          detailTitle="读书笔记"
+          detailOpen={open}
+          onCloseDetail={() => setOpen(false)}
+          emptyDetail={<p>还没有选中书</p>}
+          detail={<p>笔记内容</p>}
+        >
+          <button type="button" onClick={() => setOpen(true)}>
+            置身事内
+          </button>
+        </MasterDetail>
+      );
+    };
+    render(<BooksHarness />);
+
+    const row = screen.getByRole('button', { name: '置身事内' });
+    await user.click(row);
+    expect(screen.getByRole('dialog', { name: '读书笔记' })).toBeInTheDocument();
+    // 焦点已经被搬进抽屉，不在行上
+    expect(row).not.toHaveFocus();
+
+    await user.keyboard('{Escape}');
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(row).toHaveFocus();
+  });
+
   it('宽屏并排渲染，且不再用对话框把焦点搬走', () => {
     mockMediaQueries({ [MASTER_DETAIL_QUERY]: true });
     setup({ detailOpen: true });

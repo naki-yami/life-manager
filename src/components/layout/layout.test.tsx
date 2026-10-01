@@ -518,6 +518,19 @@ describe('BottomTabBar', () => {
     );
   });
 
+  it('关掉导航抽屉后焦点回到「更多」按钮，而不是丢到整页开头', async () => {
+    renderLayout('/');
+
+    const more = within(bar()).getByRole('button', { name: '更多' });
+    await userEvent.click(more);
+    expect(screen.getByRole('dialog', { name: '导航' })).toBeInTheDocument();
+
+    await userEvent.keyboard('{Escape}');
+
+    expect(screen.queryByRole('dialog', { name: '导航' })).not.toBeInTheDocument();
+    expect(more).toHaveFocus();
+  });
+
   it('当前页面的 Tab 带 aria-current，点击即可跳转', async () => {
     renderLayout('/');
 

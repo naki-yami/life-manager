@@ -39,8 +39,22 @@ export function useFocusTrap<T extends HTMLElement>(
 
     return () => {
       if (lockScroll && previousOverflow !== null) document.body.style.overflow = previousOverflow;
-      // 元素已经从 DOM 上摘掉时不要再 focus，否则会把焦点丢到 body 上
-      if (previous?.isConnected) previous.focus?.();
+
+      /*
+       * 归还焦点。
+       *
+       * 触发元素还在（绝大多数情况）就直接还给它。已经不在了 —— 典型场景是「删除」：
+       * 确认弹窗关掉的那一刻，打开它的那一行也没了 —— 退回主内容区。
+       *
+       * 不兜这一下的话焦点会掉到 body 上：读屏用户以为整页失去了焦点，键盘用户下一步
+       * 按 Tab 是从整页开头重新走，刚才的位置等于白丢。
+       */
+      if (previous?.isConnected) {
+        previous.focus?.();
+        return;
+      }
+      const main = document.getElementById('main-content') ?? document.querySelector('main');
+      main?.focus?.();
     };
   }, [containerRef, lockScroll]);
 

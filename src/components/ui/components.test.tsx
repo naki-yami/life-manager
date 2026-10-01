@@ -391,3 +391,176 @@ describe('窄屏适配', () => {
     expect(screen.getByRole('dialog', { name: '导航' }).className).toContain('max-w-[85vw]');
   });
 });
+
+/**
+ * 浮层关闭后的焦点归还（U8）。
+ *
+ * 三个浮层共用 useFocusTrap 的同一份实现，所以这里也共用一套写法：点「打开」的那个按钮
+ * 就是待会儿要收回焦点的那个 —— 焦点丢到 body 上时，键盘用户下一步按 Tab 是从整页开头
+ * 重新走，等于把刚才的位置弄丢了。
+ */
+describe('浮层关闭后的焦点归还（U8）', () => {
+  const ModalHarness: React.FC = () => {
+    const [isOpen, setOpen] = useState(false);
+    return (
+      <>
+        <button type="button" onClick={() => setOpen(true)}>
+          打开编辑弹窗
+        </button>
+        <Modal isOpen={isOpen} onClose={() => setOpen(false)} title="编辑书籍">
+          <p>表单</p>
+        </Modal>
+      </>
+    );
+  };
+
+  const DrawerHarness: React.FC = () => {
+    const [isOpen, setOpen] = useState(false);
+    return (
+      <>
+        <button type="button" onClick={() => setOpen(true)}>
+          打开导航抽屉
+        </button>
+        <Drawer isOpen={isOpen} onClose={() => setOpen(false)} title="导航">
+          <p>书签</p>
+        </Drawer>
+      </>
+    );
+  };
+
+  const ConfirmHarness: React.FC = () => {
+    const [isOpen, setOpen] = useState(false);
+    return (
+      <>
+        <button type="button" onClick={() => setOpen(true)}>
+          删除这本书
+        </button>
+        <ConfirmDialog
+          isOpen={isOpen}
+          onClose={() => setOpen(false)}
+          onConfirm={() => setOpen(false)}
+          title="删除书籍"
+          tone="danger"
+        />
+      </>
+    );
+  };
+
+  it('Modal：点关闭按钮后焦点回到触发它的那个按钮', async () => {
+    const user = userEvent.setup();
+    render(<ModalHarness />);
+
+    const trigger = screen.getByRole('button', { name: '打开编辑弹窗' });
+    await user.click(trigger);
+    expect(screen.getByRole('dialog', { name: '编辑书籍' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '关闭' }));
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
+  });
+
+  it('Modal：Esc 关闭后焦点也回到触发按钮', async () => {
+    const user = userEvent.setup();
+    render(<ModalHarness />);
+
+    const trigger = screen.getByRole('button', { name: '打开编辑弹窗' });
+    await user.click(trigger);
+    await user.keyboard('{Escape}');
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
+  });
+
+  it('Modal：点背景遮罩关闭后焦点也回到触发按钮', async () => {
+    const user = userEvent.setup();
+    render(<ModalHarness />);
+
+    const trigger = screen.getByRole('button', { name: '打开编辑弹窗' });
+    await user.click(trigger);
+
+    const dialog = screen.getByRole('dialog', { name: '编辑书籍' });
+    // 遮罩是弹层根容器的第一个孩子：点它等于「点外面」
+    const backdrop = dialog.parentElement?.firstElementChild;
+    expect(backdrop).toHaveAttribute('aria-hidden');
+    await user.click(backdrop as HTMLElement);
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
+  });
+
+  it('Drawer：关闭后焦点回到触发按钮', async () => {
+    const user = userEvent.setup();
+    render(<DrawerHarness />);
+
+    const trigger = screen.getByRole('button', { name: '打开导航抽屉' });
+    await user.click(trigger);
+    expect(screen.getByRole('dialog', { name: '导航' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '关闭' }));
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
+  });
+
+  it('触发元素在浮层里被删掉时，焦点退回主内容区，不掉到 body 上', async () => {
+    const user = userEvent.setup();
+    // 真实场景：确认删除 → 弹窗关掉的同时，打开它的那一行也没了。
+    // 不兜这一下的话焦点落到 body，下一步 Tab 从整页开头重来。
+    const DeleteHarness: React.FC = () => {
+      const [isOpen, setOpen] = useState(false);
+      const [hasRow, setHasRow] = useState(true);
+      return (
+        <main id="main-content" tabIndex={-1}>
+          {hasRow && (
+            <button type="button" onClick={() => setOpen(true)}>
+              删除这本书
+            </button>
+          )}
+          <Modal
+            isOpen={isOpen}
+            onClose={() => setOpen(false)}
+            title="删除书籍"
+            footer={
+              <button
+                type="button"
+                onClick={() => {
+                  setHasRow(false);
+                  setOpen(false);
+                }}
+              >
+                确认删除
+              </button>
+            }
+          >
+            <p>删掉就找不回来了</p>
+          </Modal>
+        </main>
+      );
+    };
+    render(<DeleteHarness />);
+
+    await user.click(screen.getByRole('button', { name: '删除这本书' }));
+    expect(screen.getByRole('dialog', { name: '删除书籍' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '确认删除' }));
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '删除这本书' })).not.toBeInTheDocument();
+    expect(document.getElementById('main-content')).toHaveFocus();
+  });
+
+  it('ConfirmDialog：点取消后焦点回到触发按钮', async () => {
+    const user = userEvent.setup();
+    render(<ConfirmHarness />);
+
+    const trigger = screen.getByRole('button', { name: '删除这本书' });
+    await user.click(trigger);
+    expect(screen.getByRole('dialog', { name: '删除书籍' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '取消' }));
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
+  });
+});
