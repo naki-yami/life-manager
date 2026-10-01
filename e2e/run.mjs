@@ -29,9 +29,13 @@ import { registerRouteCases } from './cases/routes.e2e.mjs';
 import { registerKeyboardCases } from './cases/keyboard.e2e.mjs';
 import { registerDataCases } from './cases/data.e2e.mjs';
 import { registerMobileCases } from './cases/mobile.e2e.mjs';
+import { registerLayoutCases } from './cases/layout.e2e.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const SHOT_DIR = join(ROOT, '.runtime', 'e2e-shots');
+
+/** 桌面视口。窄屏用例自己会改，所以每条用例开跑前压回来（见 beforeEach） */
+const DEFAULT_VIEWPORT = { width: 1440, height: 1100 };
 
 const argv = process.argv.slice(2);
 const hasFlag = (name) => argv.includes(`--${name}`);
@@ -43,6 +47,7 @@ registerRouteCases();
 registerKeyboardCases();
 registerDataCases();
 registerMobileCases();
+registerLayoutCases();
 
 if (hasFlag('list')) {
   for (const c of getCases()) console.log(`${c.name.padEnd(20)} ${c.title}`);
@@ -133,7 +138,7 @@ try {
   edge = await launchEdge();
   const target = await pickPageTarget(edge.endpoint);
   session = await openSession(edge.endpoint, target);
-  await session.setViewport({ width: 1440, height: 1100 });
+  await session.setViewport(DEFAULT_VIEWPORT);
   console.log(`  CDP 端口 ${edge.port}，target ${target.id}`);
 
   if (shots) {
@@ -152,12 +157,18 @@ try {
    *
    * 「重新加载」用 Page.reload 而不是 Page.navigate 到同一个地址 —— 同 URL 导航
    * 浏览器可能什么都不做，那就还是旧的内存态。清完存储、内存态却没换，等于没清。
+   *
+   * 视口也要复位。它和存储是同一类脏东西：窄屏用例把视口改成 375 就不再管了，
+   * 排在它后面的宽屏用例于是长在 375 上 —— 卡片里的控件行会折行，
+   * 量出来的几何全不是那个意思（`writing-card-row` 就这么栽过一次）。
+   * 用例之间不该有顺序依赖，所以每条开跑前统一压回宽屏。
    */
   async function beforeEach() {
     try {
       await resetAppState(session);
       await session.send('Page.reload', { ignoreCache: false });
       await session.waitForLoad();
+      await session.setViewport(DEFAULT_VIEWPORT);
       await delay(1200);
       session.clearErrors();
     } catch (error) {
