@@ -15,7 +15,7 @@ beforeEach(() => {
     water: {},
     templates: [],
   });
-  useLibraryStore.setState({ customFoods: [], customExercises: [] });
+  useLibraryStore.setState({ customFoods: [], customExercises: [], recentFoodNames: [], recentExerciseNames: [] });
 });
 
 const today = todayKey();
@@ -385,5 +385,30 @@ describe('DietPage', () => {
       within(picker).getByRole('button', { name: '删除自建食物「妈妈牌红烧肉」' }),
     );
     expect(useLibraryStore.getState().customFoods).toHaveLength(0);
+  });
+
+  it('食物选择器记住最近使用（U4）：填入一次后顶部出现快捷 chips', async () => {
+    render(<DietPage />);
+
+    await userEvent.click(screen.getAllByRole('button', { name: '记录饮食' })[0]!);
+    const dialog = screen.getByRole('dialog', { name: '记录饮食' });
+    await userEvent.click(within(dialog).getByRole('button', { name: '从食物库选择' }));
+    const picker = screen.getByRole('dialog', { name: '从食物库选择' });
+
+    // 首次打开没有最近使用区
+    expect(within(picker).queryByText('最近使用')).not.toBeInTheDocument();
+
+    await userEvent.click(within(picker).getByRole('button', { name: '把「鸡胸肉」填入表单' }));
+
+    // 关掉重开：最近使用区出现鸡胸肉
+    await userEvent.click(within(picker).getByRole('button', { name: '关闭' }));
+    await userEvent.click(within(dialog).getByRole('button', { name: '从食物库选择' }));
+    const pickerAgain = screen.getByRole('dialog', { name: '从食物库选择' });
+    const recentSection = within(pickerAgain).getByText('最近使用').closest('div')!;
+    expect(within(recentSection).getByRole('button', { name: /鸡胸肉/ })).toBeInTheDocument();
+
+    // 点快捷 chip 直接再填一行
+    await userEvent.click(within(recentSection).getByRole('button', { name: /鸡胸肉/ }));
+    expect(useLibraryStore.getState().recentFoodNames[0]).toBe('鸡胸肉');
   });
 });

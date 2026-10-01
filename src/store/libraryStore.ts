@@ -3,7 +3,7 @@ import { persist } from 'zustand/middleware';
 import { z } from 'zod';
 import { createId } from '../utils/id';
 import { STORAGE_KEYS } from '../utils/storageKeys';
-import { normalizeArray, pickEnum } from './normalize';
+import { asRecord, normalizeArray, pickEnum } from './normalize';
 import { persistOptions } from './persist';
 import { customExerciseSchema, customFoodSchema } from '../services/schemas';
 import { FOOD_CATEGORIES } from '../data/foodCategories';
@@ -23,6 +23,11 @@ export type CustomExercise = z.infer<typeof customExerciseSchema>;
 interface LibraryState {
   customFoods: CustomFood[];
   customExercises: CustomExercise[];
+  /** 最近从库里填入过的名字（最近在前，最多 8 条）；选择器顶部给一键直达（U4） */
+  recentFoodNames: string[];
+  recentExerciseNames: string[];
+  recordFoodUsage: (name: string) => void;
+  recordExerciseUsage: (name: string) => void;
   addCustomFood: (food: Omit<CustomFood, 'id' | 'createdAt'>) => void | 'duplicate';
   deleteCustomFood: (id: string) => void;
   addCustomExercise: (exercise: Omit<CustomExercise, 'id' | 'createdAt'>) => void | 'duplicate';
@@ -36,11 +41,25 @@ interface LibraryState {
 const defaultState = {
   customFoods: [] as CustomFood[],
   customExercises: [] as CustomExercise[],
+  recentFoodNames: [] as string[],
+  recentExerciseNames: [] as string[],
 };
+
+/** 最近使用的名字：去重置顶，最多留 8 条 */
+const recordUsage = (names: string[], name: string): string[] => {
+  const trimmed = name.trim();
+  if (!trimmed) return names;
+  return [trimmed, ...names.filter((item) => item !== trimmed)].slice(0, 8);
+};
+
+const pickNameList = (value: unknown): string[] =>
+  Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
 
 const normalize = (persisted: unknown) => {
   const record = typeof persisted === 'object' && persisted !== null ? persisted : {};
   return {
+    recentFoodNames: pickNameList(asRecord(persisted).recentFoodNames),
+    recentExerciseNames: pickNameList(asRecord(persisted).recentExerciseNames),
     customFoods: normalizeArray(customFoodSchema, (record as Record<string, unknown>).customFoods),
     customExercises: normalizeArray(
       customExerciseSchema,
@@ -53,6 +72,10 @@ export const useLibraryStore = create<LibraryState>()(
   persist(
     (set) => ({
       ...defaultState,
+      recordFoodUsage: (name) =>
+        set((state) => ({ recentFoodNames: recordUsage(state.recentFoodNames, name) })),
+      recordExerciseUsage: (name) =>
+        set((state) => ({ recentExerciseNames: recordUsage(state.recentExerciseNames, name) })),
       addCustomFood: (food) => {
         const name = food.name.trim();
         if (!name) return;
@@ -117,6 +140,8 @@ export const useLibraryStore = create<LibraryState>()(
       partialize: (state) => ({
         customFoods: state.customFoods,
         customExercises: state.customExercises,
+        recentFoodNames: state.recentFoodNames,
+        recentExerciseNames: state.recentExerciseNames,
       }),
       normalize,
     }),

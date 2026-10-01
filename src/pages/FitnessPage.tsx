@@ -207,6 +207,8 @@ export const FitnessPage: React.FC = () => {
   const customExercises = useLibraryStore((state) => state.customExercises);
   const addCustomExercise = useLibraryStore((state) => state.addCustomExercise);
   const deleteCustomExercise = useLibraryStore((state) => state.deleteCustomExercise);
+  const recentExerciseNames = useLibraryStore((state) => state.recentExerciseNames);
+  const recordExerciseUsage = useLibraryStore((state) => state.recordExerciseUsage);
   const toastContext = React.useContext(ToastContext);
   const [recordDateFilter, setRecordDateFilter] = useState<string | null>(null);
 
@@ -424,7 +426,17 @@ export const FitnessPage: React.FC = () => {
 
   const visibleExercises = libraryExercises.slice(0, 60);
 
+  /** 最近使用：按记录顺序取还在库里的前 6 个（U4） */
+  const recentExercises = useMemo(() => {
+    const byName = new Map(libraryExercises.map((exercise) => [exercise.name, exercise]));
+    return recentExerciseNames
+      .map((name) => byName.get(name))
+      .filter((exercise): exercise is LibraryExercise => exercise !== undefined)
+      .slice(0, 6);
+  }, [libraryExercises, recentExerciseNames]);
+
   const fillFromExerciseLibrary = (exercise: LibraryExercise): void => {
+    recordExerciseUsage(exercise.name);
     setWorkoutForm((form) => {
       const filled = {
         name: exercise.name,
@@ -1451,6 +1463,28 @@ export const FitnessPage: React.FC = () => {
               />
             </div>
           </div>
+
+          {exerciseKeyword.trim() === '' &&
+            exerciseMuscle === 'all' &&
+            exerciseEquipment === 'all' &&
+            recentExercises.length > 0 && (
+            <div>
+              <p className="mb-1.5 text-sm font-medium text-content-secondary">最近使用</p>
+              <div className="flex flex-wrap gap-1.5">
+                {recentExercises.map((exercise) => (
+                  <button
+                    key={exercise.name}
+                    type="button"
+                    onClick={() => fillFromExerciseLibrary(exercise)}
+                    className="inline-flex items-center gap-1 rounded-full bg-inset px-3 py-1 text-xs text-content-secondary transition-colors duration-fast ease-standard hover:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-line-focus"
+                  >
+                    {exercise.name}
+                    <span className="text-2xs text-content-tertiary">{exercise.muscleGroup}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           <ul className="max-h-64 divide-y divide-line-subtle overflow-y-auto rounded border border-line-subtle">
             {visibleExercises.length === 0 ? (

@@ -155,6 +155,8 @@ export const DietPage: React.FC = () => {
   const customFoods = useLibraryStore((state) => state.customFoods);
   const addCustomFood = useLibraryStore((state) => state.addCustomFood);
   const deleteCustomFood = useLibraryStore((state) => state.deleteCustomFood);
+  const recentFoodNames = useLibraryStore((state) => state.recentFoodNames);
+  const recordFoodUsage = useLibraryStore((state) => state.recordFoodUsage);
 
   const today = todayKey();
 
@@ -297,7 +299,17 @@ export const DietPage: React.FC = () => {
   /** 只展示前 60 条，避免一次渲染上千行；搜索本身就是收窄手段 */
   const visibleFoods = libraryFoods.slice(0, 60);
 
+  /** 最近使用：按记录顺序取还在库里的前 6 个 */
+  const recentFoods = useMemo(() => {
+    const byName = new Map(libraryFoods.map((food) => [food.name, food]));
+    return recentFoodNames
+      .map((name) => byName.get(name))
+      .filter((food): food is LibraryFood => food !== undefined)
+      .slice(0, 6);
+  }, [libraryFoods, recentFoodNames]);
+
   const fillFromLibrary = (food: LibraryFood): void => {
+    recordFoodUsage(food.name);
     setForm((current) => {
       const filled: FoodDraft = {
         name: food.name,
@@ -969,6 +981,25 @@ export const DietPage: React.FC = () => {
               />
             </div>
           </div>
+
+          {foodKeyword.trim() === '' && foodCategory === 'all' && recentFoods.length > 0 && (
+            <div>
+              <p className="mb-1.5 text-sm font-medium text-content-secondary">最近使用</p>
+              <div className="flex flex-wrap gap-1.5">
+                {recentFoods.map((food) => (
+                  <button
+                    key={food.name}
+                    type="button"
+                    onClick={() => fillFromLibrary(food)}
+                    className="inline-flex items-center gap-1 rounded-full bg-inset px-3 py-1 text-xs text-content-secondary transition-colors duration-fast ease-standard hover:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-line-focus"
+                  >
+                    {food.name}
+                    <span className="text-2xs text-content-tertiary tabular">{food.calories} kcal</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           <ul className="max-h-64 divide-y divide-line-subtle overflow-y-auto rounded border border-line-subtle">
             {visibleFoods.length === 0 ? (

@@ -2,7 +2,12 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { allFoods, useLibraryStore } from './libraryStore';
 
 beforeEach(() => {
-  useLibraryStore.setState({ customFoods: [], customExercises: [] });
+  useLibraryStore.setState({
+    customFoods: [],
+    customExercises: [],
+    recentFoodNames: [],
+    recentExerciseNames: [],
+  });
 });
 
 describe('libraryStore 自建食物', () => {
@@ -89,5 +94,27 @@ describe('libraryStore 自建食物', () => {
 
     expect(useLibraryStore.getState().customExercises).toHaveLength(1);
     expect(useLibraryStore.getState().customFoods).toHaveLength(1);
+  });
+
+  it('最近使用：去重置顶、上限 8 条、空名字忽略', () => {
+    const store = useLibraryStore.getState();
+    for (const name of ['鸡胸肉', '米饭', '鸡蛋', '牛奶', '苹果', '面条', '豆腐', '虾', '牛肉']) {
+      store.recordFoodUsage(name);
+    }
+    let names = useLibraryStore.getState().recentFoodNames;
+    // 最新在前，最旧的「鸡胸肉」被挤出（上限 8）
+    expect(names[0]).toBe('牛肉');
+    expect(names).not.toContain('鸡胸肉');
+    expect(names).toHaveLength(8);
+
+    // 再点一次「米饭」：去重置顶，不重复
+    store.recordFoodUsage('米饭');
+    names = useLibraryStore.getState().recentFoodNames;
+    expect(names[0]).toBe('米饭');
+    expect(names.filter((item) => item === '米饭')).toHaveLength(1);
+
+    store.recordExerciseUsage('卧推');
+    store.recordExerciseUsage('  ');
+    expect(useLibraryStore.getState().recentExerciseNames).toEqual(['卧推']);
   });
 });
