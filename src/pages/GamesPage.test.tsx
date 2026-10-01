@@ -143,14 +143,12 @@ describe('GamesPage', () => {
     await userEvent.type(hours, '42');
     expect(gameOf('哈迪斯').hoursPlayed).toBe(42);
 
-    fireEvent.change(screen.getByRole('slider', { name: '调整「哈迪斯」的进度' }), {
-      target: { value: '70' },
-    });
+    const progress = screen.getByRole('slider', { name: '调整「哈迪斯」的进度' });
+    fireEvent.change(progress, { target: { value: '70' } });
     expect(gameOf('哈迪斯').progress).toBe(70);
-    expect(screen.getByRole('progressbar', { name: '通关进度' })).toHaveAttribute(
-      'aria-valuenow',
-      '70',
-    );
+    // 进度只有一个控件（可拖的那根）：改完之后它自己也要跟着显示 70%
+    expect(screen.getByRole('slider', { name: '调整「哈迪斯」的进度' })).toHaveValue('70');
+    expect(screen.getByText('70%')).toBeInTheDocument();
   });
 
   it('可以直接点成就切换解锁状态', async () => {

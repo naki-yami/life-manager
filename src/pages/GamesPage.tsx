@@ -12,7 +12,6 @@ import {
   Input,
   Modal,
   NumberInput,
-  ProgressBar,
   SegmentedControl,
   Select,
   SelectionBar,
@@ -913,14 +912,11 @@ export const GamesPage: React.FC = () => {
                           </div>
                         </div>
 
-                        <div className="mt-3 space-y-2">
-                          <ProgressBar
-                            value={game.progress}
-                            label="通关进度"
-                            showValue
-                            tone={game.progress >= 100 ? 'success' : 'accent'}
-                          />
+                        <div className="mt-3">
+                          {/* 进度只留这一根可拖的条：原先上面还并排放了一根只读进度条，
+                              同一个值印两遍，也看不出哪根能改 */}
                           <Slider
+                            label="通关进度"
                             ariaLabel={`调整「${game.name}」的进度`}
                             value={game.progress}
                             onChange={(value) => updateGame(game.id, { progress: value })}
