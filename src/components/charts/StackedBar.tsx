@@ -4,6 +4,7 @@ import { STACKED_PEAK_LABEL } from './buckets';
 import type { ChartBucket } from './buckets';
 import { CHART_SERIES_BAR, CHART_SERIES_DOT, seriesAt, type ChartSeriesIndex } from './tones';
 import { CHART_FOCUS_RING, useChartCursor } from './useChartCursor';
+import { peakWithDate } from './digest';
 
 export interface StackedSeries {
   name: string;
@@ -50,9 +51,9 @@ export const StackedBar: React.FC<StackedBarProps> = ({
   );
   /** 缩放用的下界（理由同 BarChart）：全 0 时给个非零除数，别拿它当峰值报出去 */
   const scale = Math.max(1, ...totals);
-  /** 描述里报的真实峰值：totals 已按非负累加，取最大值即可 */
-  const peak = totals.reduce((top, value) => Math.max(top, value), 0);
   const grandTotal = totals.reduce((sum, value) => sum + value, 0);
+  /** 描述里的峰值走 peakWithDate：它只知道「哪一天最高」，不知道是被拆成几段的 */
+  const dailyTotals = dates.map((date, index) => ({ date, value: totals[index] ?? 0 }));
   const activeIndex = cursor.index;
   const activeDate = activeIndex === null ? undefined : dates[activeIndex];
 
@@ -72,7 +73,7 @@ export const StackedBar: React.FC<StackedBarProps> = ({
       <div
         {...cursor.containerProps}
         role="img"
-        aria-label={`${label}：合计 ${formatValue(grandTotal)}，${STACKED_PEAK_LABEL[bucket]} ${formatValue(peak)}`}
+        aria-label={`${label}：合计 ${formatValue(grandTotal)}，${STACKED_PEAK_LABEL[bucket]} ${peakWithDate(dailyTotals, formatValue, formatDate)}`}
         className={`flex items-end gap-1 ${CHART_FOCUS_RING}`}
         style={{ height }}
       >

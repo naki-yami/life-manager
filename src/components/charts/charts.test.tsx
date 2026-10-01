@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 import { BarChart, Heatmap, LineChart, Sparkline, StackedBar } from './index';
 import { seriesAt } from './tones';
+import { extremeWithDate, hasChartSignal, peakWithDate, troughWithDate } from './digest';
 import { dayRange, weekdayIndex } from '../../utils/stats';
 
 describe('Sparkline', () => {
@@ -40,7 +41,7 @@ describe('BarChart', () => {
     );
 
     expect(
-      screen.getByRole('img', { name: '每日完成任务数：合计 6 个，单日最高 4 个' }),
+      screen.getByRole('img', { name: '每日完成任务数：合计 6 个，单日最高 4 个（1/8）' }),
     ).toBeInTheDocument();
     expect(screen.getByText('合计 6 个')).toBeInTheDocument();
 
@@ -79,7 +80,7 @@ describe('BarChart', () => {
     render(<BarChart data={data} label="每周完成任务数" bucket="week" />);
 
     expect(
-      screen.getByRole('img', { name: '每周完成任务数：合计 7，单周最高 5' }),
+      screen.getByRole('img', { name: '每周完成任务数：合计 7，单周最高 5（9/14）' }),
     ).toBeInTheDocument();
   });
 });
@@ -102,7 +103,7 @@ describe('LineChart', () => {
 
     expect(
       screen.getByRole('img', {
-        name: '体重趋势：共 2 次记录，最新 68 kg，最低 68 kg，最高 70 kg',
+        name: '体重趋势：共 2 次记录，最新 68 kg，最低 68 kg（9/2），最高 70 kg（9/1）',
       }),
     ).toBeInTheDocument();
     expect(screen.getByText('最低 68 kg · 最高 70 kg')).toBeInTheDocument();
@@ -160,7 +161,7 @@ describe('LineChart', () => {
 
     expect(
       screen.getByRole('img', {
-        name: '心情趋势：共 2 周，最新 3.5 分，最低 2.5 分，最高 3.5 分',
+        name: '心情趋势：共 2 周，最新 3.5 分，最低 2.5 分（9/21），最高 3.5 分（9/28）',
       }),
     ).toBeInTheDocument();
     unmount();
@@ -175,7 +176,7 @@ describe('LineChart', () => {
     );
     expect(
       screen.getByRole('img', {
-        name: '心情趋势：共 1 个月，最新 3.5 分，最低 3.5 分，最高 3.5 分',
+        name: '心情趋势：共 1 个月，最新 3.5 分，最低 3.5 分（9/1），最高 3.5 分（9/1）',
       }),
     ).toBeInTheDocument();
   });
@@ -194,7 +195,9 @@ describe('Heatmap', () => {
     const data = dayRange('2026-01-10', 5).map((date) => ({ date, value: 1 }));
     render(<Heatmap data={data} label="活动热力图" />);
 
-    const grid = screen.getByRole('img', { name: '活动热力图：5 天里有 5 天有记录，合计 5' });
+    const grid = screen.getByRole('img', {
+      name: '活动热力图：5 天里有 5 天有记录，合计 5，最多的一天 1（1/6）',
+    });
     const offset = weekdayIndex(data[0]!.date);
     expect(grid.children).toHaveLength(Math.ceil((offset + data.length) / 7) * 7);
     expect(grid.children).toHaveLength(7);
@@ -315,7 +318,9 @@ describe('StackedBar', () => {
       <StackedBar dates={dates} series={series} label="活动构成" formatDate={(key) => key} />,
     );
 
-    expect(screen.getByRole('img', { name: '活动构成：合计 4，最高一天 3' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('img', { name: '活动构成：合计 4，最高一天 3（2026-01-07）' }),
+    ).toBeInTheDocument();
     const columns = container.querySelectorAll('[role="img"] > div');
     expect(columns).toHaveLength(2);
     // 第一天只有任务 1（占 1/3），第二天任务 2 + 训练 1（占满）
@@ -368,7 +373,9 @@ describe('StackedBar', () => {
       />,
     );
 
-    expect(screen.getByRole('img', { name: '活动构成：合计 4，最高一月 3' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('img', { name: '活动构成：合计 4，最高一月 3（9/1）' }),
+    ).toBeInTheDocument();
   });
 
   it('每一天都是 0 时，「最高一天」报 0，而不是缩放用的 1', () => {
@@ -384,5 +391,51 @@ describe('StackedBar', () => {
     );
 
     expect(screen.getByRole('img', { name: '活动构成：合计 0，最高一天 0' })).toBeInTheDocument();
+  });
+});
+
+describe('图表摘要（U8）', () => {
+  it('峰值带上落在哪一天，读屏用户不用自己比对明细', () => {
+    const data = [
+      { date: '2026-03-10', value: 2 },
+      { date: '2026-03-12', value: 5 },
+      { date: '2026-03-14', value: 1 },
+    ];
+
+    expect(peakWithDate(data, (value) => `${value} 次`)).toBe('5 次（3/12）');
+    expect(troughWithDate(data, (value) => `${value} 次`)).toBe('1 次（3/14）');
+  });
+
+  it('整段没有信号时不报日期 —— 没有「最高的那一天」这件事', () => {
+    const blank = [
+      { date: '2026-03-10', value: 0 },
+      { date: '2026-03-11', value: 0 },
+    ];
+
+    expect(hasChartSignal(blank)).toBe(false);
+    expect(peakWithDate(blank, (value) => `${value} 次`)).toBe('0 次');
+  });
+
+  it('段里混着真实的 0 时照样报日期 —— 那个 0 是记录，不是空白', () => {
+    const data = [
+      { date: '2026-03-10', value: 0 },
+      { date: '2026-03-11', value: 3 },
+    ];
+
+    expect(hasChartSignal(data)).toBe(true);
+    expect(troughWithDate(data, (value) => `${value} 次`)).toBe('0 次（3/10）');
+  });
+
+  it('并列最大时取最早的那一天，结果稳定不随数据顺序漂移', () => {
+    const data = [
+      { date: '2026-03-11', value: 4 },
+      { date: '2026-03-12', value: 4 },
+    ];
+
+    expect(peakWithDate(data, (value) => String(value))).toBe('4（3/11）');
+  });
+
+  it('空序列退回数值本身，调用方不用先判长度', () => {
+    expect(extremeWithDate([], 'max', (value) => `${value} 次`)).toBe('0 次');
   });
 });

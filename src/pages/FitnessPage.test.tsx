@@ -7,7 +7,7 @@ import { ToastProvider } from '../components/ui';
 import { useFitnessStore } from '../store/fitnessStore';
 import { useLibraryStore } from '../store/libraryStore';
 import { useBodyStore } from '../store/bodyStore';
-import { addDays, todayKey } from '../utils/date';
+import { addDays, formatShortDate, todayKey } from '../utils/date';
 
 beforeEach(() => {
   useFitnessStore.setState({ plans: [], records: [] });
@@ -214,7 +214,9 @@ describe('FitnessPage', () => {
     render(<FitnessPage />);
 
     expect(
-      screen.getByRole('img', { name: '最近 91 天训练频率热力图：91 天里有 2 天有记录，合计 2' }),
+      screen.getByRole('img', {
+        name: `最近 91 天训练频率热力图：91 天里有 2 天有记录，合计 2，最多的一天 1（${formatShortDate(addDays(todayKey(), -1))}）`,
+      }),
     ).toBeInTheDocument();
     // 5 组 × 5 次 × (60 + 100) kg，同属当周时合并到一根柱
     expect(screen.getByText(/合计 4,000 kg/)).toBeInTheDocument();
@@ -320,7 +322,7 @@ describe('FitnessPage', () => {
     expect(statText('较上次')).toContain('—');
     expect(
       screen.getByRole('img', {
-        name: '体重趋势：共 1 次记录，最新 70.4 kg，最低 70.4 kg，最高 70.4 kg',
+        name: `体重趋势：共 1 次记录，最新 70.4 kg，最低 70.4 kg（${formatShortDate(todayKey())}），最高 70.4 kg（${formatShortDate(todayKey())}）`,
       }),
     ).toBeInTheDocument();
   });
@@ -341,7 +343,7 @@ describe('FitnessPage', () => {
     expect(statText('较上次')).toContain('上次 71 kg（2026-09-27）');
     expect(
       screen.getByRole('img', {
-        name: '体重趋势：共 2 次记录，最新 70.4 kg，最低 70.4 kg，最高 71 kg',
+        name: '体重趋势：共 2 次记录，最新 70.4 kg，最低 70.4 kg（9/29），最高 71 kg（9/27）',
       }),
     ).toBeInTheDocument();
     expect(screen.getByText('较上次 -0.6 kg')).toBeInTheDocument();

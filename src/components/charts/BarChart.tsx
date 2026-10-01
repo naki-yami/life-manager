@@ -7,6 +7,7 @@ import { CHART_BAR } from './tones';
 import type { ChartTone } from './tones';
 import { formatShortDate } from '../../utils/date';
 import { CHART_FOCUS_RING, useChartCursor } from './useChartCursor';
+import { peakWithDate } from './digest';
 
 export interface BarChartProps {
   data: DayPoint[];
@@ -39,11 +40,9 @@ export const BarChart: React.FC<BarChartProps> = ({
   const cursor = useChartCursor(data.length);
   /**
    * 缩放用的下界：全是 0 时也得有个非零除数，否则柱高会算成 NaN。
-   * 但它**只服务于画图**，不能拿去做描述里的峰值（见 peak）。
+   * 它**只服务于画图** —— 描述里的峰值走 peakWithDate，从真实数据取，不碰这个 floor。
    */
   const scale = Math.max(1, ...data.map((point) => point.value));
-  /** 描述里报的真实峰值：若用上面的 floor，「合计 0」会配上自相矛盾的「最高 1」 */
-  const peak = data.reduce((top, point) => Math.max(top, point.value), 0);
   const total = sumOf(data.map((point) => point.value));
   const active = cursor.index === null ? undefined : data[cursor.index];
 
@@ -63,7 +62,7 @@ export const BarChart: React.FC<BarChartProps> = ({
       <div
         {...cursor.containerProps}
         role="img"
-        aria-label={`${label}：合计 ${formatValue(total)}，${BAR_PEAK_LABEL[bucket]} ${formatValue(peak)}`}
+        aria-label={`${label}：合计 ${formatValue(total)}，${BAR_PEAK_LABEL[bucket]} ${peakWithDate(data, formatValue, formatDate)}`}
         className={`flex items-end gap-1 ${CHART_FOCUS_RING}`}
         style={{ height }}
       >

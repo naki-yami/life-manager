@@ -19,7 +19,7 @@ import { useJournalStore } from '../store/journalStore';
 import { DASHBOARD_WIDGET_IDS, DEFAULT_DASHBOARD, useUiStore } from '../store/uiStore';
 import { ToastProvider } from '../components/ui';
 import { STORAGE_KEYS } from '../utils/storageKeys';
-import { todayKey } from '../utils/date';
+import { formatShortDate, todayKey } from '../utils/date';
 
 const renderHome = () =>
   render(
@@ -227,7 +227,9 @@ describe('HomePage', () => {
     renderHome();
 
     expect(
-      screen.getByRole('img', { name: '近 30 天活动热力图：30 天里有 1 天有记录，合计 2' }),
+      screen.getByRole('img', {
+        name: `近 30 天活动热力图：30 天里有 1 天有记录，合计 2，最多的一天 2（${formatShortDate(todayKey())}）`,
+      }),
     ).toBeInTheDocument();
     expect(screen.getByText('近 7 天 2 次，上一周 0 次')).toBeInTheDocument();
     expect(screen.getByText(/环比/, { selector: 'span' }).textContent).toContain('+100%');
@@ -239,7 +241,9 @@ describe('HomePage', () => {
     renderHome();
 
     expect(
-      screen.getByRole('img', { name: '近 30 天活动热力图：30 天里有 1 天有记录，合计 1' }),
+      screen.getByRole('img', {
+        name: `近 30 天活动热力图：30 天里有 1 天有记录，合计 1，最多的一天 1（${formatShortDate(todayKey())}）`,
+      }),
     ).toBeInTheDocument();
   });
 

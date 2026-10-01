@@ -4,6 +4,7 @@ import { CHART_FILL, CHART_STROKE } from './tones';
 import type { ChartTone } from './tones';
 import { formatShortDate } from '../../utils/date';
 import { CHART_FOCUS_RING, useChartCursor } from './useChartCursor';
+import { peakWithDate, troughWithDate } from './digest';
 import { LINE_POINT_LABEL } from './buckets';
 import type { ChartBucket } from './buckets';
 
@@ -84,7 +85,7 @@ export const LineChart: React.FC<LineChartProps> = ({
       <div
         {...cursor.containerProps}
         role="img"
-        aria-label={`${label}：共 ${data.length} ${LINE_POINT_LABEL[bucket]}，最新 ${formatValue(latest.value)}，最低 ${formatValue(min)}，最高 ${formatValue(max)}`}
+        aria-label={`${label}：共 ${data.length} ${LINE_POINT_LABEL[bucket]}，最新 ${formatValue(latest.value)}，最低 ${troughWithDate(data, formatValue, formatDate)}，最高 ${peakWithDate(data, formatValue, formatDate)}`}
         className={`relative ${CHART_FOCUS_RING}`}
         style={{ height }}
       >

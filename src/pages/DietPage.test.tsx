@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { DietPage } from './DietPage';
 import { useDietStore } from '../store/dietStore';
 import { useLibraryStore } from '../store/libraryStore';
-import { addDays, formatDayLabel, todayKey } from '../utils/date';
+import { addDays, formatDayLabel, formatShortDate, todayKey } from '../utils/date';
 import { FoodItem, MealType } from '../types';
 
 beforeEach(() => {
@@ -202,7 +202,9 @@ describe('DietPage', () => {
     render(<DietPage />);
 
     expect(
-      screen.getByRole('img', { name: '热量趋势（近 7 天）：合计 1,000 kcal，单日最高 600 kcal' }),
+      screen.getByRole('img', {
+        name: `热量趋势（近 7 天）：合计 1,000 kcal，单日最高 600 kcal（${formatShortDate(today)}）`,
+      }),
     ).toBeInTheDocument();
     expect(screen.getByText('合计 1,000 kcal')).toBeInTheDocument();
 

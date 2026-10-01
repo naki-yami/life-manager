@@ -1,6 +1,8 @@
 import React from 'react';
 import type { DayPoint } from '../../utils/stats';
 import { activeDays, heatLevel, sumOf, weekdayIndex } from '../../utils/stats';
+import { formatShortDate } from '../../utils/date';
+import { hasChartSignal, peakWithDate } from './digest';
 
 export interface HeatmapProps {
   data: DayPoint[];
@@ -20,6 +22,10 @@ export const Heatmap: React.FC<HeatmapProps> = ({ data, label, cellSize = 12, cl
   const max = Math.max(0, ...data.map((point) => point.value));
   const total = sumOf(data.map((point) => point.value));
   const active = activeDays(data).length;
+  /** 最热闹的那一天；一段空白期（全 0）不报 —— 没有「最多的一天」这回事 */
+  const busiest = hasChartSignal(data)
+    ? `，最多的一天 ${peakWithDate(data, (value) => String(value), formatShortDate)}`
+    : '';
 
   const slots: Array<DayPoint | null> = [];
   if (data.length > 0) {
@@ -34,7 +40,7 @@ export const Heatmap: React.FC<HeatmapProps> = ({ data, label, cellSize = 12, cl
       <div className="overflow-x-auto pb-1">
         <div
           role="img"
-          aria-label={`${label}：${data.length} 天里有 ${active} 天有记录，合计 ${total}`}
+          aria-label={`${label}：${data.length} 天里有 ${active} 天有记录，合计 ${total}${busiest}`}
           className="grid w-max grid-flow-col gap-1"
           style={{ gridTemplateRows: `repeat(7, ${cellSize}px)` }}
         >

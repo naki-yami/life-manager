@@ -13,7 +13,8 @@ import { useDietStore } from '../store/dietStore';
 import { useGameStore } from '../store/gameStore';
 import { useGoalStore } from '../store/goalStore';
 import { useJournalStore } from '../store/journalStore';
-import { addDays, todayKey } from '../utils/date';
+import { addDays, formatShortDate, todayKey } from '../utils/date';
+import { weekStartKey } from '../utils/stats';
 
 const renderStats = () =>
   render(
@@ -99,7 +100,9 @@ describe('StatsPage', () => {
     renderStats();
 
     expect(
-      screen.getByRole('img', { name: '最近 30 天活动热力图：30 天里有 1 天有记录，合计 1' }),
+      screen.getByRole('img', {
+        name: `最近 30 天活动热力图：30 天里有 1 天有记录，合计 1，最多的一天 1（${formatShortDate(todayKey())}）`,
+      }),
     ).toBeInTheDocument();
     expect(
       screen.getByRole('img', { name: /最近 30 天任务完成数（按天）：合计 1 个/ }),
@@ -114,7 +117,9 @@ describe('StatsPage', () => {
     renderStats();
 
     expect(
-      screen.getByRole('img', { name: '最近 30 天活动热力图：30 天里有 1 天有记录，合计 1' }),
+      screen.getByRole('img', {
+        name: `最近 30 天活动热力图：30 天里有 1 天有记录，合计 1，最多的一天 1（${formatShortDate(todayKey())}）`,
+      }),
     ).toBeInTheDocument();
     expect(screen.getByRole('img', { name: /最近 30 天活动构成：合计 1 次/ })).toBeInTheDocument();
     expect(screen.getByText('连续记录 1 天')).toBeInTheDocument();
@@ -301,7 +306,9 @@ describe('StatsPage', () => {
       expect(within(card as HTMLElement).getByText(name)).toBeInTheDocument();
     }
     expect(
-      screen.getByRole('img', { name: '最近 30 天活动构成：合计 3 次，最高一天 3 次' }),
+      screen.getByRole('img', {
+        name: `最近 30 天活动构成：合计 3 次，最高一天 3 次（${formatShortDate(todayKey())}）`,
+      }),
     ).toBeInTheDocument();
   });
 
@@ -455,7 +462,7 @@ describe('StatsPage', () => {
 
     expect(
       screen.getByRole('img', {
-        name: '最近 90 天读书 · 阅读时长：合计 75 分钟，单周最高 45 分钟',
+        name: `最近 90 天读书 · 阅读时长：合计 75 分钟，单周最高 45 分钟（${formatShortDate(weekStartKey(todayKey()))}）`,
       }),
     ).toBeInTheDocument();
     // 每个模块卡的副标题都会写明聚合粒度，所以是多处命中
