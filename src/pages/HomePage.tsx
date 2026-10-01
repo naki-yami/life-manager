@@ -35,7 +35,6 @@ import {
 } from '../components/ui';
 import { PageHeader } from '../components/layout';
 import { DashboardGrid, type DashboardWidgetView } from '../components/dashboard';
-import { DemoDataCard } from '../components/DemoDataCard';
 import { GoalProgressList } from '../components/goals';
 import { DayTimeline, type TimelineEntry } from '../components/timeline/DayTimeline';
 import { FocusTimer, type FocusOption } from '../components/timeline/FocusTimer';
@@ -1055,8 +1054,6 @@ export const HomePage: React.FC = () => {
           </>
         }
       />
-
-      <DemoDataCard variant="home" />
 
       <DashboardGrid
         widgets={dashboard}

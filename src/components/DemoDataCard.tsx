@@ -15,19 +15,11 @@ import {
   type DemoModules,
 } from '../data/demoData';
 
-export interface DemoDataCardProps {
-  /**
-   * home：冷启动引导——有真实数据时整块隐藏（首页不打扰）。
-   * settings：随时可用——没 demo 就能载入，有 demo 就能清除。
-   */
-  variant: 'home' | 'settings';
-}
-
 /**
  * 示例数据卡（原 7.7）：一键载入 / 一键清除带 demo 前缀标记的样本记录。
- * 自行订阅七个模块，调用方不需要传任何数据。
+ * 只放在「数据与设置」页（用户明确不要放首页）；自行订阅七个模块，调用方不需要传任何数据。
  */
-export const DemoDataCard: React.FC<DemoDataCardProps> = ({ variant }) => {
+export const DemoDataCard: React.FC = () => {
   const toast = useOptionalToast();
   const [busy, setBusy] = useState(false);
 
@@ -45,9 +37,6 @@ export const DemoDataCard: React.FC<DemoDataCardProps> = ({ variant }) => {
   );
   const appEmpty = useMemo(() => appIsEmpty(modules), [modules]);
   const demoLoaded = useMemo(() => demoDataExists(modules), [modules]);
-
-  // 首页变体：有真实数据时保持安静（冷启动引导是它唯一的职责）
-  if (variant === 'home' && !appEmpty && !demoLoaded) return null;
 
   const handleSeed = (): void => {
     setBusy(true);
@@ -72,10 +61,8 @@ export const DemoDataCard: React.FC<DemoDataCardProps> = ({ variant }) => {
     });
   };
 
-  const settingsVariant = variant === 'settings';
-
-  // settings 变体在有真实数据、没 demo 时给一个安静的「载入」入口
-  if (settingsVariant && !demoLoaded && !appEmpty) {
+  // 有真实数据、没 demo 时给一个安静的「载入」入口（全空时的冷启动文案在下面）
+  if (!demoLoaded && !appEmpty) {
     return (
       <Card>
         <CardBody className="flex flex-wrap items-center gap-4">

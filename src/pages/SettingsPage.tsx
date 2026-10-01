@@ -637,7 +637,7 @@ export const SettingsPage: React.FC = () => {
         </CardBody>
       </Card>
 
-      <DemoDataCard variant="settings" />
+      <DemoDataCard />
 
       <Card>
         <CardHeader title="快捷键" subtitle="在任何页面都能用（输入框里打字时不会触发）" />

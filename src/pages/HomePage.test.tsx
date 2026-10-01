@@ -608,23 +608,4 @@ describe('HomePage 目标达成卡片', () => {
     expect(screen.getByRole('button', { name: '管理目标' })).toBeInTheDocument();
   });
 
-  it('空应用提供一键载入示例数据，载入后可清除（原 7.7）', async () => {
-    renderHome();
-
-    expect(screen.getByText('第一次用？载入一份示例数据看看各页面长什么样')).toBeInTheDocument();
-
-    await userEvent.click(screen.getByRole('button', { name: '一键载入示例数据' }));
-
-    expect(useTaskStore.getState().tasks.some((task) => task.id.startsWith('demo-'))).toBe(true);
-    expect(screen.getByText('示例数据还在')).toBeInTheDocument();
-
-    // 再记一条真实任务，清除示例后它要还在
-    useTaskStore.getState().addTask('真实任务', '', 'low', '');
-
-    await userEvent.click(screen.getByRole('button', { name: '清除示例数据' }));
-
-    const titles = useTaskStore.getState().tasks.map((task) => task.title);
-    expect(titles).toEqual(['真实任务']);
-    expect(screen.queryByText('示例数据还在')).not.toBeInTheDocument();
-  });
 });
