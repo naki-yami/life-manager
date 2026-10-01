@@ -101,6 +101,47 @@ describe('normalizeDashboard', () => {
     expect(ids.indexOf('today')).toBeGreaterThan(ids.indexOf('stats'));
   });
 
+  it('存下来的正好是上一版默认排布时整体升到新默认，老用户不会卡在旧布局', () => {
+    const legacy = [
+      { id: 'stats', size: 'lg', hidden: false },
+      { id: 'focus', size: 'sm', hidden: false },
+      { id: 'today', size: 'md', hidden: false },
+      { id: 'memos', size: 'sm', hidden: false },
+      { id: 'habits', size: 'md', hidden: false },
+      { id: 'journal', size: 'sm', hidden: false },
+      { id: 'goals', size: 'md', hidden: false },
+      { id: 'body', size: 'sm', hidden: false },
+      { id: 'activity', size: 'md', hidden: false },
+      { id: 'modules', size: 'md', hidden: false },
+    ];
+
+    const widgets = normalizeDashboard(legacy);
+
+    expect(idsOf(widgets)).toEqual([...DASHBOARD_WIDGET_IDS]);
+    // 目标达成跟着新默认挪到辅列 —— 不然右边那列排到「今日心情」就断了
+    expect(sizeOf(widgets, 'goals')).toBe('sm');
+  });
+
+  it('用户自己挪过的排布一律保留，不跟着默认值走', () => {
+    // 只跟上一版默认差「统计挪到了第二位」
+    const widgets = normalizeDashboard([
+      { id: 'stats', size: 'lg', hidden: false },
+      { id: 'today', size: 'md', hidden: false },
+      { id: 'focus', size: 'sm', hidden: false },
+      { id: 'memos', size: 'sm', hidden: false },
+      { id: 'habits', size: 'md', hidden: false },
+      { id: 'journal', size: 'sm', hidden: false },
+      { id: 'goals', size: 'md', hidden: false },
+      { id: 'body', size: 'sm', hidden: false },
+      { id: 'activity', size: 'md', hidden: false },
+      { id: 'modules', size: 'md', hidden: false },
+    ]);
+
+    expect(idsOf(widgets).slice(0, 2)).toEqual(['stats', 'today']);
+    // 用户放的位置原样保留：目标仍在主列
+    expect(sizeOf(widgets, 'goals')).toBe('md');
+  });
+
   it('归一化是幂等的：跑两次结果一致', () => {
     const once = normalizeDashboard([{ id: 'today', size: 'sm', hidden: true }, { id: '不认识' }]);
 
@@ -113,6 +154,27 @@ describe('uiStore 仪表盘', () => {
     expect(useUiStore.getState().dashboard).toEqual(defaultDashboard());
   });
 
+  /**
+   * 这条对着样稿的两列构成钉住。
+   *
+   * 主列（`md`）今天 / 今日习惯 / 近 30 天活动 / 模块概览；
+   * 辅列（`sm`）专注 / 快速备忘 / 今日心情 / 目标达成 / 身体指标。
+   *
+   * 最容易被打回去的是**目标达成**：它曾经是 `md` 落在主列，于是右边那列排到
+   * 「今日心情」就断了，左下空出一大块 —— 样稿里「目标」是紧接「今日心情」下面的。
+   */
+  it('默认排布的列构成按样稿：目标达成在辅列，不在主列', () => {
+    const of = (size: DashboardWidgetSize): DashboardWidgetId[] =>
+      defaultDashboard()
+        .filter((widget) => widget.size === size)
+        .map((widget) => widget.id);
+
+    expect(of('md')).toEqual(['today', 'habits', 'activity', 'modules']);
+    expect(of('sm')).toEqual(['focus', 'memos', 'journal', 'goals', 'body']);
+    // 通栏只有统计条一条
+    expect(of('lg')).toEqual(['stats']);
+  });
+
   it('moveDashboardWidget 把卡片挪到目标卡片的位置', () => {
     useUiStore.getState().moveDashboardWidget('modules', 'stats');
 
@@ -121,20 +183,14 @@ describe('uiStore 仪表盘', () => {
   });
 
   it('向后挪动时不会把别人一起挤走', () => {
+    const before = idsOf(useUiStore.getState().dashboard);
+
     useUiStore.getState().moveDashboardWidget('stats', 'focus');
 
-    expect(idsOf(useUiStore.getState().dashboard)).toEqual([
-      'focus',
-      'stats',
-      'today',
-      'memos',
-      'habits',
-      'journal',
-      'goals',
-      'body',
-      'activity',
-      'modules',
-    ]);
+    const after = idsOf(useUiStore.getState().dashboard);
+    // 只有 stats 换了位置，其余卡片的相对先后一个没动
+    expect(after.filter((id) => id !== 'stats')).toEqual(before.filter((id) => id !== 'stats'));
+    expect(after.indexOf('stats')).toBe(before.indexOf('focus'));
   });
 
   it('挪到自己身上、或 id 认不出时原样返回，不会崩', () => {

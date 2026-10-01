@@ -41,6 +41,11 @@ const setup = (overrides: Partial<React.ComponentProps<typeof DashboardGrid>> = 
  */
 const lists = (): HTMLElement[] => screen.getAllByRole('list');
 
+/** 列宽比例现在挂在两列共同的父节点上（列自己只负责纵向堆叠） */
+const columnsWrap = (list: HTMLElement): HTMLElement => list.parentElement!;
+
+const TWO_COLUMN_CLASS = 'lg:grid-cols-[minmax(0,1.62fr)_minmax(0,1fr)]';
+
 describe('DashboardGrid', () => {
   it('浏览态只渲染有内容的卡片，隐藏的与没数据的一律不占位', () => {
     setup();
@@ -70,8 +75,9 @@ describe('DashboardGrid', () => {
     expect(within(mainColumn!).getAllByRole('listitem')).toHaveLength(1);
     expect(within(sideColumn!).getAllByRole('listitem')).toHaveLength(1);
 
-    expect(mainColumn).toHaveClass('lg:col-span-8');
-    expect(sideColumn).toHaveClass('lg:col-span-4');
+    // 双列按样稿的 1.62fr : 1fr 分宽（8/4 是 2.0，主列会明显胖一截）
+    expect(columnsWrap(mainColumn!)).toBe(columnsWrap(sideColumn!));
+    expect(columnsWrap(mainColumn!)).toHaveClass(TWO_COLUMN_CLASS);
   });
 
   it('某一列空着时，另一列自己占满，不留半边空白', () => {
@@ -83,8 +89,8 @@ describe('DashboardGrid', () => {
     });
 
     const [, onlyColumn] = lists();
-    expect(onlyColumn).toHaveClass('lg:col-span-12');
-    expect(onlyColumn).not.toHaveClass('lg:col-span-8');
+    expect(columnsWrap(onlyColumn!)).toHaveClass('grid-cols-1');
+    expect(columnsWrap(onlyColumn!)).not.toHaveClass(TWO_COLUMN_CLASS);
   });
 
   /**
@@ -113,10 +119,11 @@ describe('DashboardGrid', () => {
     // 浏览态：今日聚焦没数据 → 只剩主列，主列占满
     const only = lists();
     expect(only).toHaveLength(1);
-    expect(only[0]).toHaveClass('lg:col-span-12');
+    expect(columnsWrap(only[0]!)).toHaveClass('grid-cols-1');
+    expect(columnsWrap(only[0]!)).not.toHaveClass(TWO_COLUMN_CLASS);
     browse.unmount();
 
-    // 编辑态：占位卡要露出来，于是恢复成 8 / 4 两列
+    // 编辑态：占位卡要露出来，于是恢复成两列
     render(
       <DashboardGrid
         {...{
@@ -132,8 +139,8 @@ describe('DashboardGrid', () => {
     );
     const both = lists();
     expect(both).toHaveLength(2);
-    expect(both[0]).toHaveClass('lg:col-span-8');
-    expect(both[1]).toHaveClass('lg:col-span-4');
+    expect(columnsWrap(both[0]!)).toBe(columnsWrap(both[1]!));
+    expect(columnsWrap(both[0]!)).toHaveClass(TWO_COLUMN_CLASS);
   });
 
   it('两列各自独立堆叠：同段的卡片按顺序分别落进各自那一列', () => {
@@ -207,7 +214,7 @@ describe('DashboardGrid', () => {
     setup({ widgets: widgets.map((widget) => ({ ...widget, hidden: false })), editing: true });
     expect(
       screen.getByText(
-        '拖动左上角的手柄调整顺序。「宽」通栏，「中」进左列，「小」进右列；某一列空着时另一列会占满。',
+        '拖动左上角的手柄调整顺序。「宽」通栏，「中」进左列，「小」进右列；某一列空着时这一列会占满。',
       ),
     ).toBeInTheDocument();
   });

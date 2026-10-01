@@ -474,14 +474,19 @@ describe('HomePage 仪表盘', () => {
 
     renderHome();
 
-    // 分栏容器：窄屏一列，宽屏 12 栏
-    expect(columnEl('today').parentElement).toHaveClass('grid-cols-1', 'lg:grid-cols-12');
+    // 分栏容器：窄屏一列，宽屏按样稿的 1.62fr : 1fr 分宽
+    expect(columnEl('today').parentElement).toHaveClass(
+      'grid-cols-1',
+      'lg:grid-cols-[minmax(0,1.62fr)_minmax(0,1fr)]',
+    );
+    expect(columnEl('today').parentElement).toBe(columnEl('memos').parentElement);
 
-    expect(columnEl('memos')).toHaveClass('lg:col-span-4');
-    expect(columnEl('today')).toHaveClass('lg:col-span-8');
+    // 列自己只负责纵向堆叠，宽度交给父节点的模板
+    expect(columnEl('memos')).toHaveClass('flex', 'flex-col');
+    expect(columnEl('today')).toHaveClass('flex', 'flex-col');
     // 宽档不参与分栏，自己独占一段
     expect(columnEl('stats')).toHaveClass('grid-cols-1');
-    expect(columnEl('stats')).not.toHaveClass('lg:col-span-8');
+    expect(columnEl('stats')).not.toHaveClass('flex-col');
   });
 
   it('同一列里卡片的顺序就是用户排的顺序', () => {
@@ -560,7 +565,7 @@ describe('HomePage 仪表盘', () => {
 
     // 改成宽档之后它不再跟别人并排，而是自己独占一行
     expect(columnEl('today')).toHaveClass('grid-cols-1');
-    expect(columnEl('today')).not.toHaveClass('lg:col-span-8');
+    expect(columnEl('today')).not.toHaveClass('flex-col');
   });
 
   it('「恢复默认布局」把顺序、宽度、隐藏一起还原', async () => {
@@ -694,5 +699,43 @@ describe('HomePage 目标达成卡片', () => {
     // 首页卡片带周期前缀（「每周 · 1 次 / 4 次」），用正则匹配数值部分
     expect(screen.getByText(/1 次 \/ 4 次/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '管理目标' })).toBeInTheDocument();
+  });
+
+  /**
+   * 样稿的两列构成，逐张卡钉死：
+   *
+   * 左：今天 / 近 30 天活动 / 模块概览 —— 三张卡同宽，边界对齐；
+   * 右：专注 / 快速备忘 / 今日心情 / 目标达成。
+   *
+   * 「目标达成」是最容易被放错的一张：它进主列的话，右边那列排到「今日心情」
+   * 就断了，左下空出一大块 —— 那正是上一版的观感。
+   */
+  it('默认排布按样稿分两列：活动与模块跟「今天」同列，目标跟「备忘 / 心情」同列', () => {
+    useGoalStore.setState({
+      goals: [
+        {
+          id: 'g1',
+          metric: 'fitness.sessions',
+          period: 'week',
+          target: 4,
+          createdAt: '2026-09-01T12:00:00',
+        },
+      ],
+    });
+    useFitnessStore
+      .getState()
+      .addRecord('推日', todayKey(), [{ name: '杠铃卧推', sets: 5, reps: 5, weight: 60 }], '');
+    useTaskStore.getState().addTask('写周报', '', 'high', todayKey());
+    useTaskStore.getState().addMemo('临时想法');
+
+    renderHome();
+
+    // 左列：活动与模块跟「今天」同宽同列
+    expect(columnEl('activity')).toBe(columnEl('today'));
+    expect(columnEl('modules')).toBe(columnEl('today'));
+    // 右列：目标排在「快速备忘 / 今日心情」下面
+    expect(columnEl('goals')).toBe(columnEl('memos'));
+    expect(columnEl('goals')).toBe(columnEl('journal'));
+    expect(columnEl('goals')).not.toBe(columnEl('today'));
   });
 });

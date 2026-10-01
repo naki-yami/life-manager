@@ -23,7 +23,8 @@ import type { DashboardWidget, DashboardWidgetId, DashboardWidgetSize } from '..
  * 首页仪表盘栅格。
  *
  * 设计上的四个取舍：
- * - **宽度档位就是「放哪儿」**：宽档通栏独占一行，中档进主列（8 栏），小档进辅列（4 栏）。
+ * - **宽度档位就是「放哪儿」**：宽档通栏独占一行，中档进主列，小档进辅列。
+ *   双列按样稿的 1.62fr : 1fr 分宽。
  *   主列与辅列各自独立上下堆叠，互不挤位。这正是要修掉的那个毛病 —— 老实现是行优先的
  *   12 栏栅格，行高由该行最高的卡决定，于是卡片一高一矮、或者某张卡因为没数据被跳过，
  *   那一行就留下一块填不满的空白（「今日心情」旁边空出 8 栏就是这么来的）。
@@ -105,9 +106,20 @@ function segmentsOf(widgets: readonly DashboardWidget[]): Segment[] {
   return segments;
 }
 
-/** 一列的外壳：两列都在时按 8 / 4 分栏，对面空着就自己占满 */
-const columnClass = (span: 'lg:col-span-8' | 'lg:col-span-4', bothColumns: boolean): string =>
-  `flex min-w-0 flex-col gap-4 ${bothColumns ? span : 'lg:col-span-12'}`;
+/**
+ * 双列段的外壳。
+ *
+ * 列宽比例直接照抄样稿的 `grid-template-columns: minmax(0, 1.62fr) minmax(0, 1fr)`，
+ * **不用 12 栏的 8 / 4** —— 8:4 是 2.0 的比例，主列会比样稿宽一截、辅列窄一截，
+ * 「近 30 天活动」「模块概览」跟着一起胖，右边那列又显得挤。
+ */
+const TWO_COLUMNS = 'grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.62fr)_minmax(0,1fr)]';
+
+/** 对面那列空着时，这一列自己占满，不留「宽度不齐的半边空白」 */
+const ONE_COLUMN = 'grid min-w-0 grid-cols-1 gap-4';
+
+/** 一列本身只负责纵向堆叠，宽度由上面的模板决定 */
+const COLUMN = 'flex min-w-0 flex-col gap-4';
 
 interface SortableWidgetProps {
   widget: DashboardWidget;
@@ -243,17 +255,13 @@ export const DashboardGrid: React.FC<DashboardGridProps> = ({
               return (
                 <div
                   key={`columns-${segment.main[0]?.id ?? segment.side[0]?.id ?? index}`}
-                  className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-12"
+                  className={bothColumns ? TWO_COLUMNS : ONE_COLUMN}
                 >
                   {segment.main.length > 0 && (
-                    <ul className={columnClass('lg:col-span-8', bothColumns)}>
-                      {segment.main.map(renderWidget)}
-                    </ul>
+                    <ul className={COLUMN}>{segment.main.map(renderWidget)}</ul>
                   )}
                   {segment.side.length > 0 && (
-                    <ul className={columnClass('lg:col-span-4', bothColumns)}>
-                      {segment.side.map(renderWidget)}
-                    </ul>
+                    <ul className={COLUMN}>{segment.side.map(renderWidget)}</ul>
                   )}
                 </div>
               );
@@ -286,7 +294,7 @@ export const DashboardGrid: React.FC<DashboardGridProps> = ({
             </>
           ) : (
             <span className="text-xs text-content-tertiary">
-              拖动左上角的手柄调整顺序。「宽」通栏，「中」进左列，「小」进右列；某一列空着时另一列会占满。
+              拖动左上角的手柄调整顺序。「宽」通栏，「中」进左列，「小」进右列；某一列空着时这一列会占满。
             </span>
           )}
           <span className="flex-1" />

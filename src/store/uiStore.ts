@@ -22,7 +22,7 @@ export type DashboardWidgetId =
   | 'activity'
   | 'modules';
 
-/** 卡片宽度档位，对应 12 栏栅格里的 4 / 8 / 12 栏：小 + 中正好凑满一行 */
+/** 卡片宽度档位：`lg` 通栏独占一段，`md` 进主列，`sm` 进辅列 */
 export type DashboardWidgetSize = 'sm' | 'md' | 'lg';
 
 export interface DashboardWidget {
@@ -31,32 +31,66 @@ export interface DashboardWidget {
   hidden: boolean;
 }
 
+/**
+ * 全部卡片 id。**顺序与 `DEFAULT_DASHBOARD` 一致** ——
+ * 归一化时给老数据补缺的卡片就按这个顺序走，两处顺序不一致会补出乱的排布。
+ */
 export const DASHBOARD_WIDGET_IDS: readonly DashboardWidgetId[] = [
   'stats',
-  'focus',
   'today',
-  'memos',
   'habits',
+  'activity',
+  'modules',
+  'focus',
+  'memos',
   'journal',
   'goals',
   'body',
-  'activity',
-  'modules',
 ];
 
 export const DASHBOARD_WIDGET_SIZES: readonly DashboardWidgetSize[] = ['sm', 'md', 'lg'];
 
 /**
- * 默认排布：统计整行 → 底下一整段双列 ——
- * 主列（左，8 栏）今天是主角，往下是习惯、目标、近 30 天活动、模块概览；
- * 辅列（右，4 栏）专注、快速备忘、今日心情、身体指标。
+ * 默认排布，按样稿的两列来：统计整行 → 底下一整段双列。
  *
- * 只有统计条是通栏，其余全在这一段里：通栏卡会把两列「切断」，短的那一列
- * 只能空着等长的那一列排完，页面上就出现一块填不满的空白（老首页「一会儿左、
- * 一会儿右、中间还空一块」的观感就是这么来的）。整段一起排，两列各自堆叠、
- * 互不挤位，也就没有谁在等谁。
+ * 主列（左，1.62fr）**今天 → 今日习惯 → 近 30 天活动 → 模块概览**；
+ * 辅列（右，1fr）**专注 → 快速备忘 → 今日心情 → 目标达成 → 身体指标**。
+ *
+ * 两条规矩：
+ * - **只有统计条通栏**，其余全在这一段里。通栏卡会把两列「切断」，短的那一列只能
+ *   空着等长的那一列排完，页面上就出现一块填不满的空白。
+ * - **目标达成在辅列**（`sm`）。它以前是 `md` 落在主列，于是右边那列排到「今日心情」
+ *   就断了，左侧底部空出一大块 —— 样稿里「目标」是紧接在「今日心情」下面的。
+ *
+ * 数据缺哪张卡，那张就不渲染，但**列位不变**：习惯没数据时主列正好是
+ * 「今天 / 近 30 天活动 / 模块概览」，和样稿一致。
  */
 export const DEFAULT_DASHBOARD: readonly DashboardWidget[] = [
+  { id: 'stats', size: 'lg', hidden: false },
+  { id: 'today', size: 'md', hidden: false },
+  { id: 'habits', size: 'md', hidden: false },
+  { id: 'activity', size: 'md', hidden: false },
+  { id: 'modules', size: 'md', hidden: false },
+  { id: 'focus', size: 'sm', hidden: false },
+  { id: 'memos', size: 'sm', hidden: false },
+  { id: 'journal', size: 'sm', hidden: false },
+  { id: 'goals', size: 'sm', hidden: false },
+  { id: 'body', size: 'sm', hidden: false },
+];
+
+const defaultSizeOf = (id: DashboardWidgetId): DashboardWidgetSize =>
+  DEFAULT_DASHBOARD.find((item) => item.id === id)?.size ?? 'lg';
+
+/**
+ * 上一版的默认排布。
+ *
+ * 用户从没动过布局时，`lm:ui` 里存下来的就是这个 —— 认出来就整体升到新默认。
+ * 不认的话「改了默认值、老用户永远看不到」：他们的存档里仍是旧顺序、旧档位，
+ * 页面照旧空一块，而我们会以为改好了。
+ *
+ * **只认「一模一样」这一种**：哪怕用户只挪过一张卡，也一律保留他的排布。
+ */
+const LEGACY_DEFAULT_DASHBOARD: readonly DashboardWidget[] = [
   { id: 'stats', size: 'lg', hidden: false },
   { id: 'focus', size: 'sm', hidden: false },
   { id: 'today', size: 'md', hidden: false },
@@ -69,8 +103,14 @@ export const DEFAULT_DASHBOARD: readonly DashboardWidget[] = [
   { id: 'modules', size: 'md', hidden: false },
 ];
 
-const defaultSizeOf = (id: DashboardWidgetId): DashboardWidgetSize =>
-  DEFAULT_DASHBOARD.find((item) => item.id === id)?.size ?? 'lg';
+/** 两个排布是否逐项相同（id / 档位 / 隐藏，且顺序一致） */
+const sameLayout = (raw: readonly unknown[], expected: readonly DashboardWidget[]): boolean => {
+  if (raw.length !== expected.length) return false;
+  return expected.every((widget, index) => {
+    const item = asRecord(raw[index]);
+    return item.id === widget.id && item.size === widget.size && item.hidden === widget.hidden;
+  });
+};
 
 const isWidgetId = (value: unknown): value is DashboardWidgetId =>
   typeof value === 'string' && (DASHBOARD_WIDGET_IDS as readonly string[]).includes(value);
@@ -88,6 +128,12 @@ const isWidgetId = (value: unknown): value is DashboardWidgetId =>
  */
 export function normalizeDashboard(value: unknown): DashboardWidget[] {
   const raw = Array.isArray(value) ? value : [];
+
+  // 存下来的正好是上一版的默认排布 → 用户没动过，跟着新版默认走
+  if (sameLayout(raw, LEGACY_DEFAULT_DASHBOARD)) {
+    return DEFAULT_DASHBOARD.map((item) => ({ ...item }));
+  }
+
   const result: DashboardWidget[] = [];
   const seen = new Set<DashboardWidgetId>();
 
