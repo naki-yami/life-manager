@@ -423,7 +423,6 @@ export const WritingPage: React.FC = () => {
                             min={0}
                             step={1000}
                             suffix="目标"
-                            hint="0 表示未设置"
                           />
                         </div>
                         <div className="w-36">
