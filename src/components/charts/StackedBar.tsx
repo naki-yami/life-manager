@@ -5,6 +5,7 @@ import type { ChartBucket } from './buckets';
 import { CHART_SERIES_BAR, CHART_SERIES_DOT, seriesAt, type ChartSeriesIndex } from './tones';
 import { CHART_FOCUS_RING, useChartCursor } from './useChartCursor';
 import { peakWithDate } from './digest';
+import { ChartEmpty } from './ChartEmpty';
 
 export interface StackedSeries {
   name: string;
@@ -58,14 +59,7 @@ export const StackedBar: React.FC<StackedBarProps> = ({
   const activeDate = activeIndex === null ? undefined : dates[activeIndex];
 
   if (dates.length === 0) {
-    return (
-      <div
-        role="img"
-        aria-label={`${label}（暂无数据）`}
-        style={{ height }}
-        className={`w-full rounded-sm bg-inset ${className}`}
-      />
-    );
+    return <ChartEmpty label={label} height={height} className={className} />;
   }
 
   return (

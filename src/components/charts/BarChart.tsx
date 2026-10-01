@@ -8,6 +8,7 @@ import type { ChartTone } from './tones';
 import { formatShortDate } from '../../utils/date';
 import { CHART_FOCUS_RING, useChartCursor } from './useChartCursor';
 import { peakWithDate } from './digest';
+import { ChartEmpty } from './ChartEmpty';
 
 export interface BarChartProps {
   data: DayPoint[];
@@ -47,14 +48,7 @@ export const BarChart: React.FC<BarChartProps> = ({
   const active = cursor.index === null ? undefined : data[cursor.index];
 
   if (data.length === 0) {
-    return (
-      <div
-        role="img"
-        aria-label={`${label}（暂无数据）`}
-        style={{ height }}
-        className={`w-full rounded-sm bg-inset ${className}`}
-      />
-    );
+    return <ChartEmpty label={label} height={height} className={className} />;
   }
 
   return (

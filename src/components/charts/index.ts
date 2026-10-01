@@ -1,3 +1,5 @@
+export { ChartEmpty } from './ChartEmpty';
+export type { ChartEmptyProps } from './ChartEmpty';
 export { Sparkline } from './Sparkline';
 export type { SparklineProps } from './Sparkline';
 export { BarChart } from './BarChart';

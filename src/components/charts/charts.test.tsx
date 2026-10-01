@@ -2,7 +2,7 @@ import React from 'react';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
-import { BarChart, Heatmap, LineChart, Sparkline, StackedBar } from './index';
+import { BarChart, ChartEmpty, Heatmap, LineChart, Sparkline, StackedBar } from './index';
 import { seriesAt } from './tones';
 import { extremeWithDate, hasChartSignal, peakWithDate, troughWithDate } from './digest';
 import { dayRange, weekdayIndex } from '../../utils/stats';
@@ -43,6 +43,21 @@ describe('Sparkline', () => {
     const dot = container.querySelector<HTMLElement>('span[aria-hidden]');
     expect(dot?.style.left).toBe('98%');
     expect(dot?.style.top).toBe('58%');
+  });
+});
+
+describe('ChartEmpty', () => {
+  it('空图不只是一块灰底，还写明为什么空', () => {
+    render(<ChartEmpty label="每日热量" height={120} />);
+
+    const box = screen.getByRole('img', { name: '每日热量（暂无数据）' });
+    expect(box).toHaveTextContent('暂无数据');
+  });
+
+  it('后缀可以换，读屏描述跟着换', () => {
+    render(<ChartEmpty label="每日趋势" height={32} suffix="数据不足" />);
+
+    expect(screen.getByRole('img', { name: '每日趋势（数据不足）' })).toHaveTextContent('数据不足');
   });
 });
 

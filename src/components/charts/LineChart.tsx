@@ -6,6 +6,7 @@ import { formatShortDate } from '../../utils/date';
 import { CHART_FOCUS_RING, useChartCursor } from './useChartCursor';
 import { peakWithDate, troughWithDate } from './digest';
 import { LINE_POINT_LABEL } from './buckets';
+import { ChartEmpty } from './ChartEmpty';
 import type { ChartBucket } from './buckets';
 
 export interface LineChartProps {
@@ -49,14 +50,7 @@ export const LineChart: React.FC<LineChartProps> = ({
   // 钩子必须在提前 return 之前调用，否则空数据与非空数据走的是两套 Hook 顺序
   const cursor = useChartCursor(data.length);
   if (data.length === 0) {
-    return (
-      <div
-        role="img"
-        aria-label={`${label}（暂无数据）`}
-        style={{ height }}
-        className={`w-full rounded-sm bg-inset ${className}`}
-      />
-    );
+    return <ChartEmpty label={label} height={height} className={className} />;
   }
 
   const values = data.map((point) => point.value);
