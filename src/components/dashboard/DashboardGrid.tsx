@@ -22,11 +22,16 @@ import type { DashboardWidget, DashboardWidgetId, DashboardWidgetSize } from '..
 /**
  * 首页仪表盘栅格。
  *
- * 设计上的三个取舍：
- * - **宽度分档而不是 1x1 / 2x2**：卡片高度由内容决定，硬要「两行高」就得给每张卡定死高度，
- *   内容一多就出滚动条。宽档（4 / 8 / 12 栏）能拿到同样的排版自由度，还不用和高度打架。
+ * 设计上的四个取舍：
+ * - **宽度档位就是「放哪儿」**：宽档通栏独占一行，中档进主列（8 栏），小档进辅列（4 栏）。
+ *   主列与辅列各自独立上下堆叠，互不挤位。这正是要修掉的那个毛病 —— 老实现是行优先的
+ *   12 栏栅格，行高由该行最高的卡决定，于是卡片一高一矮、或者某张卡因为没数据被跳过，
+ *   那一行就留下一块填不满的空白（「今日心情」旁边空出 8 栏就是这么来的）。
+ *   换成两列独立堆叠之后，旁边少了谁都不影响自己这一列。
+ * - **对面那列空着时，这一列自己占满**：宁可让卡片变宽，也不留「宽度不齐的半边空白」。
  * - **顺序、尺寸、隐藏都存在 `lm:ui` 里**，且只存 id 与档位：卡片叫什么、渲染成什么样都属于代码，
- *   以后改文案不会让用户已经排好的布局失效。
+ *   以后改文案不会让用户已经排好的布局失效。档位的语义从「占几栏」变成「进哪一列」，
+ *   旧存档里的 sm / md / lg 照原样继续用，不需要迁移。
  * - **只有编辑态才渲染「没数据的卡片」**：平时「没有活动就不显示空热力图」，进编辑态则一律显示，
  *   否则用户没法把一张暂时没数据的卡片拖走或隐藏。
  */
@@ -50,11 +55,11 @@ export interface DashboardGridProps {
   onReset: () => void;
 }
 
-/** 12 栏栅格下的宽度档位：小 + 中正好凑满一行 */
-const SPAN: Record<DashboardWidgetSize, string> = {
-  sm: 'lg:col-span-4',
-  md: 'lg:col-span-8',
-  lg: 'lg:col-span-12',
+/** 档位到位置的映射：「宽」通栏，「中」主列，「小」辅列 */
+const PLACEMENT: Record<DashboardWidgetSize, 'full' | 'main' | 'side'> = {
+  lg: 'full',
+  md: 'main',
+  sm: 'side',
 };
 
 const SIZE_OPTIONS: Array<{ value: DashboardWidgetSize; label: string }> = [
@@ -62,6 +67,47 @@ const SIZE_OPTIONS: Array<{ value: DashboardWidgetSize; label: string }> = [
   { value: 'md', label: '中' },
   { value: 'lg', label: '宽' },
 ];
+
+type Segment =
+  | { kind: 'full'; widget: DashboardWidget }
+  | { kind: 'columns'; main: readonly DashboardWidget[]; side: readonly DashboardWidget[] };
+
+/**
+ * 把卡片按顺序切成「通栏」与「双列」两类段。
+ *
+ * 连续的非通栏卡片合成一段双列：段内中档进主列、小档进辅列，各自堆叠。
+ * 通栏卡片自己独占一段，等于在页面上划一条横带，把上下的双列区隔开。
+ */
+function segmentsOf(widgets: readonly DashboardWidget[]): Segment[] {
+  const segments: Segment[] = [];
+  let main: DashboardWidget[] = [];
+  let side: DashboardWidget[] = [];
+
+  const flush = (): void => {
+    if (main.length === 0 && side.length === 0) return;
+    segments.push({ kind: 'columns', main, side });
+    main = [];
+    side = [];
+  };
+
+  for (const widget of widgets) {
+    const placement = PLACEMENT[widget.size];
+    if (placement === 'full') {
+      flush();
+      segments.push({ kind: 'full', widget });
+      continue;
+    }
+    if (placement === 'main') main.push(widget);
+    else side.push(widget);
+  }
+  flush();
+
+  return segments;
+}
+
+/** 一列的外壳：两列都在时按 8 / 4 分栏，对面空着就自己占满 */
+const columnClass = (span: 'lg:col-span-8' | 'lg:col-span-4', bothColumns: boolean): string =>
+  `flex min-w-0 flex-col gap-4 ${bothColumns ? span : 'lg:col-span-12'}`;
 
 interface SortableWidgetProps {
   widget: DashboardWidget;
@@ -86,8 +132,10 @@ const SortableWidget: React.FC<SortableWidgetProps> = ({
   return (
     <li
       ref={setNodeRef}
+      data-testid="dashboard-widget"
+      data-widget={widget.id}
       style={{ transform: CSS.Transform.toString(transform), transition }}
-      className={`min-w-0 ${SPAN[widget.size]} ${isDragging ? 'relative z-10 opacity-70' : ''}`}
+      className={`min-w-0 ${isDragging ? 'relative z-10 opacity-70' : ''}`}
     >
       {editing && (
         <div className="mb-2 flex flex-wrap items-center gap-2 rounded border border-dashed border-line bg-inset px-2 py-1.5">
@@ -158,28 +206,59 @@ export const DashboardGrid: React.FC<DashboardGridProps> = ({
   );
   const hidden = known.filter((widget) => widget.hidden);
 
+  const segments = segmentsOf(visible);
+
   const handleDragEnd = (event: DragEndEvent): void => {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
     onMove(active.id as DashboardWidgetId, over.id as DashboardWidgetId);
   };
 
+  const renderWidget = (widget: DashboardWidget): React.ReactNode => (
+    <SortableWidget
+      key={widget.id}
+      widget={widget}
+      view={viewOf(widget.id)!}
+      editing={editing}
+      onResize={onResize}
+      onHide={onHide}
+    />
+  );
+
   return (
     <>
       <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={handleDragEnd}>
         <SortableContext items={visible.map((widget) => widget.id)} strategy={rectSortingStrategy}>
-          <ul className="grid grid-cols-1 gap-4 lg:grid-cols-12">
-            {visible.map((widget) => (
-              <SortableWidget
-                key={widget.id}
-                widget={widget}
-                view={viewOf(widget.id)!}
-                editing={editing}
-                onResize={onResize}
-                onHide={onHide}
-              />
-            ))}
-          </ul>
+          <div className="flex flex-col gap-4">
+            {segments.map((segment, index) => {
+              if (segment.kind === 'full') {
+                return (
+                  <ul key={segment.widget.id} className="grid min-w-0 grid-cols-1 gap-4">
+                    {renderWidget(segment.widget)}
+                  </ul>
+                );
+              }
+
+              const bothColumns = segment.main.length > 0 && segment.side.length > 0;
+              return (
+                <div
+                  key={`columns-${segment.main[0]?.id ?? segment.side[0]?.id ?? index}`}
+                  className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-12"
+                >
+                  {segment.main.length > 0 && (
+                    <ul className={columnClass('lg:col-span-8', bothColumns)}>
+                      {segment.main.map(renderWidget)}
+                    </ul>
+                  )}
+                  {segment.side.length > 0 && (
+                    <ul className={columnClass('lg:col-span-4', bothColumns)}>
+                      {segment.side.map(renderWidget)}
+                    </ul>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </SortableContext>
       </DndContext>
 
@@ -207,7 +286,7 @@ export const DashboardGrid: React.FC<DashboardGridProps> = ({
             </>
           ) : (
             <span className="text-xs text-content-tertiary">
-              拖动左上角的手柄调整顺序，或用「小 / 中 / 宽」改宽度。
+              拖动左上角的手柄调整顺序。「宽」通栏，「中」进左列，「小」进右列；某一列空着时另一列会占满。
             </span>
           )}
           <span className="flex-1" />

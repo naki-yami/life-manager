@@ -47,13 +47,19 @@ beforeEach(() => {
   useUiStore.setState({ dashboard: DEFAULT_DASHBOARD.map((widget) => ({ ...widget })) });
 });
 
-/** 仪表盘栅格；页面里可能还有卡片内部的列表，取文档顺序里的第一个 */
-const dashboardList = (): HTMLElement => screen.getAllByRole('list')[0]!;
-/** 只取卡片的直接子项：卡片内部（时间轴、待办列表）也有自己的 li */
-const dashboardItems = (): HTMLElement[] =>
-  Array.from(dashboardList().children).filter(
-    (child): child is HTMLElement => child.tagName === 'LI',
-  );
+/**
+ * 仪表盘里的卡片，按文档顺序。
+ *
+ * 栅格会按档位把卡片分到通栏段与左右两列，DOM 也随之分段，所以不能再靠「第一个 ul 的子节点」
+ * 取卡 —— 改成按卡片身上的钩子取，文档顺序仍然等于用户排的顺序。
+ */
+const dashboardItems = (): HTMLElement[] => screen.getAllByTestId('dashboard-widget');
+
+const widgetEl = (id: string): HTMLElement =>
+  dashboardItems().find((item) => item.dataset.widget === id)!;
+
+/** 卡片所在的那一列（通栏卡片所在的是它自己独占一行的段） */
+const columnEl = (id: string): HTMLElement => widgetEl(id).closest('ul')!;
 
 describe('HomePage', () => {
   it('统计卡片反映真实数据', () => {
@@ -300,7 +306,7 @@ describe('HomePage 仪表盘', () => {
     expect(items[1]).toHaveTextContent('快速添加任务');
   });
 
-  it('宽度档位映射到 12 栏栅格，窄屏单列', () => {
+  it('档位决定卡片进哪一列：小档进辅列、中档进主列、宽档通栏', () => {
     useUiStore.setState({
       dashboard: [
         { id: 'todos', size: 'sm', hidden: false },
@@ -311,12 +317,31 @@ describe('HomePage 仪表盘', () => {
 
     renderHome();
 
-    expect(dashboardList()).toHaveClass('grid-cols-1', 'lg:grid-cols-12');
+    // 分栏容器：窄屏一列，宽屏 12 栏
+    expect(columnEl('capture').parentElement).toHaveClass('grid-cols-1', 'lg:grid-cols-12');
 
-    const items = dashboardItems();
-    expect(items[0]).toHaveClass('lg:col-span-4');
-    expect(items[1]).toHaveClass('lg:col-span-8');
-    expect(items[2]).toHaveClass('lg:col-span-12');
+    expect(columnEl('todos')).toHaveClass('lg:col-span-4');
+    expect(columnEl('capture')).toHaveClass('lg:col-span-8');
+    // 宽档不参与分栏，自己独占一段
+    expect(columnEl('stats')).toHaveClass('grid-cols-1');
+    expect(columnEl('stats')).not.toHaveClass('lg:col-span-8');
+  });
+
+  it('同一列里卡片的顺序就是用户排的顺序', () => {
+    useUiStore.setState({
+      dashboard: [
+        { id: 'todos', size: 'md', hidden: false },
+        { id: 'capture', size: 'md', hidden: false },
+      ],
+    });
+
+    renderHome();
+
+    expect(
+      within(columnEl('todos'))
+        .getAllByTestId('dashboard-widget')
+        .map((item) => item.dataset.widget),
+    ).toEqual(['todos', 'capture']);
   });
 
   it('「编辑布局」进入编辑态：出现拖拽手柄与宽度控件，没数据的卡片也显示出来', async () => {
@@ -380,10 +405,9 @@ describe('HomePage 仪表盘', () => {
       'lg',
     );
 
-    const captureItem = dashboardItems().find((item) =>
-      (item.textContent ?? '').includes('快速添加任务'),
-    )!;
-    expect(captureItem).toHaveClass('lg:col-span-12');
+    // 改成宽档之后它不再跟别人并排，而是自己独占一行
+    expect(columnEl('capture')).toHaveClass('grid-cols-1');
+    expect(columnEl('capture')).not.toHaveClass('lg:col-span-8');
   });
 
   it('「恢复默认布局」把顺序、宽度、隐藏一起还原', async () => {
