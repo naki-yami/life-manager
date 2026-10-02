@@ -1,6 +1,7 @@
 import React from 'react';
 import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { WritingPage } from './WritingPage';
 import { ToastProvider } from '../components/ui';
@@ -19,6 +20,14 @@ beforeEach(() => {
   );
 });
 
+/** 选中项进 URL（`?project=`）之后，页面必须在 Router 里渲染 */
+const renderWriting = (): ReturnType<typeof render> =>
+  render(
+    <MemoryRouter initialEntries={['/study/writing']}>
+      <WritingPage />
+    </MemoryRouter>,
+  );
+
 const projectOf = (title: string) =>
   useWritingStore.getState().projects.find((project) => project.title === title)!;
 
@@ -29,7 +38,7 @@ describe('WritingPage 从命令面板打开', () => {
 
   it('聚焦某篇稿件时直接打开编辑器', () => {
     useWritingStore.getState().addProject('周报模板', 'article');
-    render(<WritingPage />);
+    renderWriting();
 
     act(() => {
       requestPaletteFocus('/study/writing', projectOf('周报模板').id);
@@ -39,7 +48,7 @@ describe('WritingPage 从命令面板打开', () => {
   });
 
   it('聚焦一篇不存在的稿件时不弹编辑器', () => {
-    render(<WritingPage />);
+    renderWriting();
 
     act(() => {
       requestPaletteFocus('/study/writing', 'missing');
@@ -59,7 +68,7 @@ const setStatus = (title: string, status: WritingStatus): void => {
 
 describe('WritingPage', () => {
   it('空态引导新建第一个项目', async () => {
-    render(<WritingPage />);
+    renderWriting();
     expect(screen.getByText('还没有写作项目')).toBeInTheDocument();
 
     await userEvent.click(screen.getAllByRole('button', { name: '新建项目' })[0]!);
@@ -75,7 +84,7 @@ describe('WritingPage', () => {
   });
 
   it('新建项目弹窗里在标题框按回车直接提交（U7）', async () => {
-    render(<WritingPage />);
+    renderWriting();
 
     await userEvent.click(screen.getAllByRole('button', { name: '新建项目' })[0]!);
     const dialog = screen.getByRole('dialog', { name: '新建写作项目' });
@@ -87,7 +96,7 @@ describe('WritingPage', () => {
   });
 
   it('新建项目时标题为空则不能提交', () => {
-    render(<WritingPage />);
+    renderWriting();
 
     return userEvent.click(screen.getAllByRole('button', { name: '新建项目' })[0]!).then(() => {
       const dialog = screen.getByRole('dialog', { name: '新建写作项目' });
@@ -107,7 +116,7 @@ describe('WritingPage', () => {
     useWritingStore.getState().updateWordCount(projectOf('长文').id, 1200);
     useWritingStore.getState().updateWordCount(projectOf('文案').id, 800);
 
-    render(<WritingPage />);
+    renderWriting();
 
     expect(statText('项目总数')).toContain('3');
     expect(statText('进行中项目')).toContain('1');
@@ -121,7 +130,7 @@ describe('WritingPage', () => {
     useWritingStore.getState().addProject('新品发布文案', 'copy');
     useWritingStore.getState().updateNotes(projectOf('新品发布文案').id, '主打轻量化的卖点');
 
-    render(<WritingPage />);
+    renderWriting();
 
     await userEvent.type(screen.getByRole('textbox', { name: '搜索' }), '简史');
     expect(screen.getByText('人类简史读书笔记')).toBeInTheDocument();
@@ -140,7 +149,7 @@ describe('WritingPage', () => {
     useWritingStore.getState().addProject('C', 'article');
     setStatus('A', 'completed');
 
-    render(<WritingPage />);
+    renderWriting();
 
     expect(screen.getByRole('button', { name: /全部/ })).toHaveTextContent('3');
     expect(screen.getByRole('button', { name: /^已完成/ })).toHaveTextContent('1');
@@ -153,7 +162,7 @@ describe('WritingPage', () => {
 
   it('字数是只读展示（由正文自动统计），可以改目标字数、状态与一键标记完成', async () => {
     useWritingStore.getState().addProject('长文', 'article');
-    render(<WritingPage />);
+    renderWriting();
 
     expect(screen.getByText('已写 0 字')).toBeInTheDocument();
     expect(screen.queryByRole('spinbutton', { name: '「长文」的字数' })).not.toBeInTheDocument();
@@ -176,22 +185,31 @@ describe('WritingPage', () => {
 
   it('创作笔记可以保存与清空', async () => {
     useWritingStore.getState().addProject('长文', 'article');
-    render(<WritingPage />);
+    renderWriting();
 
     await userEvent.click(screen.getByRole('button', { name: '创作笔记' }));
     const dialog = screen.getByRole('dialog', { name: /长文/ });
-    await userEvent.type(within(dialog).getByLabelText('创作笔记'), '第二章要加一个反转');
+    /*
+     * 每次重新查，不要缓存元素：抽屉里的 textarea 会随重渲染换节点，
+     * 缓存的引用点不动（userEvent.clear 会报 "could not be focused"）。
+     * 抽屉里只有一个 textbox，按 role 拿即可。
+     */
+    const openBox = (): HTMLElement =>
+      within(screen.getByRole('dialog', { name: /长文/ })).getByRole('textbox');
+
+    await userEvent.type(openBox(), '第二章要加一个反转');
     await userEvent.click(within(dialog).getByRole('button', { name: '保存' }));
 
     expect(projectOf('长文').notes).toBe('第二章要加一个反转');
-    expect(screen.getByText('第二章要加一个反转')).toBeInTheDocument();
 
+    // 窄屏存完抽屉会收起（宽屏右栏才是常驻的），再点一次打开，草稿应从 store 回填
     await userEvent.click(screen.getByRole('button', { name: '创作笔记' }));
-    const reopened = screen.getByRole('dialog', { name: /长文/ });
-    expect(within(reopened).getByLabelText('创作笔记')).toHaveValue('第二章要加一个反转');
+    expect(openBox()).toHaveValue('第二章要加一个反转');
 
-    await userEvent.clear(within(reopened).getByLabelText('创作笔记'));
-    await userEvent.click(within(reopened).getByRole('button', { name: '保存' }));
+    await userEvent.clear(openBox());
+    await userEvent.click(
+      within(screen.getByRole('dialog', { name: /长文/ })).getByRole('button', { name: '保存' }),
+    );
 
     expect(projectOf('长文').notes).toBe('');
     expect(screen.getByText('还没有创作笔记')).toBeInTheDocument();
@@ -201,7 +219,7 @@ describe('WritingPage', () => {
     useWritingStore.getState().addProject('长文', 'article');
     useWritingStore.getState().updateNotes(projectOf('长文').id, '一些笔记');
 
-    render(<WritingPage />);
+    renderWriting();
     await userEvent.click(screen.getByRole('button', { name: '删除《长文》' }));
 
     const dialog = screen.getByRole('dialog', { name: '删除写作项目' });
@@ -221,7 +239,7 @@ describe('WritingPage', () => {
 
   it('筛选无结果时提供清除筛选', async () => {
     useWritingStore.getState().addProject('长文', 'article');
-    render(<WritingPage />);
+    renderWriting();
 
     await userEvent.type(screen.getByRole('textbox', { name: '搜索' }), 'zzz');
     expect(screen.getByText('没有符合条件的项目')).toBeInTheDocument();
@@ -234,7 +252,7 @@ describe('WritingPage', () => {
     useWritingStore.getState().addProject('新文章', 'article');
     const id = projectOf('新文章').id;
     useWritingStore.getState().setTargetWords(id, 100);
-    render(<WritingPage />);
+    renderWriting();
 
     await userEvent.click(screen.getByRole('button', { name: '编辑正文' }));
     const dialog = screen.getByRole('dialog', { name: /编辑正文/ });
@@ -254,7 +272,7 @@ describe('WritingPage', () => {
     const id = projectOf('新文章').id;
     useWritingStore.getState().updateContent(id, '第一版');
     useWritingStore.getState().updateContent(id, '第二版更长一些');
-    render(<WritingPage />);
+    renderWriting();
 
     await userEvent.click(screen.getByRole('button', { name: '编辑正文' }));
     const dialog = screen.getByRole('dialog', { name: /编辑正文/ });
@@ -267,9 +285,11 @@ describe('WritingPage', () => {
     useWritingStore.getState().addProject('新文章', 'article');
     useWritingStore.getState().setTargetWords(projectOf('新文章').id, 5);
     render(
-      <ToastProvider>
-        <WritingPage />
-      </ToastProvider>,
+      <MemoryRouter initialEntries={['/study/writing']}>
+        <ToastProvider>
+          <WritingPage />
+        </ToastProvider>
+      </MemoryRouter>,
     );
 
     await userEvent.click(screen.getByRole('button', { name: '编辑正文' }));
@@ -283,7 +303,7 @@ describe('WritingPage', () => {
   it('导出会生成 Markdown 下载', async () => {
     useWritingStore.getState().addProject('可导出的稿子', 'article');
     useWritingStore.getState().updateContent(projectOf('可导出的稿子').id, '正文内容');
-    render(<WritingPage />);
+    renderWriting();
 
     await userEvent.click(screen.getByRole('button', { name: '导出《可导出的稿子》为 Markdown' }));
 
@@ -294,7 +314,7 @@ describe('WritingPage', () => {
 
 describe('WritingPage 标签', () => {
   it('新建项目时能打标签，卡片上会显示', async () => {
-    render(<WritingPage />);
+    renderWriting();
 
     await userEvent.click(screen.getAllByRole('button', { name: '新建项目' })[0]!);
     const dialog = screen.getByRole('dialog', { name: '新建写作项目' });
@@ -308,7 +328,7 @@ describe('WritingPage 标签', () => {
 
   it('卡片上可以就地补标签，标签会写回 store', async () => {
     useWritingStore.getState().addProject('专栏稿', 'article');
-    render(<WritingPage />);
+    renderWriting();
 
     await userEvent.click(screen.getByRole('button', { name: '添加标签' }));
     await userEvent.type(screen.getByLabelText('编辑标签'), '专栏{Enter}');
@@ -322,7 +342,7 @@ describe('WritingPage 标签', () => {
     const store = useWritingStore.getState();
     store.addProject('专栏稿', 'article', ['专栏']);
     store.addProject('产品文案', 'copy', ['工作']);
-    render(<WritingPage />);
+    renderWriting();
 
     await userEvent.type(screen.getByRole('textbox', { name: '搜索' }), '#专栏');
 
@@ -336,51 +356,64 @@ describe('WritingPage 宽屏双栏', () => {
   });
 
   const expectWideLayout = (): void => mockMediaQueries({ [MASTER_DETAIL_QUERY]: true });
-  const panel = (name = '创作笔记'): HTMLElement => screen.getByRole('complementary', { name });
+  const panel = (name = '《长文》的创作笔记'): HTMLElement =>
+    screen.getByRole('complementary', { name });
 
-  it('宽屏右栏常驻，没选中项目时是占位内容', () => {
+  /*
+   * 「右栏选完就空」是设计文档点名要改掉的反模式，写作页是最后一处。
+   * 现在默认选中第一个可见项目，右栏一进来就有内容；一个稿件都没有时才走空态。
+   */
+  it('宽屏右栏常驻，默认选中第一个可见项目', () => {
     useWritingStore.getState().addProject('长文', 'article');
     expectWideLayout();
 
-    render(<WritingPage />);
+    renderWriting();
 
-    expect(within(panel()).getByText('还没有选中项目')).toBeInTheDocument();
-    expect(screen.getByText('长文')).toBeInTheDocument();
+    expect(panel()).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '长文' })).toHaveAttribute('aria-current', 'true');
+  });
+
+  it('一个稿件都没有时右栏给空态引导', () => {
+    expectWideLayout();
+
+    renderWriting();
+
+    expect(screen.getByRole('complementary', { name: '创作笔记' })).toHaveTextContent('还没有稿件');
   });
 
   it('点「创作笔记」在右栏就地写，不再弹对话框', async () => {
     useWritingStore.getState().addProject('长文', 'article');
     expectWideLayout();
 
-    render(<WritingPage />);
+    renderWriting();
     await userEvent.click(screen.getByRole('button', { name: '创作笔记' }));
 
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-    expect(screen.getByText('长文')).toBeInTheDocument();
 
-    const aside = panel('《长文》的创作笔记');
+    const aside = panel();
     await userEvent.type(within(aside).getByLabelText('创作笔记'), '第二章要加一个反转');
     await userEvent.click(within(aside).getByRole('button', { name: '保存' }));
 
     expect(projectOf('长文').notes).toBe('第二章要加一个反转');
-    expect(screen.getByText('第二章要加一个反转')).toBeInTheDocument();
-    // 存完右栏回到占位
-    expect(within(panel()).getByText('还没有选中项目')).toBeInTheDocument();
+    // 同一段文案在列表预览里也有一份，断言收窄到右栏
+    expect(within(aside).getByLabelText('创作笔记')).toHaveValue('第二章要加一个反转');
+    // 存完右栏不关（常驻），仍停在这个项目上
+    expect(panel()).toBeInTheDocument();
   });
 
-  it('「取消」只关右栏，不写回 store', async () => {
+  it('「取消」只清草稿，不写回 store', async () => {
     useWritingStore.getState().addProject('长文', 'article');
     expectWideLayout();
 
-    render(<WritingPage />);
+    renderWriting();
     await userEvent.click(screen.getByRole('button', { name: '创作笔记' }));
 
-    const aside = panel('《长文》的创作笔记');
+    const aside = panel();
     await userEvent.type(within(aside).getByLabelText('创作笔记'), '不该被保存');
     await userEvent.click(within(aside).getByRole('button', { name: '取消' }));
 
-    expect(within(panel()).getByText('还没有选中项目')).toBeInTheDocument();
     expect(projectOf('长文').notes).toBe('');
+    expect(panel()).toBeInTheDocument();
   });
 
   it('再点另一个项目的「创作笔记」，右栏换成那一个', async () => {
@@ -390,7 +423,7 @@ describe('WritingPage 宽屏双栏', () => {
     store.updateNotes(projectOf('长文').id, '原来的笔记');
     expectWideLayout();
 
-    render(<WritingPage />);
+    renderWriting();
     /** 卡片上的「创作笔记」按钮，按项目标题定位，避免多个项目时选到别的卡 */
     const noteButtonOf = (title: string): HTMLElement =>
       within(screen.getByText(title).closest('li') as HTMLElement).getByRole('button', {
@@ -410,19 +443,20 @@ describe('WritingPage 宽屏双栏', () => {
     useWritingStore.getState().addProject('长文', 'article');
     expectWideLayout();
 
-    render(<WritingPage />);
+    renderWriting();
     await userEvent.click(screen.getByRole('button', { name: '编辑正文' }));
 
     // 这一条是刻意的：正文编辑器占的是「写作面积」，塞进 24rem 右栏反而更难写
     expect(screen.getByRole('dialog', { name: '《长文》编辑正文' })).toBeInTheDocument();
-    expect(within(panel()).getByText('还没有选中项目')).toBeInTheDocument();
+    // 右栏不受影响：它常驻在创作笔记上（弹窗是叠加的，不是替换右栏）
+    expect(panel()).toBeInTheDocument();
   });
 
   it('宽屏下命令面板聚焦某篇稿子，还是打开编辑器', () => {
     useWritingStore.getState().addProject('长文', 'article');
     expectWideLayout();
 
-    render(<WritingPage />);
+    renderWriting();
     act(() => {
       requestPaletteFocus('/study/writing', projectOf('长文').id);
     });
@@ -434,7 +468,7 @@ describe('WritingPage 宽屏双栏', () => {
 describe('WritingPage 正文 Markdown', () => {
   it('正文编辑器可以切到预览看排版', async () => {
     useWritingStore.getState().addProject('新文章', 'article');
-    render(<WritingPage />);
+    renderWriting();
 
     await userEvent.click(screen.getByRole('button', { name: '编辑正文' }));
     const dialog = screen.getByRole('dialog', { name: /编辑正文/ });
@@ -446,7 +480,7 @@ describe('WritingPage 正文 Markdown', () => {
 
   it('工具栏插入的标记会随「保存」一起写回正文', async () => {
     useWritingStore.getState().addProject('新文章', 'article');
-    render(<WritingPage />);
+    renderWriting();
 
     await userEvent.click(screen.getByRole('button', { name: '编辑正文' }));
     const dialog = screen.getByRole('dialog', { name: /编辑正文/ });
@@ -465,7 +499,7 @@ describe('WritingPage 正文 Markdown', () => {
 describe('WritingPage 专注模式', () => {
   it('「专注模式」把正文弹窗铺满视口，重开时复位', async () => {
     useWritingStore.getState().addProject('新文章', 'article');
-    render(<WritingPage />);
+    renderWriting();
 
     await userEvent.click(screen.getByRole('button', { name: '编辑正文' }));
     const dialog = screen.getByRole('dialog', { name: /编辑正文/ });
@@ -486,7 +520,7 @@ describe('WritingPage 专注模式', () => {
 
   it('专注模式下正文照常能写能存', async () => {
     useWritingStore.getState().addProject('新文章', 'article');
-    render(<WritingPage />);
+    renderWriting();
 
     await userEvent.click(screen.getByRole('button', { name: '编辑正文' }));
     const dialog = screen.getByRole('dialog', { name: /编辑正文/ });
@@ -510,7 +544,7 @@ describe('WritingPage 导出 Word', () => {
   it('导出 Word 产出一个 docx 的 Blob', async () => {
     useWritingStore.getState().addProject('可导出的稿子', 'article');
     useWritingStore.getState().updateContent(projectOf('可导出的稿子').id, '正文内容');
-    render(<WritingPage />);
+    renderWriting();
 
     await userEvent.click(screen.getByRole('button', { name: '导出《可导出的稿子》为 Word' }));
 
@@ -523,7 +557,7 @@ describe('WritingPage 导出 Word', () => {
 
   it('空正文也能导出，不是零字节文件', async () => {
     useWritingStore.getState().addProject('空白稿', 'article');
-    render(<WritingPage />);
+    renderWriting();
 
     await userEvent.click(screen.getByRole('button', { name: '导出《空白稿》为 Word' }));
 
@@ -536,7 +570,7 @@ describe('WritingPage 导出 Word', () => {
     const store = useWritingStore.getState();
     store.addProject('同一篇', 'article');
     store.updateContent(projectOf('同一篇').id, '共同正文');
-    render(<WritingPage />);
+    renderWriting();
 
     await userEvent.click(screen.getByRole('button', { name: '导出《同一篇》为 Markdown' }));
     await userEvent.click(screen.getByRole('button', { name: '导出《同一篇》为 Word' }));

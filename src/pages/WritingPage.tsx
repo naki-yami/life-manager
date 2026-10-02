@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   CheckCircle2,
   Download,
@@ -38,6 +38,7 @@ import { formatNumber } from '../utils/date';
 import { WritingProject, WritingStatus, WritingType } from '../types';
 import { useNewEntryShortcut } from '../hooks/useShortcuts';
 import { usePaletteFocus } from '../hooks/usePaletteFocus';
+import { useUrlSelection } from '../hooks/useUrlSelection';
 import { ToastContext } from '../components/ui/toastContext';
 import { downloadBlob, downloadTextFile } from '../utils/download';
 import { buildDocxBlob, composeExportMarkdown } from '../utils/docx';
@@ -109,7 +110,6 @@ export const WritingPage: React.FC = () => {
   const [showAddModal, setShowAddModal] = useState(false);
   useNewEntryShortcut(() => setShowAddModal(true));
 
-  const [noteId, setNoteId] = useState<string | null>(null);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [noteInput, setNoteInput] = useState('');
   const [editorId, setEditorId] = useState<string | null>(null);
@@ -140,7 +140,34 @@ export const WritingPage: React.FC = () => {
 
   const totalWords = projects.reduce((sum, project) => sum + project.wordCount, 0);
 
+  /*
+   * 右栏常驻：选中哪个项目进 URL（`?project=`），没传或被筛掉时落到第一个可见的。
+   * 以前是「点「创作笔记」才有右栏，否则一句『还没有选中项目』」——
+   * 那正是开发页 / 读书页 / 游戏页都已经改掉的反模式。
+   */
+  const visibleProjectIds = useMemo(
+    () => visibleProjects.map((project) => project.id),
+    [visibleProjects],
+  );
+  const [noteId, setNoteId] = useUrlSelection('project', visibleProjectIds);
+  /** 窄屏抽屉的开合：宽屏右栏永远有选中项，不能拿「有没有选中」当开合条件 */
+  const [drawerOpen, setDrawerOpen] = useState(false);
+
   const noteProject = projects.find((project) => project.id === noteId) ?? null;
+
+  /*
+   * 选中项一变就把笔记草稿对齐到那个项目。
+   * 以前只在 `openNotes()` 里播种（那时「打开」是明确动作）；现在切换靠点标题
+   * 或地址栏，改成跟着 id 走。依赖里**只放 id 不放 `projects`**，
+   * 否则保存后 store 换新数组会把草稿重置掉。
+   */
+  const projectIdForDraft = noteProject?.id ?? null;
+  React.useEffect(() => {
+    const target = useWritingStore
+      .getState()
+      .projects.find((item) => item.id === projectIdForDraft);
+    setNoteInput(target?.notes ?? '');
+  }, [projectIdForDraft]);
   const deletingProject = projects.find((project) => project.id === pendingDeleteId) ?? null;
 
   const openAddModal = (): void => {
@@ -221,11 +248,10 @@ export const WritingPage: React.FC = () => {
   const openNotes = (id: string, notes: string): void => {
     setNoteInput(notes);
     setNoteId(id);
+    setDrawerOpen(true);
   };
 
-  const closeNotes = (): void => {
-    setNoteId(null);
-  };
+  const closeNotes = (): void => setDrawerOpen(false);
 
   const handleSaveNotes = (): void => {
     if (noteId) updateNotes(noteId, noteInput);
@@ -283,14 +309,14 @@ export const WritingPage: React.FC = () => {
 
       <MasterDetail
         detailTitle={noteProject ? `《${noteProject.title}》的创作笔记` : '创作笔记'}
-        detailOpen={noteProject !== null}
+        detailOpen={drawerOpen}
         onCloseDetail={closeNotes}
         drawerWidth="lg"
         emptyDetail={
           <EmptyState
             icon={<StickyNote size={20} aria-hidden />}
-            title="还没有选中项目"
-            description="点左边任意一个项目的「创作笔记」，就能在这里记想法。"
+            title="还没有稿件"
+            description="点右上角「新建项目」，选中一个就能在这里记想法。"
             className="py-6"
           />
         }
@@ -359,7 +385,17 @@ export const WritingPage: React.FC = () => {
                   <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="font-semibold text-content">{project.title}</h3>
+                        {/* 点标题 = 选中进右栏（`?project=`）；aria-current 让读屏知道右栏说的是哪个 */}
+                        <button
+                          type="button"
+                          onClick={() => openNotes(project.id, project.notes)}
+                          aria-current={project.id === noteId ? 'true' : undefined}
+                          className={`min-w-0 rounded-sm text-left font-semibold transition-colors duration-fast hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-line-focus ${
+                            project.id === noteId ? 'text-accent' : 'text-content'
+                          }`}
+                        >
+                          {project.title}
+                        </button>
                         <Badge tone="info">{TYPE_LABEL[project.type]}</Badge>
                         <Badge tone={STATUS_TONE[project.status]}>
                           {STATUS_LABEL[project.status]}
