@@ -244,7 +244,7 @@ export const WorkItemList: React.FC<WorkItemListProps> = ({ project }) => {
             onMove={handleKanbanMove}
           />
         ) : (
-          <ul className="stagger-enter divide-y divide-line-subtle rounded-lg border border-line-subtle">
+          <ul className="divide-y divide-line-subtle rounded-lg border border-line-subtle">
             {filteredTasks.map((task) => {
               const overdue =
                 task.status !== 'done' && task.dueDate !== null && task.dueDate < today;
@@ -253,7 +253,7 @@ export const WorkItemList: React.FC<WorkItemListProps> = ({ project }) => {
               return (
                 <li
                   key={task.id}
-                  className="flex items-start gap-2.5 px-3 py-2.5 transition-[background-color,transform] duration-fast ease-standard hover:translate-x-0.5 hover:bg-hover"
+                  className="nudge-x flex items-start gap-2.5 px-3 py-2.5 hover:bg-hover"
                 >
                   <span
                     className="mt-1 shrink-0"

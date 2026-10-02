@@ -48,7 +48,7 @@ export const MilestoneGrid: React.FC<MilestoneGridProps> = ({ project }) => {
               return (
                 <li
                   key={milestone.id}
-                  className="flex items-center gap-3 rounded-lg border border-line-subtle bg-inset px-3 py-2.5 transition-[border-color,transform] duration-fast ease-standard hover:-translate-y-px hover:border-line"
+                  className="lift flex items-center gap-3 rounded-lg border border-line-subtle bg-inset px-3 py-2.5 hover:border-line"
                 >
                   <Flag
                     size={14}

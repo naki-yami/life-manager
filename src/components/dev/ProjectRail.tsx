@@ -79,7 +79,7 @@ export const ProjectRail: React.FC<ProjectRailProps> = ({
      * 滚动都发生在内层容器（overflow-x/y-auto），页面本身绝不横向溢出。
      */}
     <ul
-      className="stagger-enter flex gap-2 overflow-x-auto pb-1 max-lg:-mx-1 max-lg:px-1 lg:max-h-[calc(100vh-260px)] lg:flex-col lg:overflow-y-auto lg:overflow-x-hidden"
+      className="flex gap-2 overflow-x-auto pb-1 max-lg:-mx-1 max-lg:px-1 lg:max-h-[calc(100vh-260px)] lg:flex-col lg:overflow-y-auto lg:overflow-x-hidden"
       aria-label="项目列表"
     >
       {projects.map((project) => {
@@ -94,7 +94,7 @@ export const ProjectRail: React.FC<ProjectRailProps> = ({
               type="button"
               onClick={() => onSelect(project.id)}
               aria-current={selected ? 'true' : undefined}
-              className={`w-full rounded-lg border p-3 text-left transition-[border-color,background-color,transform] duration-fast ease-standard hover:-translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-line-focus ${
+              className={`lift w-full rounded-lg border p-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-line-focus ${
                 selected
                   ? 'border-accent bg-accent-soft'
                   : 'border-line-subtle bg-surface hover:border-line'
