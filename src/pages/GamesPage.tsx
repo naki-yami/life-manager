@@ -45,6 +45,7 @@ import { Game, GamePlatform, GameSession, GameStatus } from '../types';
 import { useNewEntryShortcut } from '../hooks/useShortcuts';
 import { usePaletteFocus } from '../hooks/usePaletteFocus';
 import { useTagSuggestions } from '../hooks/useTagSuggestions';
+import { useUrlSelection } from '../hooks/useUrlSelection';
 
 type Filter = 'all' | GameStatus;
 
@@ -213,12 +214,18 @@ export const GamesPage: React.FC = () => {
 
   /**
    * 右栏当前展示哪一款游戏的哪一块。
-   * 成就与笔记是同一款游戏的两面，共用一份「选中了什么」的状态：
-   * 宽屏下它决定右栏内容，窄屏下它决定抽屉开不开。
+   *
+   * 「选中了哪款」进 URL（`?game=`），没传或被筛掉时落到第一款可见的游戏 ——
+   * 右栏因此常驻有内容，不再等用户先点一下（「选完就空」是开发页先改掉的反模式）。
+   * 「成就 / 笔记」是同一款游戏的两面，属于面板内的子视图，留在本地状态；切游戏时归位到笔记。
    */
-  const [detail, setDetail] = useState<{ gameId: string; kind: 'achievements' | 'notes' } | null>(
-    null,
-  );
+  const [detailGameId, selectGame] = useUrlSelection('game', shownGameIds);
+  const [detailKind, setDetailKind] = useState<'achievements' | 'notes'>('notes');
+  /**
+   * 窄屏抽屉的开合。宽屏右栏永远有选中项，不能再拿「有没有 detail」当开合条件，
+   * 否则窄屏一进来抽屉就是开的。
+   */
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [form, setForm] = useState<{ name: string; platform: GamePlatform; tags: string[] }>({
     name: '',
@@ -298,33 +305,53 @@ export const GamesPage: React.FC = () => {
     [sessions],
   );
 
-  const detailGame = games.find((game) => game.id === detail?.gameId) ?? null;
+  const detailGame = games.find((game) => game.id === detailGameId) ?? null;
   /** 详情栏标题：宽屏是卡片标题，窄屏是抽屉的可访问名称 */
-  const detailKindLabel = detail?.kind === 'notes' ? '笔记' : '成就';
-  const detailTitle = detail
-    ? detailGame
-      ? `《${detailGame.name}》的${detailKindLabel}`
-      : detailKindLabel
-    : '游戏详情';
+  const detailKindLabel = detailKind === 'notes' ? '笔记' : '成就';
+  const detailTitle = detailGame ? `《${detailGame.name}》的${detailKindLabel}` : detailKindLabel;
   const pendingGame = games.find((game) => game.id === pendingDeleteId) ?? null;
   const pendingSession = sessions.find((session) => session.id === pendingSessionId) ?? null;
 
+  /*
+   * 选中项一变就把笔记 / 短评 / 通关日期 / 评分草稿对齐到那一款。
+   * 以前只在 `openNotes()` 里播种（那时「打开」是明确动作）；现在切换靠点标题
+   * 或地址栏，改成跟着 id 走。依赖里**只放 id 不放 `games`**，
+   * 否则保存后 store 换新数组会把草稿重置掉。
+   */
+  const gameIdForDraft = detailGame?.id ?? null;
+  React.useEffect(() => {
+    const target = useGameStore.getState().games.find((game) => game.id === gameIdForDraft);
+    if (!target) return;
+    setNoteInput(target.notes);
+    setReviewInput(target.review);
+    setFinishedAtInput(target.finishedAt ?? '');
+    setRatingInput(target.rating);
+  }, [gameIdForDraft]);
+
   const openNotes = (game: Game): void => {
+    selectGame(game.id);
+    setDetailKind('notes');
     setNoteInput(game.notes);
     setReviewInput(game.review);
     setFinishedAtInput(game.finishedAt ?? '');
     setRatingInput(game.rating);
-    setDetail({ gameId: game.id, kind: 'notes' });
+    setDrawerOpen(true);
+  };
+
+  const openAchievements = (game: Game): void => {
+    selectGame(game.id);
+    setDetailKind('achievements');
+    setDrawerOpen(true);
   };
 
   const closeDetail = (): void => {
-    setDetail(null);
+    setDrawerOpen(false);
     setAchievementForm({ name: '', description: '' });
   };
 
   const handleSaveNotes = (): void => {
-    if (detail) {
-      updateGame(detail.gameId, {
+    if (detailGame) {
+      updateGame(detailGame.id, {
         notes: noteInput.trim(),
         review: reviewInput.trim(),
         rating: ratingInput,
@@ -349,10 +376,10 @@ export const GamesPage: React.FC = () => {
   };
 
   const handleAddAchievement = (): void => {
-    if (!detail || detail.kind !== 'achievements') return;
+    if (!detailGame || detailKind !== 'achievements') return;
     const name = achievementForm.name.trim();
     if (!name) return;
-    addAchievement(detail.gameId, name, achievementForm.description.trim());
+    addAchievement(detailGame.id, name, achievementForm.description.trim());
     setAchievementForm({ name: '', description: '' });
   };
 
@@ -509,19 +536,19 @@ export const GamesPage: React.FC = () => {
 
       <MasterDetail
         detailTitle={detailTitle}
-        detailOpen={detail !== null}
+        detailOpen={drawerOpen}
         onCloseDetail={closeDetail}
         drawerWidth="lg"
         emptyDetail={
           <EmptyState
             icon={<Trophy size={20} aria-hidden />}
-            title="还没有选中游戏"
-            description="点左边任意一款游戏的「管理成就」或「笔记」，就能在这里处理。"
+            title="游戏库里还没有游戏"
+            description="点右上角「添加游戏」，选中一款就能在这里管成就、写笔记。"
             className="py-6"
           />
         }
         detail={
-          detail === null || detailGame === null ? null : detail.kind === 'achievements' ? (
+          detailGame === null ? null : detailKind === 'achievements' ? (
             <div className="space-y-4">
               <p className="text-xs text-content-tertiary">点击已有成就可以切换解锁状态</p>
               <div className="space-y-2">
@@ -831,7 +858,17 @@ export const GamesPage: React.FC = () => {
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
-                          <h3 className="font-semibold text-content">{game.name}</h3>
+                          {/* 点游戏名 = 选中进右栏（`?game=`）；aria-current 让读屏知道右栏说的是哪一款 */}
+                          <button
+                            type="button"
+                            onClick={() => openNotes(game)}
+                            aria-current={game.id === detailGameId ? 'true' : undefined}
+                            className={`min-w-0 rounded-sm text-left font-semibold transition-colors duration-fast hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-line-focus ${
+                              game.id === detailGameId ? 'text-accent' : 'text-content'
+                            }`}
+                          >
+                            {game.name}
+                          </button>
                           <button
                             type="button"
                             aria-pressed={game.favorite}
@@ -933,7 +970,7 @@ export const GamesPage: React.FC = () => {
                             size="sm"
                             variant="ghost"
                             icon={<Trophy size={13} aria-hidden />}
-                            onClick={() => setDetail({ gameId: game.id, kind: 'achievements' })}
+                            onClick={() => openAchievements(game)}
                           >
                             管理成就
                           </Button>

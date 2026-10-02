@@ -1,6 +1,7 @@
 import React from 'react';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { GamesPage } from './GamesPage';
 import { ToastProvider } from '../components/ui';
@@ -17,6 +18,14 @@ beforeEach(() => {
 
 const gameOf = (name: string) => useGameStore.getState().games.find((game) => game.name === name)!;
 
+/** 选中项进 URL（`?game=`）之后，页面必须在 Router 里渲染 */
+const renderGames = (): ReturnType<typeof render> =>
+  render(
+    <MemoryRouter initialEntries={['/games']}>
+      <GamesPage />
+    </MemoryRouter>,
+  );
+
 describe('GamesPage 从命令面板打开', () => {
   afterEach(() => {
     resetPaletteFocus();
@@ -24,7 +33,7 @@ describe('GamesPage 从命令面板打开', () => {
 
   it('聚焦某款游戏时打开它的笔记面板', () => {
     addGame('星露谷物语');
-    render(<GamesPage />);
+    renderGames();
 
     act(() => {
       requestPaletteFocus('/games', gameOf('星露谷物语').id);
@@ -34,7 +43,7 @@ describe('GamesPage 从命令面板打开', () => {
   });
 
   it('聚焦一款不存在的游戏时不弹面板', () => {
-    render(<GamesPage />);
+    renderGames();
 
     act(() => {
       requestPaletteFocus('/games', 'missing');
@@ -58,7 +67,7 @@ const setStatus = (name: string, status: GameStatus): void => {
 
 describe('GamesPage', () => {
   it('空态引导添加第一款游戏', async () => {
-    render(<GamesPage />);
+    renderGames();
     expect(screen.getByText('游戏库还是空的')).toBeInTheDocument();
 
     await userEvent.click(screen.getAllByRole('button', { name: '添加游戏' })[0]!);
@@ -78,7 +87,7 @@ describe('GamesPage', () => {
   });
 
   it('添加游戏弹窗里在名称框按回车直接提交（U7）', async () => {
-    render(<GamesPage />);
+    renderGames();
 
     await userEvent.click(screen.getAllByRole('button', { name: '添加游戏' })[0]!);
     const dialog = screen.getByRole('dialog', { name: '添加游戏' });
@@ -97,7 +106,7 @@ describe('GamesPage', () => {
     useGameStore.getState().updateHoursPlayed(gameOf('塞尔达传说').id, 10);
     useGameStore.getState().updateHoursPlayed(gameOf('哈迪斯').id, 2.5);
 
-    render(<GamesPage />);
+    renderGames();
 
     expect(statText('游戏总数')).toContain('3');
     expect(statText('在玩中')).toContain('2');
@@ -112,7 +121,7 @@ describe('GamesPage', () => {
     setStatus('哈迪斯', 'completed');
     useGameStore.getState().addAchievement(gameOf('空洞骑士').id, '速通五小时', '');
 
-    render(<GamesPage />);
+    renderGames();
 
     expect(screen.getByRole('button', { name: /^全部/ })).toHaveTextContent('3');
     expect(screen.getByRole('button', { name: /^已通关/ })).toHaveTextContent('1');
@@ -130,7 +139,7 @@ describe('GamesPage', () => {
 
   it('可以改状态、改时长与拖动进度', async () => {
     addGame('哈迪斯');
-    render(<GamesPage />);
+    renderGames();
 
     await userEvent.selectOptions(
       screen.getByRole('combobox', { name: '调整「哈迪斯」的状态' }),
@@ -154,7 +163,7 @@ describe('GamesPage', () => {
   it('可以直接点成就切换解锁状态', async () => {
     addGame('哈迪斯');
     useGameStore.getState().addAchievement(gameOf('哈迪斯').id, '逃出冥界', '击败冥王');
-    render(<GamesPage />);
+    renderGames();
 
     expect(screen.getByText('成就 0/1')).toBeInTheDocument();
 
@@ -168,7 +177,7 @@ describe('GamesPage', () => {
 
   it('管理成就里可以新增与删除成就', async () => {
     addGame('哈迪斯');
-    render(<GamesPage />);
+    renderGames();
 
     await userEvent.click(screen.getByRole('button', { name: '管理成就' }));
     const dialog = screen.getByRole('dialog', { name: '《哈迪斯》的成就' });
@@ -191,7 +200,7 @@ describe('GamesPage', () => {
 
   it('笔记可以保存与清空', async () => {
     addGame('哈迪斯');
-    render(<GamesPage />);
+    renderGames();
 
     await userEvent.click(screen.getByRole('button', { name: '笔记' }));
     const dialog = screen.getByRole('dialog', { name: '《哈迪斯》的笔记' });
@@ -215,7 +224,7 @@ describe('GamesPage', () => {
     useGameStore.getState().addAchievement(gameOf('哈迪斯').id, '逃出冥界', '');
     useGameStore.getState().updateHoursPlayed(gameOf('哈迪斯').id, 30);
 
-    render(<GamesPage />);
+    renderGames();
     await userEvent.click(screen.getByRole('button', { name: '删除《哈迪斯》' }));
 
     const dialog = screen.getByRole('dialog', { name: '删除游戏' });
@@ -236,7 +245,7 @@ describe('GamesPage', () => {
 
   it('记录游玩会写入流水，并把时长累加到游戏上', async () => {
     addGame('哈迪斯');
-    render(<GamesPage />);
+    renderGames();
 
     await userEvent.click(screen.getAllByRole('button', { name: '记录游玩' })[0]!);
     const dialog = screen.getByRole('dialog', { name: '记录游玩' });
@@ -264,7 +273,7 @@ describe('GamesPage', () => {
     await new Promise((resolve) => setTimeout(resolve, 5));
     addGame('新坑');
     useGameStore.getState().updateGameStatus(gameOf('新坑').id, 'backlog');
-    render(<GamesPage />);
+    renderGames();
 
     const card = screen.getByText('下一步玩什么').closest('div.rounded-lg') as HTMLElement;
     await userEvent.click(within(card).getByRole('button', { name: '记录游玩' }));
@@ -286,7 +295,7 @@ describe('GamesPage', () => {
     useGameStore.getState().addSession(gameId, todayKey(), 3, '第一章');
     useGameStore.getState().addSession(gameId, todayKey(), 1.5, '');
 
-    render(<GamesPage />);
+    renderGames();
 
     const year = todayKey().slice(0, 4);
     expect(screen.getByText(`${year} 年游玩`)).toBeInTheDocument();
@@ -301,9 +310,11 @@ describe('GamesPage', () => {
     useGameStore.getState().addSession(gameId, todayKey(), 2, '');
 
     render(
-      <ToastProvider>
-        <GamesPage />
-      </ToastProvider>,
+      <MemoryRouter initialEntries={['/games']}>
+        <ToastProvider>
+          <GamesPage />
+        </ToastProvider>
+      </MemoryRouter>,
     );
 
     await userEvent.click(screen.getByRole('button', { name: /的「哈迪斯」游玩记录/ }));
@@ -326,7 +337,7 @@ describe('GamesPage', () => {
 
   it('没有游玩记录时不渲染年度卡片', () => {
     addGame('哈迪斯');
-    render(<GamesPage />);
+    renderGames();
 
     expect(screen.queryByText(`${todayKey().slice(0, 4)} 年游玩`)).not.toBeInTheDocument();
     expect(screen.queryByRole('img', { name: /每月游玩时长/ })).not.toBeInTheDocument();
@@ -334,7 +345,7 @@ describe('GamesPage', () => {
 
   it('游戏卡片带封面占位（渐变 + 首字）', () => {
     addGame('哈迪斯');
-    render(<GamesPage />);
+    renderGames();
 
     // 封面是 aria-hidden 的装饰块，里面显示游戏名首字
     const cover = screen.getByText('哈').closest('div[aria-hidden]');
@@ -345,7 +356,7 @@ describe('GamesPage', () => {
 
 describe('GamesPage 标签', () => {
   it('添加游戏时能打标签，卡片上会显示', async () => {
-    render(<GamesPage />);
+    renderGames();
 
     await userEvent.click(screen.getAllByRole('button', { name: '添加游戏' })[0]!);
     const dialog = screen.getByRole('dialog', { name: '添加游戏' });
@@ -359,7 +370,7 @@ describe('GamesPage 标签', () => {
 
   it('卡片上可以就地补标签，标签会写回 store', async () => {
     addGame('极乐迪斯科');
-    render(<GamesPage />);
+    renderGames();
 
     await userEvent.click(screen.getByRole('button', { name: '添加标签' }));
     await userEvent.type(screen.getByLabelText('编辑标签'), 'RPG{Enter}');
@@ -373,7 +384,7 @@ describe('GamesPage 标签', () => {
     const store = useGameStore.getState();
     store.addGame('极乐迪斯科', 'PC', ['RPG']);
     store.addGame('星露谷物语', 'PC', ['休闲']);
-    render(<GamesPage />);
+    renderGames();
 
     await userEvent.type(screen.getByRole('textbox', { name: '搜索' }), '#休闲');
 
@@ -387,23 +398,39 @@ describe('GamesPage 宽屏双栏', () => {
   });
 
   const expectWideLayout = (): void => mockMediaQueries({ [MASTER_DETAIL_QUERY]: true });
-  const panel = (name = '游戏详情'): HTMLElement => screen.getByRole('complementary', { name });
+  const panel = (name = '《哈迪斯》的笔记'): HTMLElement =>
+    screen.getByRole('complementary', { name });
 
-  it('宽屏右栏常驻，没选中游戏时是占位内容', () => {
+  /*
+   * 「右栏选完就空」是设计文档点名要改掉的反模式（开发页先改的）。
+   * 现在默认选中第一款可见的游戏、默认落在「笔记」这一面，右栏一进来就有内容；
+   * 游戏库为空时才走空态。
+   */
+  it('宽屏右栏常驻，默认选中第一款游戏并落在笔记面', () => {
     addGame('哈迪斯');
     expectWideLayout();
 
-    render(<GamesPage />);
+    renderGames();
 
-    expect(within(panel()).getByText('还没有选中游戏')).toBeInTheDocument();
-    expect(screen.getByText('哈迪斯')).toBeInTheDocument();
+    expect(panel()).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '哈迪斯' })).toHaveAttribute('aria-current', 'true');
+  });
+
+  it('游戏库为空时右栏给空态引导', () => {
+    expectWideLayout();
+
+    renderGames();
+
+    expect(screen.getByRole('complementary', { name: '笔记' })).toHaveTextContent(
+      '游戏库里还没有游戏',
+    );
   });
 
   it('点「管理成就」在右栏增删，不再弹对话框', async () => {
     addGame('哈迪斯');
     expectWideLayout();
 
-    render(<GamesPage />);
+    renderGames();
     await userEvent.click(screen.getByRole('button', { name: '管理成就' }));
 
     // 焦点没被搬进对话框，游戏库也还在
@@ -432,7 +459,7 @@ describe('GamesPage 宽屏双栏', () => {
     addGame('哈迪斯');
     expectWideLayout();
 
-    render(<GamesPage />);
+    renderGames();
     await userEvent.click(screen.getByRole('button', { name: '笔记' }));
 
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
@@ -442,23 +469,25 @@ describe('GamesPage 宽屏双栏', () => {
     await userEvent.click(within(aside).getByRole('button', { name: '保存' }));
 
     expect(gameOf('哈迪斯').notes).toBe('先刷满武器再打冥王');
-    expect(screen.getByText('先刷满武器再打冥王')).toBeInTheDocument();
-    // 存完右栏回到占位
-    expect(within(panel()).getByText('还没有选中游戏')).toBeInTheDocument();
+    // 文案会同时出现在右栏文本框与列表预览里，断言收窄到右栏
+    expect(within(panel()).getByLabelText('笔记')).toHaveValue('先刷满武器再打冥王');
+    // 存完右栏不关（常驻），仍停在这一款游戏的笔记面
+    expect(panel()).toBeInTheDocument();
   });
 
   it('「取消」只关右栏，不把草稿写回 store', async () => {
     addGame('哈迪斯');
     expectWideLayout();
 
-    render(<GamesPage />);
+    renderGames();
     await userEvent.click(screen.getByRole('button', { name: '笔记' }));
 
     const aside = panel('《哈迪斯》的笔记');
     await userEvent.type(within(aside).getByLabelText('笔记'), '不该被保存');
     await userEvent.click(within(aside).getByRole('button', { name: '取消' }));
 
-    expect(within(panel()).getByText('还没有选中游戏')).toBeInTheDocument();
+    // 取消只清草稿、不写库；右栏常驻，仍停在那一款上
+    expect(panel()).toBeInTheDocument();
     expect(gameOf('哈迪斯').notes).toBe('');
   });
 
@@ -466,7 +495,7 @@ describe('GamesPage 宽屏双栏', () => {
     addGame('哈迪斯');
     expectWideLayout();
 
-    render(<GamesPage />);
+    renderGames();
     await userEvent.click(screen.getByRole('button', { name: '管理成就' }));
     expect(panel('《哈迪斯》的成就')).toBeInTheDocument();
 
@@ -479,7 +508,7 @@ describe('GamesPage 宽屏双栏', () => {
     addGame('星露谷物语');
     expectWideLayout();
 
-    render(<GamesPage />);
+    renderGames();
     act(() => {
       requestPaletteFocus('/games', gameOf('星露谷物语').id);
     });
@@ -492,7 +521,7 @@ describe('GamesPage 宽屏双栏', () => {
     addGame('哈迪斯');
     expectWideLayout();
 
-    render(<GamesPage />);
+    renderGames();
 
     // 先点一堆草稿再取消：store 里不该有任何变化
     await userEvent.click(screen.getByRole('button', { name: '笔记' }));
@@ -531,7 +560,7 @@ describe('GamesPage 宽屏双栏', () => {
     addGame('哈迪斯');
     expectWideLayout();
 
-    render(<GamesPage />);
+    renderGames();
     await userEvent.click(screen.getByRole('button', { name: '笔记' }));
     const aside = panel('《哈迪斯》的笔记');
     await userEvent.click(within(aside).getByRole('button', { name: '9' }));
@@ -552,7 +581,7 @@ describe('GamesPage 宽屏双栏', () => {
     useGameStore.getState().updateGame(gameOf('空洞骑士').id, { rating: 9 });
     expectWideLayout();
 
-    render(<GamesPage />);
+    renderGames();
 
     // 收藏：列表里的星标是即时生效的开关
     await userEvent.click(screen.getByRole('button', { name: '收藏「哈迪斯」' }));
@@ -587,7 +616,7 @@ describe('GamesPage 宽屏双栏', () => {
     setStatus('空洞骑士', 'completed');
     expectWideLayout();
 
-    render(<GamesPage />);
+    renderGames();
     expect(screen.getByText('哈迪斯')).toBeInTheDocument();
     expect(screen.getByText('空洞骑士')).toBeInTheDocument();
 
@@ -613,7 +642,7 @@ describe('GamesPage 宽屏双栏', () => {
     addGame('哈迪斯');
     expectWideLayout();
 
-    render(<GamesPage />);
+    renderGames();
     await userEvent.click(screen.getByRole('button', { name: /只看收藏/ }));
 
     // 有数据、被筛空 → 走「没有符合条件」，而不是「游戏库还是空的」
@@ -640,7 +669,7 @@ describe('GamesPage 批量操作', () => {
 
   it('点「批量」进入批量模式，单条删除图标藏起来', async () => {
     seed();
-    render(<GamesPage />);
+    renderGames();
 
     expect(screen.queryByRole('toolbar', { name: '批量操作' })).not.toBeInTheDocument();
 
@@ -653,7 +682,7 @@ describe('GamesPage 批量操作', () => {
 
   it('全选后批量改游玩状态', async () => {
     seed();
-    render(<GamesPage />);
+    renderGames();
     await userEvent.click(screen.getByRole('button', { name: '批量' }));
     await userEvent.click(screen.getByRole('button', { name: '全选' }));
 
@@ -665,7 +694,7 @@ describe('GamesPage 批量操作', () => {
 
   it('批量改平台只动选中的那几款', async () => {
     seed();
-    render(<GamesPage />);
+    renderGames();
     await userEvent.click(screen.getByRole('button', { name: '批量' }));
     await userEvent.click(screen.getByLabelText('选中「哈迪斯」'));
 
@@ -679,9 +708,11 @@ describe('GamesPage 批量操作', () => {
   it('批量删除要二次确认，删完能整体撤销', async () => {
     seed();
     render(
-      <ToastProvider>
-        <GamesPage />
-      </ToastProvider>,
+      <MemoryRouter initialEntries={['/games']}>
+        <ToastProvider>
+          <GamesPage />
+        </ToastProvider>
+      </MemoryRouter>,
     );
     await userEvent.click(screen.getByRole('button', { name: '批量' }));
     await userEvent.click(screen.getByRole('button', { name: '全选' }));
@@ -704,7 +735,7 @@ describe('GamesPage 行间键盘导航（U8）', () => {
     const user = userEvent.setup();
     addGame('星露谷物语');
     addGame('空洞骑士');
-    render(<GamesPage />);
+    renderGames();
 
     const notes = screen.getAllByRole('button', { name: '笔记' });
     expect(notes).toHaveLength(2);
