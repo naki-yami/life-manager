@@ -5,6 +5,11 @@
 **当前规模**：9 个模块页面（首页 / 今日计划 / 读书 / 开发 / 写作 / 健身 / 饮食 / 游戏 / 设置）、5 个基础 UI 组件、8 个 zustand store、约 1600 行源码
 **本文档定位**：一份可直接投喂给 AI 编码 Agent（Codex / Claude Code / Cursor / Windsurf）的优化任务书
 
+> **历史存档（写于 V1 优化之前）**：正文里的定位与存储约束已被后续决策取代 ——
+> 「不引入后端、不外调云 API」见 `docs/adr/0002-跨设备同步以本机服务实现，纯本地降为默认.md`
+> （纯本地降为默认形态、跨设备同步可选开启，默认关闭时仍是零网络请求）；存储已从 localStorage
+> 迁到 IndexedDB 为主（V2.1）。要重新投喂这份任务书时，先按这两条现状改写。
+
 ---
 
 ## 0. 使用说明
@@ -35,7 +40,7 @@
 ```
 E:/MyApp
 ├── AGENTS.md                  # 要求：每次改动必须 commit + 必须写测试
-├── docs/产品设计文档.md        # 9 模块 MVP 范围与定位（纯本地、localStorage、桌面端）
+├── docs/产品设计文档.md        # 最初的产品定位与各模块功能清单
 ├── docs/技术方案.md
 ├── src/App.tsx                # 9 条路由，未做 lazy 分包
 ├── src/components/layout/     # Layout / Header / Sidebar（侧栏固定 224px，不可折叠）
@@ -54,7 +59,7 @@ E:/MyApp
 
 ## 3. 硬性约束与红线
 
-1. 保持**纯本地单机应用**：不引入后端、不外调云 API、不要求登录，所有数据留在浏览器。
+1. 保持**默认纯本地**：不要求登录，默认不联网也不上云，所有数据留在浏览器。（**这条已被 `docs/adr/0002` 取代**：纯本地从硬约束降为默认形态，跨设备同步可选开启；默认关闭时仍是零网络请求。）
 2. **不允许丢失用户数据**：任何存储结构变更必须提供 `migrate`，旧数据读取后自动升级，不得静默丢弃。
 3. **禁止 `localStorage.clear()`**：它会把同源下其他项目的数据一起清掉。只删除本项目自己的 key。
 4. **不要一次性大重写**：分阶段交付，每个阶段结束后 `npm run dev` 必须能正常跑、现有数据必须还能用。
@@ -382,7 +387,7 @@ Tailwind 里映射为 `bg-surface` / `text-content-secondary` / `border-subtle` 
 
 ## 附录 A：极简版（一行提示词）
 
-> 读 `E:\MyApp` 源码与其 `docs/`、`AGENTS.md`，把这款本地个人管理应用全面升级：先修数据缺陷（`SettingsPage` 的 `localStorage.clear()` 与 7 处导入丢字段问题），再建立 Tailwind 设计令牌与组件库（含 Toast / ConfirmDialog / CommandPalette / 表格 / 图表 / 热力图 / Kitchen Sink 页），然后逐模块深化功能与视觉（任务看板与子任务、阅读会话与笔记时间轴、写作编辑器与字数热力图、训练 PR 与容量统计、三大营养素与食物库、成就墙与游玩会话），最后补 Vitest 测试与 ESLint/Prettier。保持纯本地、localStorage、数据零丢失，分阶段提交，每阶段给验收步骤。
+> 读 `E:\MyApp` 源码与其 `docs/`、`AGENTS.md`，把这款本地个人管理应用全面升级：先修数据缺陷（`SettingsPage` 的 `localStorage.clear()` 与 7 处导入丢字段问题），再建立 Tailwind 设计令牌与组件库（含 Toast / ConfirmDialog / CommandPalette / 表格 / 图表 / 热力图 / Kitchen Sink 页），然后逐模块深化功能与视觉（任务看板与子任务、阅读会话与笔记时间轴、写作编辑器与字数热力图、训练 PR 与容量统计、三大营养素与食物库、成就墙与游玩会话），最后补 Vitest 测试与 ESLint/Prettier。保持**默认**纯本地（同步可选，见 `docs/adr/0002`）、数据零丢失，分阶段提交，每阶段给验收步骤。
 
 ## 附录 B：单模块迭代模板
 

@@ -177,6 +177,10 @@ CI（`.github/workflows/ci.yml`）按 `typecheck → lint → format:check → t
 - `CHANGELOG.md`：逐版本变更（含每版的取舍与「已知取舍」）。
 - `docs/Life-Manager-模块合并规划.md`：13 个主导航收敛为 8 的规划、分阶段记录与决策记录。
 - `docs/adr/0001-导航收敛与嵌套路由.md`：导航收敛（宿主 + 嵌套子路由）的取舍。
+- `docs/adr/0002-跨设备同步以本机服务实现，纯本地降为默认.md`：V2.0 把「不引入后端」从硬约束降为默认形态，
+  以及同步的鉴权、第二份存储载体与回滚条件。
+- `docs/adr/0003-工单与规格用本地-markdown.md`：工单与规格为什么落 `.scratch/` 而不是 GitHub Issues。
+- `docs/agents/`：给协作代理的约定（工单跟踪器、triage 取值、领域文档入口）。
 - `CONTEXT.md`：本项目特有的术语表（宿主 / 子页 / 数据模块…）。
 - `docs/Life-Manager-V2-优化建议.md`：同类项目调研、现状诊断、优化建议与分阶段路线图（含实施进度）。
 - `docs/产品设计文档.md`：最初的产品定位与各模块功能清单。
