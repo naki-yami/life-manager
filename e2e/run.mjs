@@ -30,6 +30,7 @@ import { registerKeyboardCases } from './cases/keyboard.e2e.mjs';
 import { registerDataCases } from './cases/data.e2e.mjs';
 import { registerMobileCases } from './cases/mobile.e2e.mjs';
 import { registerLayoutCases } from './cases/layout.e2e.mjs';
+import { registerDevCases } from './cases/dev.e2e.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const SHOT_DIR = join(ROOT, '.runtime', 'e2e-shots');
@@ -48,6 +49,7 @@ registerKeyboardCases();
 registerDataCases();
 registerMobileCases();
 registerLayoutCases();
+registerDevCases();
 
 if (hasFlag('list')) {
   for (const c of getCases()) console.log(`${c.name.padEnd(20)} ${c.title}`);

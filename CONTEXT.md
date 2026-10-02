@@ -60,3 +60,39 @@ _Avoid_: 用它指导航项。
 
 **达成率（progress）**：
 目标当前进度除以目标值。只有指标与目标都存在时才有意义。
+
+## 外观
+
+**皮肤（appearance）**：
+整层界面观感，挂 `<html data-appearance>` 切换。`glass`「流光玻璃」是默认（半透明表面、
+环境光晕、粘性浮层磨砂，不挂属性走基线令牌）；`paper`「纸面扁平」是素底平卡片，
+可在设置页切回。皮肤只换表面观感，不碰业务数据，随备份导出。
+_Avoid_: 主题 —— 主题指明暗（themeMode）或主题色（accent），与皮肤是三个维度。
+
+**环境光晕（canvas glow）**：
+`--lm-canvas-glow` 定义、`body::before` 渲染的一层固定视口渐变，跟着主题色走。
+透明度压在 5% 以内，保证光晕最浓处正文对比度过 AA。
+
+**磨砂（frosted）**：
+`.frosted` 工具类，只给真正浮在内容之上的层用（页头、弹窗、抽屉、项目栏）；
+卡片不挂，避免全站 backdrop-filter 的性能税。
+
+**级联进场（stagger enter）**：
+`.stagger-enter` 给容器直接子元素做逐项 45ms 延迟的淡入上浮，封顶 10 项。
+用于仪表盘之外的少量块级进场；长列表不用。
+
+## 开发工作
+
+**项目栏（project rail）**：
+开发页左侧的项目切换器（`components/dev/ProjectRail`）。宽屏 sticky 竖列，窄屏横向胶囊条；
+选中项写进 URL 的 `?project=`。
+_Avoid_: 侧栏 —— 那是全站导航的 Sidebar。
+
+**详情（detail）**：
+项目栏右侧的常驻分区：详情头（ProjectHero，编辑就地展开）、里程碑磁贴、工作项、开发日志、
+按项目的近期投入。旧路由 `/dev/:id` 永久重定向到 `/dev?project=`。
+
+**推送今日计划（push to today）**：
+把一条工作项推进 TasksPage，带 `TaskRef` 回链与幂等去重（`services/devPush`）；
+推送任务完成后允许再次推送。
+_Avoid_: 同步、导入 —— 数据不搬家，今日计划里只有一条带引用的任务。
