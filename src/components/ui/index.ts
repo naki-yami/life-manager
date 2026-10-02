@@ -23,6 +23,8 @@ export { BADGE_TONES } from './badgeTones';
 export type { BadgeProps, BadgeTone, DividerProps, KbdProps } from './Badge';
 export { TagChips, TagInput, TagEditor } from './Tags';
 export type { TagChipsProps, TagInputProps, TagEditorProps } from './Tags';
+export { BulkTagDialog, BulkDeleteDialog } from './BulkDialogs';
+export type { BulkTagDialogProps, BulkDeleteDialogProps } from './BulkDialogs';
 export { Spinner, Skeleton, Alert, EmptyState, ErrorState } from './Feedback';
 export type {
   SpinnerProps,

@@ -14,6 +14,8 @@ import {
 } from 'lucide-react';
 import {
   Badge,
+  BulkDeleteDialog,
+  BulkTagDialog,
   Button,
   Card,
   CardBody,
@@ -189,25 +191,22 @@ export const BooksPage: React.FC = () => {
    */
   const listNav = useRovingList({ ids: shownBookIds, onToggleSelect: selection.toggle });
   const [bulkTagModal, setBulkTagModal] = useState(false);
-  const [bulkTagDraft, setBulkTagDraft] = useState<string[]>([]);
-  const [bulkTagsRemove, setBulkTagsRemove] = useState(false);
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
 
-  const applyBulkTags = (): void => {
-    const wanted = normalizeTags(bulkTagDraft);
-    if (wanted.length === 0) return;
+  /** 批量打标签：`remove` 为真表示「移除」而不是「添加」 */
+  const applyBulkTags = (wanted: string[], remove: boolean): void => {
+    const tags = normalizeTags(wanted);
+    if (tags.length === 0) return;
 
     for (const id of selection.selectedIds) {
       const book = books.find((item) => item.id === id);
       if (!book) continue;
-      const merged = bulkTagsRemove
-        ? book.tags.filter((tag) => !wanted.includes(tag))
-        : normalizeTags([...book.tags, ...wanted]);
+      const merged = remove
+        ? book.tags.filter((tag) => !tags.includes(tag))
+        : normalizeTags([...book.tags, ...tags]);
       updateBook(id, { tags: merged });
     }
 
-    setBulkTagDraft([]);
-    setBulkTagsRemove(false);
     setBulkTagModal(false);
   };
 
@@ -889,15 +888,7 @@ export const BooksPage: React.FC = () => {
             onClear={selection.clear}
             onSelectAll={selection.selectAll}
           >
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={() => {
-                setBulkTagDraft([]);
-                setBulkTagsRemove(false);
-                setBulkTagModal(true);
-              }}
-            >
+            <Button size="sm" variant="secondary" onClick={() => setBulkTagModal(true)}>
               打标签
             </Button>
             <Select
@@ -1070,50 +1061,23 @@ export const BooksPage: React.FC = () => {
         tone="danger"
       />
 
-      <Modal
+      <BulkTagDialog
         isOpen={bulkTagModal}
         onClose={() => setBulkTagModal(false)}
-        title="批量打标签"
-        description={`将对选中的 ${selection.count} 本书生效`}
-        footer={
-          <>
-            <Button variant="secondary" onClick={() => setBulkTagModal(false)}>
-              取消
-            </Button>
-            <Button onClick={applyBulkTags} disabled={bulkTagDraft.length === 0}>
-              应用
-            </Button>
-          </>
-        }
-      >
-        <div className="space-y-4">
-          <SegmentedControl
-            label="标签处理方式"
-            value={bulkTagsRemove ? 'remove' : 'add'}
-            onChange={(value) => setBulkTagsRemove(value === 'remove')}
-            options={[
-              { value: 'add', label: '添加' },
-              { value: 'remove', label: '移除' },
-            ]}
-          />
-          <TagInput
-            label="标签"
-            hint="回车或逗号分隔；添加是并集，移除只影响已选中的这批"
-            value={bulkTagDraft}
-            suggestions={tagSuggestions}
-            onChange={setBulkTagDraft}
-          />
-        </div>
-      </Modal>
+        count={selection.count}
+        unit="本书"
+        suggestions={tagSuggestions}
+        onApply={applyBulkTags}
+      />
 
-      <ConfirmDialog
+      <BulkDeleteDialog
         isOpen={bulkDeleteOpen}
         onClose={() => setBulkDeleteOpen(false)}
         onConfirm={confirmBulkDelete}
-        title="批量删除书籍"
-        description={`确定要删除选中的 ${selection.count} 本书吗？连同它们的笔记一起删除，删完可以点「撤销」全部放回去。`}
-        confirmText="删除"
-        tone="danger"
+        count={selection.count}
+        unit="本书"
+        noun="书籍"
+        extra="连同它们的笔记一起删除"
       />
     </div>
   );

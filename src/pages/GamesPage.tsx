@@ -2,6 +2,8 @@ import React, { useMemo, useState } from 'react';
 import { Clock, Gamepad2, ListChecks, Plus, Star, StickyNote, Trash2, Trophy } from 'lucide-react';
 import {
   Badge,
+  BulkDeleteDialog,
+  BulkTagDialog,
   Button,
   Card,
   CardBody,
@@ -169,25 +171,21 @@ export const GamesPage: React.FC = () => {
   /** 行间键盘导航（U8）：j / k 走行、x 进批量 */
   const listNav = useRovingList({ ids: shownGameIds, onToggleSelect: selection.toggle });
   const [bulkTagModal, setBulkTagModal] = useState(false);
-  const [bulkTagDraft, setBulkTagDraft] = useState<string[]>([]);
-  const [bulkTagsRemove, setBulkTagsRemove] = useState(false);
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
 
-  const applyBulkTags = (): void => {
-    const wanted = normalizeTags(bulkTagDraft);
-    if (wanted.length === 0) return;
+  const applyBulkTags = (wanted: string[], remove: boolean): void => {
+    const tags = normalizeTags(wanted);
+    if (tags.length === 0) return;
 
     for (const id of selection.selectedIds) {
       const game = games.find((item) => item.id === id);
       if (!game) continue;
-      const merged = bulkTagsRemove
-        ? game.tags.filter((tag) => !wanted.includes(tag))
-        : normalizeTags([...game.tags, ...wanted]);
+      const merged = remove
+        ? game.tags.filter((tag) => !tags.includes(tag))
+        : normalizeTags([...game.tags, ...tags]);
       updateGame(id, { tags: merged });
     }
 
-    setBulkTagDraft([]);
-    setBulkTagsRemove(false);
     setBulkTagModal(false);
   };
 
@@ -984,15 +982,7 @@ export const GamesPage: React.FC = () => {
             onClear={selection.clear}
             onSelectAll={selection.selectAll}
           >
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={() => {
-                setBulkTagDraft([]);
-                setBulkTagsRemove(false);
-                setBulkTagModal(true);
-              }}
-            >
+            <Button size="sm" variant="secondary" onClick={() => setBulkTagModal(true)}>
               打标签
             </Button>
             <Select
@@ -1166,50 +1156,23 @@ export const GamesPage: React.FC = () => {
         tone="danger"
       />
 
-      <Modal
+      <BulkTagDialog
         isOpen={bulkTagModal}
         onClose={() => setBulkTagModal(false)}
-        title="批量打标签"
-        description={`将对选中的 ${selection.count} 款游戏生效`}
-        footer={
-          <>
-            <Button variant="secondary" onClick={() => setBulkTagModal(false)}>
-              取消
-            </Button>
-            <Button onClick={applyBulkTags} disabled={bulkTagDraft.length === 0}>
-              应用
-            </Button>
-          </>
-        }
-      >
-        <div className="space-y-4">
-          <SegmentedControl
-            label="标签处理方式"
-            value={bulkTagsRemove ? 'remove' : 'add'}
-            onChange={(value) => setBulkTagsRemove(value === 'remove')}
-            options={[
-              { value: 'add', label: '添加' },
-              { value: 'remove', label: '移除' },
-            ]}
-          />
-          <TagInput
-            label="标签"
-            hint="回车或逗号分隔；添加是并集，移除只影响已选中的这批"
-            value={bulkTagDraft}
-            suggestions={tagSuggestions}
-            onChange={setBulkTagDraft}
-          />
-        </div>
-      </Modal>
+        count={selection.count}
+        unit="款游戏"
+        suggestions={tagSuggestions}
+        onApply={applyBulkTags}
+      />
 
-      <ConfirmDialog
+      <BulkDeleteDialog
         isOpen={bulkDeleteOpen}
         onClose={() => setBulkDeleteOpen(false)}
         onConfirm={confirmBulkDelete}
-        title="批量删除游戏"
-        description={`确定要删除选中的 ${selection.count} 款游戏吗？成就记录与时长会一起删除，删完可以点「撤销」全部放回去。`}
-        confirmText="删除"
-        tone="danger"
+        count={selection.count}
+        unit="款游戏"
+        noun="游戏"
+        extra="成就记录与时长会一起删除"
       />
     </div>
   );

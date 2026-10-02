@@ -6,6 +6,8 @@ import { renderToString } from 'react-dom/server';
 import {
   Badge,
   BADGE_TONES,
+  BulkDeleteDialog,
+  BulkTagDialog,
   Button,
   Card,
   CardBody,
@@ -762,5 +764,88 @@ describe('ScorePicker', () => {
       5,
     );
     expect(screen.queryByRole('button', { name: '清除' })).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * `BulkTagDialog` / `BulkDeleteDialog`：读书 / 游戏 / 任务三页原来各写一份，
+ * 除了量词与联想来源之外完全一样。断言盯「抽出来之后行为一致」+「调用方该拿到的东西还在」
+ * —— 量词要进描述、处理方式是 add 还是 remove 要传对、空草稿不能点「应用」。
+ */
+describe('批量弹窗', () => {
+  it('打标签：量词进描述，点「应用」把草稿与处理方式一起报回去', async () => {
+    const onApply = vi.fn();
+    render(
+      <BulkTagDialog
+        isOpen
+        onClose={() => {}}
+        count={3}
+        unit="本书"
+        suggestions={['财务']}
+        onApply={onApply}
+      />,
+    );
+
+    expect(screen.getByText('将对选中的 3 本书生效')).toBeInTheDocument();
+
+    await userEvent.type(screen.getByLabelText('标签'), '读书{Enter}');
+    await userEvent.click(screen.getByRole('button', { name: '应用' }));
+
+    expect(onApply).toHaveBeenCalledWith(['读书'], false);
+  });
+
+  it('打标签：切到「移除」时处理方式报 true', async () => {
+    const onApply = vi.fn();
+    render(<BulkTagDialog isOpen onClose={() => {}} count={1} unit="条任务" onApply={onApply} />);
+
+    await userEvent.click(screen.getByRole('button', { name: '移除' }));
+    await userEvent.type(screen.getByLabelText('标签'), '过期{Enter}');
+    await userEvent.click(screen.getByRole('button', { name: '应用' }));
+
+    expect(onApply).toHaveBeenCalledWith(['过期'], true);
+  });
+
+  it('打标签：草稿为空时「应用」是灰的', () => {
+    render(<BulkTagDialog isOpen onClose={() => {}} count={2} unit="款游戏" onApply={() => {}} />);
+
+    expect(screen.getByRole('button', { name: '应用' })).toBeDisabled();
+  });
+
+  it('批量删除：量词与补充说明拼进二次确认的文案', () => {
+    render(
+      <BulkDeleteDialog
+        isOpen
+        onClose={() => {}}
+        onConfirm={() => {}}
+        count={2}
+        unit="本书"
+        noun="书籍"
+        extra="连同它们的笔记一起删除"
+      />,
+    );
+
+    expect(screen.getByRole('dialog', { name: '批量删除书籍' })).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        '确定要删除选中的 2 本书吗？连同它们的笔记一起删除，删完可以点「撤销」全部放回去。',
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it('批量删除：没有补充说明时不留多余的逗号', () => {
+    render(
+      <BulkDeleteDialog
+        isOpen
+        onClose={() => {}}
+        onConfirm={() => {}}
+        count={4}
+        unit="条任务"
+        noun="任务"
+      />,
+    );
+
+    expect(
+      screen.getByText('确定要删除选中的 4 条任务吗？删完可以点「撤销」全部放回去。'),
+    ).toBeInTheDocument();
   });
 });

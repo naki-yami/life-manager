@@ -15,6 +15,8 @@ import {
 } from 'lucide-react';
 import {
   Badge,
+  BulkDeleteDialog,
+  BulkTagDialog,
   Button,
   Card,
   CardBody,
@@ -510,8 +512,6 @@ export const TasksPage: React.FC = () => {
    */
   const listNav = useRovingList({ ids: visibleTaskIds, onToggleSelect: selection.toggle });
   const [bulkTagModal, setBulkTagModal] = useState(false);
-  const [bulkTagDraft, setBulkTagDraft] = useState<string[]>([]);
-  const [bulkTagsRemove, setBulkTagsRemove] = useState(false);
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
 
   /** 批量改属性：不进撤销。一次改二十条塞一条「撤销」提示，反而盖住了用户下一步要点的按钮 */
@@ -519,21 +519,19 @@ export const TasksPage: React.FC = () => {
     for (const id of selection.selectedIds) updateTask(id, patch);
   };
 
-  const applyBulkTags = (): void => {
-    const wanted = normalizeTags(bulkTagDraft);
-    if (wanted.length === 0) return;
+  const applyBulkTags = (wanted: string[], remove: boolean): void => {
+    const tags = normalizeTags(wanted);
+    if (tags.length === 0) return;
 
     for (const id of selection.selectedIds) {
       const task = tasks.find((item) => item.id === id);
       if (!task) continue;
-      const merged = bulkTagsRemove
-        ? task.tags.filter((tag) => !wanted.includes(tag))
-        : normalizeTags([...task.tags, ...wanted]);
+      const merged = remove
+        ? task.tags.filter((tag) => !tags.includes(tag))
+        : normalizeTags([...task.tags, ...tags]);
       updateTask(id, { tags: merged });
     }
 
-    setBulkTagDraft([]);
-    setBulkTagsRemove(false);
     setBulkTagModal(false);
   };
 
@@ -1041,15 +1039,7 @@ export const TasksPage: React.FC = () => {
             onClear={selection.clear}
             onSelectAll={selection.selectAll}
           >
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={() => {
-                setBulkTagDraft([]);
-                setBulkTagsRemove(false);
-                setBulkTagModal(true);
-              }}
-            >
+            <Button size="sm" variant="secondary" onClick={() => setBulkTagModal(true)}>
               打标签
             </Button>
             <Select
@@ -1118,54 +1108,22 @@ export const TasksPage: React.FC = () => {
         tone="danger"
       />
 
-      {/*
-        批量打标签用弹窗而不是行内输入：一次要改的可能是十几条，
-        行内的话用户没法确认「加」还是「去」，也看不到将要应用的那组标签。
-      */}
-      <Modal
+      <BulkTagDialog
         isOpen={bulkTagModal}
         onClose={() => setBulkTagModal(false)}
-        title="批量打标签"
-        description={`将对选中的 ${selection.count} 条任务生效`}
-        footer={
-          <>
-            <Button variant="secondary" onClick={() => setBulkTagModal(false)}>
-              取消
-            </Button>
-            <Button onClick={applyBulkTags} disabled={bulkTagDraft.length === 0}>
-              应用
-            </Button>
-          </>
-        }
-      >
-        <div className="space-y-4">
-          <SegmentedControl
-            label="标签处理方式"
-            value={bulkTagsRemove ? 'remove' : 'add'}
-            onChange={(value) => setBulkTagsRemove(value === 'remove')}
-            options={[
-              { value: 'add', label: '添加' },
-              { value: 'remove', label: '移除' },
-            ]}
-          />
-          <TagInput
-            label="标签"
-            hint="回车或逗号分隔；添加是并集，移除只影响已选中的这批"
-            value={bulkTagDraft}
-            suggestions={tagSuggestions}
-            onChange={setBulkTagDraft}
-          />
-        </div>
-      </Modal>
+        count={selection.count}
+        unit="条任务"
+        suggestions={tagSuggestions}
+        onApply={applyBulkTags}
+      />
 
-      <ConfirmDialog
+      <BulkDeleteDialog
         isOpen={bulkDeleteOpen}
         onClose={() => setBulkDeleteOpen(false)}
         onConfirm={confirmBulkDelete}
-        title="批量删除任务"
-        description={`确定要删除选中的 ${selection.count} 条任务吗？删完可以点「撤销」全部放回去。`}
-        confirmText="删除"
-        tone="danger"
+        count={selection.count}
+        unit="条任务"
+        noun="任务"
       />
     </div>
   );
