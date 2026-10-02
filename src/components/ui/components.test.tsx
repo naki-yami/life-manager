@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { renderToString } from 'react-dom/server';
@@ -16,6 +16,7 @@ import {
   IconButton,
   Input,
   Modal,
+  ScorePicker,
   SegmentedControl,
   Select,
   Slider,
@@ -703,5 +704,63 @@ describe('Select 的宽度类落在最外层', () => {
     );
 
     expect(container.firstElementChild).toHaveClass('w-full');
+  });
+});
+
+/**
+ * `ScorePicker`：读书页与游戏页原来各写了一份逐字相同的 1–10 评分条，抽出来共用。
+ * 断言盯的是「抽出来之后行为一模一样」——档数、选中标记、点亮规则、清除归零。
+ */
+describe('ScorePicker', () => {
+  it('默认十档，选中的那一档用 aria-pressed 标出来', () => {
+    render(<ScorePicker label="给《活着》评分" value={7} onChange={() => {}} />);
+
+    const group = screen.getByRole('group', { name: '给《活着》评分' });
+    expect(within(group).getAllByRole('button')).toHaveLength(11); // 十档 + 清除
+    expect(within(group).getByRole('button', { name: '7' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(within(group).getByRole('button', { name: '8' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
+  });
+
+  it('点某一档把分值报回去', async () => {
+    const onChange = vi.fn();
+    render(<ScorePicker label="评分" value={0} onChange={onChange} />);
+
+    await userEvent.click(screen.getByRole('button', { name: '4' }));
+
+    expect(onChange).toHaveBeenCalledWith(4);
+  });
+
+  it('「清除」归零 —— 0 分不是一档，清除才是出口', async () => {
+    const onChange = vi.fn();
+    render(<ScorePicker label="评分" value={9} onChange={onChange} />);
+
+    await userEvent.click(screen.getByRole('button', { name: '清除' }));
+
+    expect(onChange).toHaveBeenCalledWith(0);
+  });
+
+  it('max / caption / clearLabel 都能改', () => {
+    render(
+      <ScorePicker
+        label="五档评分"
+        value={3}
+        onChange={() => {}}
+        max={5}
+        caption="打分"
+        clearLabel={null}
+      />,
+    );
+
+    expect(screen.getByText('打分')).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: '五档评分' }).querySelectorAll('button')).toHaveLength(
+      5,
+    );
+    expect(screen.queryByRole('button', { name: '清除' })).not.toBeInTheDocument();
   });
 });

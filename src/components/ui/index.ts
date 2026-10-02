@@ -44,6 +44,8 @@ export type {
 } from './Toggle';
 export { Slider } from './Slider';
 export type { SliderProps } from './Slider';
+export { ScorePicker } from './ScorePicker';
+export type { ScorePickerProps } from './ScorePicker';
 export { SegmentedControl } from './SegmentedControl';
 export type { SegmentedControlProps, SegmentedOption, SegmentedVariant } from './SegmentedControl';
 export { KanbanBoard } from './KanbanBoard';

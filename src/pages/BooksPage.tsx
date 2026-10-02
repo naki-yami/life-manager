@@ -26,6 +26,7 @@ import {
   NumberInput,
   ProgressBar,
   ProgressRing,
+  ScorePicker,
   SegmentedControl,
   Select,
   SelectionBar,
@@ -377,33 +378,11 @@ export const BooksPage: React.FC = () => {
       {/* F11 条目化：评分 / 短评 / 状态时间线属于「这本书」，随「保存」写入；
           下面的笔记列表仍保持「回车即存」的老流程，两者互不干扰 */}
       <SubmitForm id="book-entry-form" onSubmit={handleSaveEntry} className="space-y-3">
-        <div>
-          <p className="mb-1.5 text-sm font-medium text-content-secondary">评分</p>
-          <div
-            role="group"
-            aria-label={`给《${noteBook.title}》评分`}
-            className="flex flex-wrap gap-1"
-          >
-            {Array.from({ length: 10 }, (_, index) => index + 1).map((score) => (
-              <button
-                key={score}
-                type="button"
-                aria-pressed={ratingInput === score}
-                onClick={() => setRatingInput(score)}
-                className={`h-8 w-8 rounded text-xs font-medium transition-colors duration-fast ease-standard focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-line-focus ${
-                  ratingInput >= score
-                    ? 'bg-warning-soft text-warning'
-                    : 'bg-inset text-content-tertiary hover:text-content-secondary'
-                }`}
-              >
-                {score}
-              </button>
-            ))}
-            <Button size="sm" variant="ghost" onClick={() => setRatingInput(0)}>
-              清除
-            </Button>
-          </div>
-        </div>
+        <ScorePicker
+          label={`给《${noteBook.title}》评分`}
+          value={ratingInput}
+          onChange={setRatingInput}
+        />
 
         <Input
           label="短评"

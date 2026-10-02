@@ -12,6 +12,7 @@ import {
   Input,
   Modal,
   NumberInput,
+  ScorePicker,
   SegmentedControl,
   Select,
   SelectionBar,
@@ -630,33 +631,11 @@ export const GamesPage: React.FC = () => {
             <SubmitForm id="game-detail-form" onSubmit={handleSaveNotes} className="space-y-4">
               {detailGame && (
                 <>
-                  <div>
-                    <p className="mb-1.5 text-sm font-medium text-content-secondary">评分</p>
-                    <div
-                      role="group"
-                      aria-label={`给「${detailGame.name}」评分`}
-                      className="flex flex-wrap gap-1"
-                    >
-                      {Array.from({ length: 10 }, (_, index) => index + 1).map((score) => (
-                        <button
-                          key={score}
-                          type="button"
-                          aria-pressed={ratingInput === score}
-                          onClick={() => setRatingInput(score)}
-                          className={`h-8 w-8 rounded text-xs font-medium transition-colors duration-fast ease-standard focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-line-focus ${
-                            ratingInput >= score
-                              ? 'bg-warning-soft text-warning'
-                              : 'bg-inset text-content-tertiary hover:text-content-secondary'
-                          }`}
-                        >
-                          {score}
-                        </button>
-                      ))}
-                      <Button size="sm" variant="ghost" onClick={() => setRatingInput(0)}>
-                        清除
-                      </Button>
-                    </div>
-                  </div>
+                  <ScorePicker
+                    label={`给「${detailGame.name}」评分`}
+                    value={ratingInput}
+                    onChange={setRatingInput}
+                  />
 
                   <Input
                     label="短评"
