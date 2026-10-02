@@ -22,7 +22,6 @@ import {
   Input,
   KanbanBoard,
   Modal,
-  ProgressRing,
   SegmentedControl,
   Select,
   SelectionBar,
@@ -33,13 +32,11 @@ import {
   type KanbanMoveResult,
 } from '../components/ui';
 import { ListEmptyState, MasterDetail, PageHeader, Toolbar } from '../components/layout';
-import { BarChart } from '../components/charts';
 import { useTaskStore } from '../store/taskStore';
 import { useUndoableRemove } from '../hooks/useUndoableRemove';
 import { useMultiSelect } from '../hooks/useMultiSelect';
 import { rowProps, useRovingList } from '../hooks/useRovingList';
-import { dayKeyOf, daysBetween, formatShortDate, todayKey } from '../utils/date';
-import { seriesByWeek } from '../utils/stats';
+import { daysBetween, todayKey } from '../utils/date';
 import { useEntityList } from '../hooks/useEntityList';
 import { normalizeTags } from '../utils/tags';
 import { Priority, RepeatKind, RepeatRule, Task, TaskStatus } from '../types';
@@ -322,20 +319,6 @@ export const TasksPage: React.FC = () => {
   const [subtaskDraft, setSubtaskDraft] = useState<Record<string, string>>({});
 
   const today = todayKey();
-  const todayTasks = tasks.filter((task) => task.dueDate === today);
-  const todayDone = todayTasks.filter((task) => task.status === 'completed').length;
-
-  const weeklyDone = useMemo(
-    () =>
-      seriesByWeek(
-        tasks.filter((task) => task.status === 'completed'),
-        8,
-        today,
-        (task) => dayKeyOf(task.completedAt),
-        () => 1,
-      ),
-    [tasks, today],
-  );
 
   const visibleTasks = useMemo(() => {
     // 优先级筛选是任务页特有的维度，叠加在共用件的「关键词 + 状态」结果之上
@@ -568,42 +551,6 @@ export const TasksPage: React.FC = () => {
           </Button>
         }
       />
-
-      {tasks.length > 0 && (
-        <Card>
-          <CardHeader title="今日进度" subtitle="按截止日期是今天的任务统计" />
-          <CardBody className="flex flex-col gap-4 lg:flex-row lg:items-center">
-            <div className="flex items-center gap-4">
-              <ProgressRing
-                value={todayDone}
-                max={Math.max(todayTasks.length, 1)}
-                label={`今日到期任务完成 ${todayDone}/${todayTasks.length}`}
-              >
-                {todayTasks.length > 0 ? `${todayDone}/${todayTasks.length}` : '—'}
-              </ProgressRing>
-              <div>
-                <p className="text-sm font-medium text-content">
-                  {todayTasks.length > 0
-                    ? `今日到期 ${todayTasks.length} 件，已完成 ${todayDone} 件`
-                    : '今天没有到期任务'}
-                </p>
-                <p className="text-xs text-content-tertiary">
-                  本周已完成 {weeklyDone[weeklyDone.length - 1]?.value ?? 0} 件
-                </p>
-              </div>
-            </div>
-            <div className="min-w-0 flex-1">
-              <BarChart
-                data={weeklyDone}
-                bucket="week"
-                label="近 8 周每周完成任务数"
-                formatValue={(value) => `${value} 件`}
-                formatDate={formatShortDate}
-              />
-            </div>
-          </CardBody>
-        </Card>
-      )}
 
       <MasterDetail
         detailTitle="编辑任务"

@@ -274,15 +274,6 @@ describe('TasksPage', () => {
     expect(within(dropCell).getByText('中等任务')).toBeInTheDocument();
   });
 
-  it('今日进度卡展示到期完成度与每周完成柱状图', () => {
-    seed();
-    render(<TasksPage />);
-
-    expect(screen.getByText('今日到期 1 件，已完成 0 件')).toBeInTheDocument();
-    expect(screen.getByRole('progressbar', { name: '今日到期任务完成 0/1' })).toBeInTheDocument();
-    expect(screen.getByRole('img', { name: /近 8 周每周完成任务数/ })).toBeInTheDocument();
-  });
-
   it('展开后可以添加并勾选子任务，进度实时同步', async () => {
     seed();
     render(<TasksPage />);
