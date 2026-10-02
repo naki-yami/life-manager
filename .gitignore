@@ -34,4 +34,5 @@ npm-debug.log*
 *.tsbuildinfo
 
 # Test coverage
-coverage/.zcode/
+coverage/
+.zcode/
