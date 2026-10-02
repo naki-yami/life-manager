@@ -12,6 +12,21 @@ The skills speak in terms of five canonical triage roles. This file maps those r
 
 When a skill mentions a role (e.g. "apply the AFK-ready triage label"), use the corresponding label string from this table.
 
+## `ready-for-agent` 的硬门（2026-10-02 定）
+
+标 `ready-for-agent` 之前，要把这份 spec / 工单**逐条核过**，不是通读一遍觉得齐了。四件事：
+
+1. **每个 `file:line` 引用都打开核一遍**：文件在不在、行号对不对、引的是不是它说的那个东西
+   （符号真的 export 了吗？行号在后续提交里漂了吗？自引的 `:50` / `:154` 这种最容易烂，
+   直接写小节名）。
+2. **每条验收断言都问一句「这条可能是恒真的吗」**：在任何实现下都成立的断言等于没测，
+   必须换成能失败的写法。恒真断言是「没核过」的典型产物。
+3. **每个事实性数字当场数一遍**：版本号、模块数、store 数、测试基线。
+4. **分清「依赖」与「阻塞」**：等另一个工单完成是依赖，不影响本 spec 的 `ready-for-agent`；
+   只有「本 spec 里还有没定的决定」才是阻塞，才降 `needs-info`。
+
+核不完的，标 `needs-info` 并把还差哪几条列在文件顶上 —— 宁可不标，也别让标签说出内容撑不住的话。
+
 ## 备注
 
 - **本仓库用本地 markdown 跟踪器**（见 `issue-tracker.md`），所以「标签」不是 GitHub 上的 label，

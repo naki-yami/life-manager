@@ -1,21 +1,21 @@
 # V2.0 同步客户端接入
 
-Status: needs-info
+Status: ready-for-agent
 Type: spec
 
-**为什么是 `needs-info` 而不是 `ready-for-agent`（2026-10-02 复核后下调）：**
+**复核记录（2026-10-02）。** 本文曾被下调为 `needs-info`，记了四条待办；四条已全部落地，
+标回 `ready-for-agent`：
 
-1. **「以服务端为准」的快照失败语义原先没定**：`createAutoSnapshot` 写不进去时返回 `null`
-   （`backup.ts:562` / `:584`），而原 spec 要求在破坏性覆盖前留快照却没说 `null` 时怎么办。
-   照常覆盖 + 快照为 `null` = 不可恢复，正好是 ADR-0002 最优先要防的那一类。已在
-   「首次开启」一节定死：**返回 `null` 一律中止覆盖**，且恢复入口不到位就不上线该选项。
-2. **依赖顺序自述与工单矛盾**：spec 原写「按编号顺序，后一条依赖前一条」，但
-   `issues/02` 的 `Blocked by` 是「无」、`issues/04` 需要 `01 + 03`。已改为以工单为准，
-   并补上「与服务端的先后」（见下）。
-3. **依赖服务端的接口定型**：`03` 之后必须等 `sync-service` 的
-   `04-changes-and-snapshot` 完成，本文原先没表态。
-4. **`/v1/restore` 的参数形态与 restore 后的 `seq` 走势未定**（属服务端 spec，
-   但客户端要对接）—— 见 `.scratch/sync-service/spec.md` 的待决项。
+1. **「以服务端为准」的快照失败语义**已定死：`createAutoSnapshot` 写不进去时返回 `null`
+   （`backup.ts:568` 的返回类型 / `:584` 的失败路径），照常覆盖 + 快照为 `null` = 不可恢复，
+   正好是 ADR-0002 最优先要防的那一类 —— 所以「首次开启」一节写死：**返回 `null` 一律中止覆盖**，
+   恢复入口不到位就不上线该选项。
+2. **依赖顺序自述与工单矛盾**已改为以每条工单顶上的 `Blocked by` 为准，并补上「与服务端的先后」。
+3. **依赖服务端接口定型是依赖、不是阻塞**：`01` / `02` 不碰网络层可以先做，`03` 之后才需要
+   `sync-service` 的 `04-changes-and-snapshot`（见下）。
+4. **`/v1/restore` 的参数形态与恢复后的 `seq` 走势**已在服务端 spec 定死（2026-10-02）：
+   body `{ confirm: 'restore', source: 'backup' | 'history', ref }`，且**恢复不倒退 `seq`**
+   （当作一次新的写入集写回）。见 `.scratch/sync-service/spec.md` 的「自带备份与回滚」。
 
 已钉死、无需再动的部分：令牌与设备标识不进备份、内容哈希基线算法、首次开启三选一流程、
 打卡不产生墓碑。
@@ -68,6 +68,10 @@ Type: spec
 `dietGoals` 是模块单值（key 固定为模块名，整块替换、不产生 `delete`）。
 表里的「不同步项」（`lm:theme` / `lm:ui`、`focus.active`、`recent*Names`）在这个文件里
 以注释形式列出来，写明为什么不同步 —— 免得后来者以为漏了。
+
+**推送载荷里不含 `settings`**（定案 2026-10-02）：`readAllData()` 产出的 `settings`
+（`appData.ts:53-59`）是每台设备各自的 UI 状态，服务端的结构守卫里不在册，收到会按
+「模块名不在册」拒绝。它也不进副本 —— 详见服务端 spec「同步单位」表后的定案一节。
 
 **落库方式：`setState` + 按 key 的 upsert/delete 纯函数，不碰 16 个 store 的内部。**
 
@@ -160,7 +164,7 @@ Type: spec
 9. **基线可丢弃**：删掉 `lm:sync` 后同步仍能跑（退化成全量比对），且**不产生任何 `delete`**。
 10. **哈希稳定**：同一条记录用两种键序构造 → 同一个哈希。
 
-**怎么跑。** `npm run test` 全绿（当前基线 1579 条 / 93 文件），新增用例不能靠放宽既有断言通过；
+**怎么跑。** `npm run test` 全绿（当前基线 1595 条 / 94 文件），新增用例不能靠放宽既有断言通过；
 交付前另跑 `npm run typecheck && npm run lint && npm run format:check`。真浏览器冒烟
 （`npm run e2e`）**不覆盖同步**：本机服务不进 CI，e2e 里起一个假服务得不偿失。
 

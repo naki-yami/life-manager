@@ -14,11 +14,14 @@ Blocked by: 01
 
 - `src/server/replica.ts`：内存模型 + 载入 / 落盘。
   - 信封沿用备份：`{ schemaVersion, exportedAt, data, ... }`，`data` 用备份的模块名
-    （`tasks` / `books` / … / `dietGoals` / `dietWater`）。**前置**：模块表要与
-    `.scratch/backup-diet-targets` 落地后的 `BACKUP_MODULES` 对齐（schema 20）。
-    该前置已落地（`4aa45da`）：`BACKUP_MODULES` 现为 23 条，schema 20。
-  - 另加 `sync` 段：`{ seq, rev, tombstones, devices }`。
-  - 多出来的 `sync` 键会被客户端导入路径忽略，所以副本文件同时是一份合法备份。
+    （`tasks` / `books` / … / `dietGoals` / `dietWater`）。**前置已落地**（`4aa45da`）：
+    `BACKUP_MODULES` 现为 23 条，schema 20 —— `data` 段与它**严格一一对应**，一个不多一个不少。
+  - **`settings` 不在册**（定案 2026-10-02）：它是每台设备各自的 UI 状态，共享副本装谁的都是
+    随机的，所以既不进副本、也不当同步单元。结构守卫里它不在册 → 收到就按「模块名不在册」拒绝。
+  - 另加 `sync` 段：`{ seq, purgedThroughSeq, rev, tombstones, devices }`
+    （`purgedThroughSeq` 由工单 05 维护，形状在这里一次定好）。
+  - 多出来的 `sync` 键会被客户端导入路径忽略，所以副本文件**可以当备份导入**；
+    `settings` 不在其中，导入时按「缺失即保持本机」处理（见 spec 的定案一节）。
 - 结构守卫（**不校验业务字段**）：模块名在册、`id` 是非空字符串、记录是对象；其余字段原样存。
 - 原子写：临时文件 + `fsync` + `rename`。
 - 载入时发现半写文件 → 用 `backups/` 里最近一份好备份顶上并告警。
@@ -28,6 +31,8 @@ Blocked by: 01
 ## 验收
 
 - 空目录启动 → 生成一份 `seq = 0` 的合法副本。
+- 副本 `data` 段的键集合逐字等于 `BACKUP_MODULES`（23 条），不含 `settings`；
+  拿一条 `module: 'settings'` 去推 → 按「模块名不在册」拒绝，副本不变。
 - 注入一个在 `rename` 前抛错的 fs 适配器 → 副本仍是上一个好版本。
 - 半写文件 + 一份好备份 → 启动后副本等于那份备份，日志有告警。
 - 高于支持值的 `schemaVersion` 写入被拒，副本逐字节不变。
