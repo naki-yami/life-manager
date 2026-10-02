@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { STORAGE_KEYS } from '../utils/storageKeys';
 import {
+  DASHBOARD_LAYOUT_REVISION,
   DASHBOARD_WIDGET_IDS,
   DEFAULT_DASHBOARD,
   normalizeDashboard,
@@ -101,81 +102,92 @@ describe('normalizeDashboard', () => {
     expect(ids.indexOf('today')).toBeGreaterThan(ids.indexOf('stats'));
   });
 
-  it('存下来的正好是上一版默认排布时整体升到新默认，老用户不会卡在旧布局', () => {
-    const legacy = [
-      { id: 'stats', size: 'lg', hidden: false },
-      { id: 'focus', size: 'sm', hidden: false },
-      { id: 'today', size: 'md', hidden: false },
-      { id: 'memos', size: 'sm', hidden: false },
-      { id: 'habits', size: 'md', hidden: false },
-      { id: 'journal', size: 'sm', hidden: false },
-      { id: 'goals', size: 'md', hidden: false },
-      { id: 'body', size: 'sm', hidden: false },
-      { id: 'activity', size: 'md', hidden: false },
-      { id: 'modules', size: 'md', hidden: false },
-    ];
-
-    const widgets = normalizeDashboard(legacy);
-
-    expect(idsOf(widgets)).toEqual([...DASHBOARD_WIDGET_IDS]);
-    // 目标达成跟着新默认挪到辅列 —— 不然右边那列排到「今日心情」就断了
-    expect(sizeOf(widgets, 'goals')).toBe('sm');
-  });
-
-  /**
-   * 这条对应真实事故：用户的 `lm:ui` 停在 `7ad5a4c` 那版（`activity:lg` / `modules:lg`，
-   * 还带已下线的 `timeline` / `capture` / `todos`）。归一化只丢掉了认不出的 id，
-   * **档位照旧生效** —— 于是「近 30 天活动」「模块概览」仍是通栏、和「今天」不对齐，
-   * 中间空一大块；而我们改默认值完全救不到他，只会越改越远。
-   *
-   * 判据是「回写」：布局一改就整份写回，早被洗掉的 id 还在，说明用户没动过布局编辑器。
-   */
-  it('存档里还带着已下线的卡片 id → 整体升到新默认，通栏不再留下', () => {
-    const widgets = normalizeDashboard([
-      { id: 'stats', size: 'lg', hidden: false },
-      { id: 'timeline', size: 'lg', hidden: false },
-      { id: 'capture', size: 'md', hidden: false },
-      { id: 'focus', size: 'sm', hidden: false },
-      { id: 'todos', size: 'md', hidden: false },
-      { id: 'memos', size: 'sm', hidden: false },
-      { id: 'habits', size: 'md', hidden: false },
-      { id: 'body', size: 'sm', hidden: false },
-      { id: 'journal', size: 'sm', hidden: false },
-      { id: 'goals', size: 'md', hidden: false },
-      { id: 'activity', size: 'lg', hidden: false },
-      { id: 'modules', size: 'lg', hidden: false },
-    ]);
-
-    expect(idsOf(widgets)).toEqual([...DASHBOARD_WIDGET_IDS]);
-    // 关键：这两张不再通栏，回到主列和「今天」同宽
-    expect(sizeOf(widgets, 'activity')).toBe('md');
-    expect(sizeOf(widgets, 'modules')).toBe('md');
-  });
-
-  it('用户自己挪过的排布一律保留，不跟着默认值走', () => {
-    // 只跟上一版默认差「统计挪到了第二位」
-    const widgets = normalizeDashboard([
-      { id: 'stats', size: 'lg', hidden: false },
-      { id: 'today', size: 'md', hidden: false },
-      { id: 'focus', size: 'sm', hidden: false },
-      { id: 'memos', size: 'sm', hidden: false },
-      { id: 'habits', size: 'md', hidden: false },
-      { id: 'journal', size: 'sm', hidden: false },
-      { id: 'goals', size: 'md', hidden: false },
-      { id: 'body', size: 'sm', hidden: false },
-      { id: 'activity', size: 'md', hidden: false },
-      { id: 'modules', size: 'md', hidden: false },
-    ]);
-
-    expect(idsOf(widgets).slice(0, 2)).toEqual(['stats', 'today']);
-    // 用户放的位置原样保留：目标仍在主列
-    expect(sizeOf(widgets, 'goals')).toBe('md');
-  });
-
   it('归一化是幂等的：跑两次结果一致', () => {
     const once = normalizeDashboard([{ id: 'today', size: 'sm', hidden: true }, { id: '不认识' }]);
 
     expect(normalizeDashboard(once)).toEqual(once);
+  });
+});
+
+/**
+ * 排布版本号（`DASHBOARD_LAYOUT_REVISION`）。
+ *
+ * 这几条对应真实事故：用户报「首页和样稿差的越来越多」，查下来是 `lm:ui` 里存着
+ * 一份旧排布（`focus`/`memos` 在主列、`modules` 通栏），而我一直在改默认值 ——
+ * **他看到的始终是存档，所以越改越远**。
+ *
+ * 曾经试过靠形状反推「用户有没有动过」（等于旧默认 / 带已下线的卡片 id），
+ * 两种都不匹配他那种「动过一两张卡」的存档。所以改成明确的版本标记：
+ * 号对不上就换新默认，号对得上就说明用户是在这套默认之上排的，原样保留。
+ */
+describe('仪表盘排布版本号', () => {
+  /** 造一份「用户在这套默认之上把模块概览拖到了最前」的存档 */
+  const customLayout = (): DashboardWidget[] => [
+    { id: 'modules', size: 'md', hidden: false },
+    { id: 'stats', size: 'lg', hidden: false },
+    ...DEFAULT_DASHBOARD.filter((item) => item.id !== 'modules' && item.id !== 'stats'),
+  ];
+
+  const seedUi = (state: Record<string, unknown>): void => {
+    localStorage.setItem(STORAGE_KEYS.ui, JSON.stringify({ state, version: 12 }));
+    vi.resetModules();
+  };
+
+  it('老存档没有版本号 → 整体换成当前默认（用户不再卡在旧排布上）', async () => {
+    seedUi({
+      sidebarCollapsed: false,
+      density: 'comfortable',
+      // 正是用户那种存档：专注 / 备忘在主列、模块概览通栏
+      dashboard: [
+        { id: 'stats', size: 'lg', hidden: false },
+        { id: 'today', size: 'md', hidden: false },
+        { id: 'focus', size: 'md', hidden: false },
+        { id: 'memos', size: 'md', hidden: false },
+        { id: 'journal', size: 'sm', hidden: false },
+        { id: 'modules', size: 'lg', hidden: false },
+      ],
+    });
+
+    const fresh = await import('./uiStore');
+
+    expect(idsOf(fresh.useUiStore.getState().dashboard)).toEqual([...DASHBOARD_WIDGET_IDS]);
+    // 关键：模块概览不再通栏，回到主列和「今天」同宽
+    expect(sizeOf(fresh.useUiStore.getState().dashboard, 'modules')).toBe('md');
+  });
+
+  it('版本号对得上 → 用户自己排的那份原样保留', async () => {
+    seedUi({
+      sidebarCollapsed: false,
+      density: 'comfortable',
+      dashboardRevision: DASHBOARD_LAYOUT_REVISION,
+      dashboard: customLayout(),
+    });
+
+    const fresh = await import('./uiStore');
+    const dashboard = fresh.useUiStore.getState().dashboard;
+
+    expect(idsOf(dashboard)[0]).toBe('modules');
+    expect(idsOf(dashboard)).toHaveLength(DASHBOARD_WIDGET_IDS.length);
+  });
+
+  it('版本号比当前旧 → 一样换成当前默认', async () => {
+    seedUi({
+      sidebarCollapsed: false,
+      density: 'comfortable',
+      dashboardRevision: DASHBOARD_LAYOUT_REVISION - 1,
+      dashboard: customLayout(),
+    });
+
+    const fresh = await import('./uiStore');
+
+    expect(idsOf(fresh.useUiStore.getState().dashboard)).toEqual([...DASHBOARD_WIDGET_IDS]);
+  });
+
+  it('用户动过布局之后版本号会被写上，之后不再被默认值覆盖', () => {
+    useUiStore.getState().moveDashboardWidget('modules', 'stats');
+
+    expect(useUiStore.getState().dashboardRevision).toBe(DASHBOARD_LAYOUT_REVISION);
+    expect(idsOf(useUiStore.getState().dashboard)[0]).toBe('modules');
   });
 });
 

@@ -82,50 +82,19 @@ const defaultSizeOf = (id: DashboardWidgetId): DashboardWidgetSize =>
   DEFAULT_DASHBOARD.find((item) => item.id === id)?.size ?? 'lg';
 
 /**
- * 上一版的默认排布。
+ * 默认排布的版本号。**改 `DEFAULT_DASHBOARD` 时必须 +1。**
  *
- * 用户从没动过布局时，`lm:ui` 里存下来的就是这个 —— 认出来就整体升到新默认。
- * 不认的话「改了默认值、老用户永远看不到」：他们的存档里仍是旧顺序、旧档位，
- * 页面照旧空一块，而我们会以为改好了。
+ * 存档里记着「用户是在第几版默认排布之上排的」：
+ * - 号比当前小（含完全没有这个字段的老存档）→ 那份排布是照着旧默认摆的，
+ *   整体换成新默认；
+ * - 号等于当前 → 用户已经在这套默认之上动过手，原样保留他的排布。
  *
- * **只认「一模一样」这一种**：哪怕用户只挪过一张卡，也一律保留他的排布。
+ * 为什么不再去「猜」用户有没有动过（曾经试过：等于旧默认、或带着已下线的卡片 id）：
+ * 真实用户的存档两种都不匹配 —— 他动过一两张卡，于是两条规则全部落空，
+ * 我改了三轮默认值，他看到的始终是旧排布，还得出「越改越远」的观感。
+ * **判断依据要来自明确的版本标记，不能靠形状反推。**
  */
-const LEGACY_DEFAULT_DASHBOARD: readonly DashboardWidget[] = [
-  { id: 'stats', size: 'lg', hidden: false },
-  { id: 'focus', size: 'sm', hidden: false },
-  { id: 'today', size: 'md', hidden: false },
-  { id: 'memos', size: 'sm', hidden: false },
-  { id: 'habits', size: 'md', hidden: false },
-  { id: 'journal', size: 'sm', hidden: false },
-  { id: 'goals', size: 'md', hidden: false },
-  { id: 'body', size: 'sm', hidden: false },
-  { id: 'activity', size: 'md', hidden: false },
-  { id: 'modules', size: 'md', hidden: false },
-];
-
-/**
- * 已经下线的卡片 id。
- *
- * **存档里还带着它们，就说明用户从那个版本起没动过布局编辑器** ——
- * 因为布局一改就整份回写，这些 id 早被归一化洗掉了。据此把「旧版默认排布」
- * 和「用户自己排的」区分开，只升级前者。
- *
- * `timeline`（时间轴，后来搬去今日计划）、`capture`（快速捕获）、`todos`（待办）
- * 都是 V2.1 收敛掉的卡片。
- */
-const RETIRED_WIDGET_IDS: readonly string[] = ['timeline', 'capture', 'todos'];
-
-const hasRetiredWidget = (raw: readonly unknown[]): boolean =>
-  raw.some((entry) => RETIRED_WIDGET_IDS.includes(String(asRecord(entry).id)));
-
-/** 两个排布是否逐项相同（id / 档位 / 隐藏，且顺序一致） */
-const sameLayout = (raw: readonly unknown[], expected: readonly DashboardWidget[]): boolean => {
-  if (raw.length !== expected.length) return false;
-  return expected.every((widget, index) => {
-    const item = asRecord(raw[index]);
-    return item.id === widget.id && item.size === widget.size && item.hidden === widget.hidden;
-  });
-};
+export const DASHBOARD_LAYOUT_REVISION = 2;
 
 const isWidgetId = (value: unknown): value is DashboardWidgetId =>
   typeof value === 'string' && (DASHBOARD_WIDGET_IDS as readonly string[]).includes(value);
@@ -143,16 +112,6 @@ const isWidgetId = (value: unknown): value is DashboardWidgetId =>
  */
 export function normalizeDashboard(value: unknown): DashboardWidget[] {
   const raw = Array.isArray(value) ? value : [];
-
-  // 两种「用户没动过布局」的情形 → 跟着新版默认走：
-  //  1. 存下来的正好是上一版的默认排布；
-  //  2. 存档里还带着已下线的卡片 id（说明自那个版本起就没回写过布局）。
-  // 不认的话就是「默认值改了、老用户永远看不到」：他们存档里仍是旧顺序、旧档位，
-  // 页面上「近 30 天活动」「模块概览」还是通栏、中间照旧空一块，而我们以为改好了。
-  if (sameLayout(raw, LEGACY_DEFAULT_DASHBOARD) || hasRetiredWidget(raw)) {
-    return DEFAULT_DASHBOARD.map((item) => ({ ...item }));
-  }
-
   const result: DashboardWidget[] = [];
   const seen = new Set<DashboardWidgetId>();
 
@@ -211,6 +170,8 @@ interface UiState {
   density: Density;
   /** 首页仪表盘的排布、尺寸与隐藏状态 */
   dashboard: DashboardWidget[];
+  /** `dashboard` 是照着第几版默认排布摆的；见 `DASHBOARD_LAYOUT_REVISION` */
+  dashboardRevision: number;
   setSidebarCollapsed: (collapsed: boolean) => void;
   toggleSidebar: () => void;
   setDensity: (density: Density) => void;
@@ -221,10 +182,14 @@ interface UiState {
   resetDashboard: () => void;
 }
 
-const defaultState: Pick<UiState, 'sidebarCollapsed' | 'density' | 'dashboard'> = {
+const defaultState: Pick<
+  UiState,
+  'sidebarCollapsed' | 'density' | 'dashboard' | 'dashboardRevision'
+> = {
   sidebarCollapsed: false,
   density: 'comfortable',
   dashboard: DEFAULT_DASHBOARD.map((item) => ({ ...item })),
+  dashboardRevision: DASHBOARD_LAYOUT_REVISION,
 };
 
 const DENSITIES: readonly Density[] = ['comfortable', 'compact'];
@@ -245,26 +210,50 @@ export const useUiStore = create<UiState>()(
       toggleDensity: () =>
         set((state) => ({ density: state.density === 'compact' ? 'comfortable' : 'compact' })),
       moveDashboardWidget: (activeId, overId) =>
-        set((state) => ({ dashboard: moveWidget(state.dashboard, activeId, overId) })),
+        set((state) => ({
+          dashboard: moveWidget(state.dashboard, activeId, overId),
+          dashboardRevision: DASHBOARD_LAYOUT_REVISION,
+        })),
       setWidgetSize: (id, size) =>
-        set((state) => ({ dashboard: updateWidget(state.dashboard, id, { size }) })),
+        set((state) => ({
+          dashboard: updateWidget(state.dashboard, id, { size }),
+          dashboardRevision: DASHBOARD_LAYOUT_REVISION,
+        })),
       setWidgetHidden: (id, hidden) =>
-        set((state) => ({ dashboard: updateWidget(state.dashboard, id, { hidden }) })),
-      resetDashboard: () => set({ dashboard: DEFAULT_DASHBOARD.map((item) => ({ ...item })) }),
+        set((state) => ({
+          dashboard: updateWidget(state.dashboard, id, { hidden }),
+          dashboardRevision: DASHBOARD_LAYOUT_REVISION,
+        })),
+      resetDashboard: () =>
+        set({
+          dashboard: DEFAULT_DASHBOARD.map((item) => ({ ...item })),
+          dashboardRevision: DASHBOARD_LAYOUT_REVISION,
+        }),
     }),
-    persistOptions<UiState, Pick<UiState, 'sidebarCollapsed' | 'density' | 'dashboard'>>({
+    persistOptions<
+      UiState,
+      Pick<UiState, 'sidebarCollapsed' | 'density' | 'dashboard' | 'dashboardRevision'>
+    >({
       name: STORAGE_KEYS.ui,
       partialize: (state) => ({
         sidebarCollapsed: state.sidebarCollapsed,
         density: state.density,
         dashboard: state.dashboard,
+        dashboardRevision: state.dashboardRevision,
       }),
       normalize: (persisted) => {
         const raw = asRecord(persisted);
+        // 版本对不上（含完全没有这个字段的老存档）→ 整体换成当前默认。
+        // 用户自己排过的那份是照着更早的默认摆的，留着只会和样稿差得更远；
+        // 而只要他在这套默认之上动过一次手，版本就会被写上，之后不再被覆盖。
+        const keepUserLayout = Number(raw.dashboardRevision) === DASHBOARD_LAYOUT_REVISION;
         return {
           sidebarCollapsed: pickBoolean(raw.sidebarCollapsed, defaultState.sidebarCollapsed),
           density: pickEnum(raw.density, DENSITIES, defaultState.density),
-          dashboard: normalizeDashboard(raw.dashboard),
+          dashboard: keepUserLayout
+            ? normalizeDashboard(raw.dashboard)
+            : DEFAULT_DASHBOARD.map((item) => ({ ...item })),
+          dashboardRevision: DASHBOARD_LAYOUT_REVISION,
         };
       },
     }),
