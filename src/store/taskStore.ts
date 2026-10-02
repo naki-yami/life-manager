@@ -1,6 +1,15 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { Task, Priority, SubTask, TaskStatus, Memo, RepeatRule, TaskTimebox } from '../types';
+import {
+  Task,
+  Priority,
+  SubTask,
+  TaskStatus,
+  Memo,
+  RepeatRule,
+  TaskTimebox,
+  TaskRef,
+} from '../types';
 import { createId } from '../utils/id';
 import { STORAGE_KEYS } from '../utils/storageKeys';
 import { persistOptions } from './persist';
@@ -21,6 +30,8 @@ interface TaskState {
     dueDate: string,
     repeat?: RepeatRule | null,
     tags?: string[],
+    /** 来源回链：从其他模块推进来的任务记着来处（devPush 用）；手工创建不传 */
+    ref?: TaskRef,
   ) => void;
   updateTask: (id: string, updates: Partial<Task>) => void;
   /** 排 / 撤时间盒；传 null 表示把任务从时间轴上拿下来 */
@@ -42,7 +53,7 @@ export const useTaskStore = create<TaskState>()(
   persist(
     (set) => ({
       ...defaultState,
-      addTask: (title, description, priority, dueDate, repeat = null, tags = []) =>
+      addTask: (title, description, priority, dueDate, repeat = null, tags = [], ref) =>
         set((state) => ({
           tasks: [
             ...state.tasks,
@@ -57,6 +68,7 @@ export const useTaskStore = create<TaskState>()(
               repeat: repeat ?? null,
               timebox: null,
               tags: normalizeTags(tags),
+              ...(ref ? { ref } : {}),
               createdAt: new Date().toISOString(),
             },
           ],

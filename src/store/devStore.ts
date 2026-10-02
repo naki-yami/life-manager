@@ -25,7 +25,16 @@ interface DevState {
   updateProject: (id: string, updates: Partial<DevProject>) => void;
   deleteProject: (id: string) => void;
   updateProjectStatus: (id: string, status: DevProjectStatus) => void;
-  addTask: (projectId: string, title: string, priority: Priority, type?: DevItemType) => void;
+  /** 新建工作项；extras 带里程碑关联与截止日期（都是可选，缺省 null） */
+  addTask: (
+    projectId: string,
+    title: string,
+    priority: Priority,
+    type?: DevItemType,
+    extras?: { milestoneId?: string | null; dueDate?: string | null },
+  ) => void;
+  /** 就地改工作项的任意字段（状态之外还有关联 / 截止 / 标题等） */
+  updateTask: (projectId: string, taskId: string, updates: Partial<DevTask>) => void;
   updateTaskStatus: (projectId: string, taskId: string, status: DevTaskStatus) => void;
   deleteTask: (projectId: string, taskId: string) => void;
   /** 看板拖拽后整表写回某个项目的任务（顺序与状态一起定） */
@@ -80,7 +89,7 @@ export const useDevStore = create<DevState>()(
         set((state) => ({
           projects: state.projects.map((p) => (p.id === id ? { ...p, status } : p)),
         })),
-      addTask: (projectId, title, priority, type) =>
+      addTask: (projectId, title, priority, type, extras) =>
         set((state) => ({
           projects: state.projects.map((p) =>
             p.id === projectId
@@ -94,10 +103,20 @@ export const useDevStore = create<DevState>()(
                       status: 'todo' as DevTaskStatus,
                       priority,
                       type: type ?? 'feature',
+                      milestoneId: extras?.milestoneId ?? null,
+                      dueDate: extras?.dueDate ?? null,
                       createdAt: new Date().toISOString(),
                     },
                   ],
                 }
+              : p,
+          ),
+        })),
+      updateTask: (projectId, taskId, updates) =>
+        set((state) => ({
+          projects: state.projects.map((p) =>
+            p.id === projectId
+              ? { ...p, tasks: p.tasks.map((t) => (t.id === taskId ? { ...t, ...updates } : t)) }
               : p,
           ),
         })),
@@ -156,7 +175,14 @@ export const useDevStore = create<DevState>()(
         set((state) => ({
           projects: state.projects.map((p) =>
             p.id === projectId
-              ? { ...p, milestones: p.milestones.filter((m) => m.id !== milestoneId) }
+              ? {
+                  ...p,
+                  // 删里程碑时把挂在上面的工作项解关联（对齐外键 ON DELETE SET NULL）
+                  milestones: p.milestones.filter((m) => m.id !== milestoneId),
+                  tasks: p.tasks.map((t) =>
+                    t.milestoneId === milestoneId ? { ...t, milestoneId: null } : t,
+                  ),
+                }
               : p,
           ),
         })),

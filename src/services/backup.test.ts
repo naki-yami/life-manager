@@ -70,6 +70,8 @@ function sampleData(): BackupData {
             status: 'done',
             priority: 'high',
             type: 'bug',
+            milestoneId: null,
+            dueDate: null,
             createdAt: '2026-09-27T04:00:00.000Z',
           },
         ],

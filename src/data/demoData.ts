@@ -320,6 +320,8 @@ export function seedDemoData(): void {
           status: 'todo',
           priority: 'medium',
           type: 'feature',
+          milestoneId: null,
+          dueDate: null,
           createdAt: nowIso(),
         },
         {
@@ -328,6 +330,8 @@ export function seedDemoData(): void {
           status: 'done',
           priority: 'high',
           type: 'bug',
+          milestoneId: null,
+          dueDate: null,
           createdAt: nowIso(),
         },
       ],

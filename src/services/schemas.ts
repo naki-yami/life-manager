@@ -89,6 +89,15 @@ export const taskSchema = z.object({
   repeat: repeatRuleSchema.nullable().default(null),
   /** 时间盒；旧备份与旧数据没有它，缺省即「没排」 */
   timebox: taskTimeboxSchema,
+  /** 来源回链（v12）：从开发工作推到今日计划的任务记着来处；手工建的没有 */
+  ref: z
+    .object({
+      module: z.literal('dev'),
+      projectId: z.string().min(1),
+      projectTitle: z.string(),
+      devTaskId: z.string().min(1),
+    })
+    .optional(),
   createdAt: isoDateString.default(() => new Date().toISOString()),
   completedAt: z.string().optional(),
 });
@@ -154,6 +163,9 @@ export const devTaskSchema = z.object({
   priority: z.enum(['high', 'medium', 'low']).default('medium'),
   /** v10：工作项分类；旧备份缺省按「功能」处理 */
   type: z.enum(['feature', 'requirement', 'bug', 'tech']).default('feature'),
+  /** v12：关联里程碑与截止日期；旧备份缺省补 null，即「没关联 / 没定截止」 */
+  milestoneId: z.string().nullable().default(null),
+  dueDate: z.string().nullable().default(null),
   createdAt: isoDateString.default(() => new Date().toISOString()),
 });
 

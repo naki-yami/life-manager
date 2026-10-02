@@ -136,6 +136,8 @@ describe('exportModuleJson', () => {
           status: 'done',
           priority: 'high',
           type: 'bug',
+          milestoneId: null,
+          dueDate: null,
           createdAt: '2026-09-01T00:00:00.000Z',
         },
       ],

@@ -762,6 +762,54 @@ describe('devStore 里程碑 / 开发日志 / 工作项分类', () => {
     expect(task.type).toBe('bug');
   });
 
+  it('新工作项默认不挂里程碑、没有截止日期（旧字段语义：null = 没关联）', () => {
+    useDevStore.getState().addProject('写作助手', '');
+    const pid = useDevStore.getState().projects[0]!.id;
+    useDevStore.getState().addTask(pid, '修导出崩溃', 'high');
+    const task = useDevStore.getState().projects[0]!.tasks[0]!;
+    expect(task.milestoneId).toBeNull();
+    expect(task.dueDate).toBeNull();
+  });
+
+  it('工作项可以带里程碑与截止创建，updateTask 能就地改', () => {
+    useDevStore.getState().addProject('写作助手', '');
+    const pid = useDevStore.getState().projects[0]!.id;
+    const store = useDevStore.getState();
+    store.addMilestone(pid, 'v1.0 发布', '2026-10-31');
+    const milestoneId = useDevStore.getState().projects[0]!.milestones[0]!.id;
+
+    store.addTask(pid, '修导出崩溃', 'high', 'bug', {
+      milestoneId,
+      dueDate: '2026-10-20',
+    });
+    let task = useDevStore.getState().projects[0]!.tasks[0]!;
+    expect(task.milestoneId).toBe(milestoneId);
+    expect(task.dueDate).toBe('2026-10-20');
+
+    store.updateTask(pid, task.id, { dueDate: null, title: '修复导出崩溃' });
+    task = useDevStore.getState().projects[0]!.tasks[0]!;
+    expect(task.dueDate).toBeNull();
+    expect(task.title).toBe('修复导出崩溃');
+    expect(task.milestoneId).toBe(milestoneId);
+  });
+
+  it('删除里程碑时把挂在上面的工作项解关联（ON DELETE SET NULL）', () => {
+    useDevStore.getState().addProject('写作助手', '');
+    const pid = useDevStore.getState().projects[0]!.id;
+    const store = useDevStore.getState();
+    store.addMilestone(pid, 'v1.0 发布');
+    const milestoneId = useDevStore.getState().projects[0]!.milestones[0]!.id;
+    store.addTask(pid, '挂在上面的活', 'medium', 'feature', { milestoneId });
+    store.addTask(pid, '没挂的活', 'low');
+
+    store.deleteMilestone(pid, milestoneId);
+
+    const tasks = useDevStore.getState().projects[0]!.tasks;
+    expect(useDevStore.getState().projects[0]!.milestones).toHaveLength(0);
+    expect(tasks[0]!.milestoneId).toBeNull();
+    expect(tasks[1]!.milestoneId).toBeNull();
+  });
+
   it('里程碑可以增删与勾选', () => {
     useDevStore.getState().addProject('写作助手', '');
     const pid = useDevStore.getState().projects[0]!.id;

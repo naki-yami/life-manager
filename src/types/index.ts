@@ -33,6 +33,17 @@ export interface TaskTimebox {
   minutes: number;
 }
 
+/** 任务来源回链：从其他模块推进今日计划的任务，记着它从哪来（目前只有开发工作） */
+export interface TaskRef {
+  module: 'dev';
+  /** 来源 DevProject.id */
+  projectId: string;
+  /** 来源项目名；展示用，导入合并后可能对不上，仅作提示不作链接键 */
+  projectTitle: string;
+  /** 来源 DevTask.id；做幂等去重（同一条工作项不重复推） */
+  devTaskId: string;
+}
+
 export interface Task {
   id: string;
   title: string;
@@ -48,6 +59,8 @@ export interface Task {
   timebox: TaskTimebox | null;
   /** 统一标签（不带 #）；旧数据由归一化补 []，所以这里不是可选的 */
   tags: string[];
+  /** 来源回链；旧数据与手工创建的任务都没有，可选 */
+  ref?: TaskRef;
   createdAt: string;
   completedAt?: string;
 }
@@ -125,6 +138,10 @@ export interface DevTask {
   priority: Priority;
   /** 工作项分类；旧数据可能没有，默认按「功能」处理 */
   type: DevItemType;
+  /** 关联的里程碑 id；null 表示没挂到任何里程碑上（旧数据由归一化补 null） */
+  milestoneId: string | null;
+  /** 截止日期 YYYY-MM-DD；null 表示没定（旧数据由归一化补 null） */
+  dueDate: string | null;
   createdAt: string;
 }
 

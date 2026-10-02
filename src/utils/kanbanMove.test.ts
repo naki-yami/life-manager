@@ -8,6 +8,8 @@ const task = (id: string, status: DevTask['status']): DevTask => ({
   status,
   priority: 'medium',
   type: 'feature',
+  milestoneId: null,
+  dueDate: null,
   createdAt: '2026-09-01T00:00:00.000Z',
 });
 
