@@ -115,15 +115,14 @@ describe('FocusTimer', () => {
     expect(screen.getByLabelText('专注对象')).toHaveValue('task:t1');
   });
 
-  it('「换一个」把对象名与所属分组一起摆到环旁边', async () => {
+  it('「换一个」把选中的对象名摆到环旁边，下拉里仍能看到所属分组', async () => {
     setup();
-
-    expect(screen.getByText(/共 2 个可专注对象/)).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('button', { name: '换一个' }));
 
     expect(screen.getByText('写周报')).toBeInTheDocument();
-    expect(screen.getByText('任务')).toBeInTheDocument();
+    // 分组信息收进了下拉选项（「任务 · 写周报」），不再单独占一行
+    expect(screen.getByRole('option', { name: '任务 · 写周报', hidden: true })).toBeInTheDocument();
   });
 
   it('一个可专注对象都没有时「换一个」也是灰的，点了不会把状态搞乱', () => {

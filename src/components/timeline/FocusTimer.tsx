@@ -3,12 +3,7 @@ import { Play, Square } from 'lucide-react';
 import { Button, ProgressRing, SegmentedControl, Select } from '../ui';
 import type { ActiveFocus, FocusMode, FocusTarget } from '../../types';
 import type { StartFocusInput } from '../../store/focusStore';
-import {
-  POMODORO_MINUTES,
-  elapsedSeconds,
-  formatFocusDuration,
-  formatTimer,
-} from '../../utils/focus';
+import { POMODORO_MINUTES, elapsedSeconds, formatTimer } from '../../utils/focus';
 
 /**
  * 专注计时（番茄钟 / 正计时）。
@@ -186,11 +181,7 @@ export const FocusTimer: React.FC<FocusTimerProps> = ({
           </p>
           <p className="mt-0.5 text-xs text-content-tertiary">
             {mode === 'pomodoro' ? `番茄钟 ${plan} 分钟` : '正计时，停下来才记一笔'}
-            {options.length > 0 && ` · 共 ${options.length} 个可专注对象`}
           </p>
-          {option && (
-            <p className="mt-0.5 truncate text-2xs text-content-tertiary">{option.group}</p>
-          )}
         </div>
       </div>
 
@@ -208,11 +199,26 @@ export const FocusTimer: React.FC<FocusTimerProps> = ({
         </Button>
       </div>
 
-      <div className="mt-3 space-y-2 border-t border-line-subtle pt-3">
+      {/*
+       * 配置一行流：计时方式 / 计划时长 / 专注对象并排，不挂可见标签。
+       * 「怎么计、做多久、做哪件」都是想改的时候才去改的东西，不该占三行。
+       */}
+      <div className="mt-2.5 flex flex-wrap items-center gap-2">
+        <SegmentedControl label="计时方式" value={mode} onChange={setMode} options={MODE_OPTIONS} />
+        {mode === 'pomodoro' && (
+          <Select
+            aria-label="计划时长"
+            className="w-24"
+            value={plan}
+            onChange={setPlan}
+            options={PLAN_OPTIONS}
+          />
+        )}
         <Select
-          label="专注对象"
+          aria-label="专注对象"
+          className="min-w-0 flex-1 basis-40"
           value={picked}
-          placeholder={options.length > 0 ? '选一个…' : '目前没有可以专注的对象'}
+          placeholder={options.length > 0 ? '选一件事…' : '没有可专注的对象'}
           disabled={options.length === 0}
           onChange={setPicked}
           options={options.map((item) => ({
@@ -220,23 +226,6 @@ export const FocusTimer: React.FC<FocusTimerProps> = ({
             label: `${item.group} · ${item.title}`,
           }))}
         />
-        <div className="flex flex-wrap items-end gap-2">
-          <SegmentedControl
-            label="计时方式"
-            value={mode}
-            onChange={setMode}
-            options={MODE_OPTIONS}
-          />
-          {mode === 'pomodoro' && (
-            <div className="w-28">
-              <Select label="计划时长" value={plan} onChange={setPlan} options={PLAN_OPTIONS} />
-            </div>
-          )}
-        </div>
-        <p className="text-2xs text-content-tertiary">
-          正计时适合不知道会做多久的事；番茄钟到点会自动记一笔，单次最长记{' '}
-          {formatFocusDuration(600)}。
-        </p>
       </div>
     </div>
   );
