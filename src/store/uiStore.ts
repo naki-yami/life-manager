@@ -103,6 +103,21 @@ const LEGACY_DEFAULT_DASHBOARD: readonly DashboardWidget[] = [
   { id: 'modules', size: 'md', hidden: false },
 ];
 
+/**
+ * 已经下线的卡片 id。
+ *
+ * **存档里还带着它们，就说明用户从那个版本起没动过布局编辑器** ——
+ * 因为布局一改就整份回写，这些 id 早被归一化洗掉了。据此把「旧版默认排布」
+ * 和「用户自己排的」区分开，只升级前者。
+ *
+ * `timeline`（时间轴，后来搬去今日计划）、`capture`（快速捕获）、`todos`（待办）
+ * 都是 V2.1 收敛掉的卡片。
+ */
+const RETIRED_WIDGET_IDS: readonly string[] = ['timeline', 'capture', 'todos'];
+
+const hasRetiredWidget = (raw: readonly unknown[]): boolean =>
+  raw.some((entry) => RETIRED_WIDGET_IDS.includes(String(asRecord(entry).id)));
+
 /** 两个排布是否逐项相同（id / 档位 / 隐藏，且顺序一致） */
 const sameLayout = (raw: readonly unknown[], expected: readonly DashboardWidget[]): boolean => {
   if (raw.length !== expected.length) return false;
@@ -129,8 +144,12 @@ const isWidgetId = (value: unknown): value is DashboardWidgetId =>
 export function normalizeDashboard(value: unknown): DashboardWidget[] {
   const raw = Array.isArray(value) ? value : [];
 
-  // 存下来的正好是上一版的默认排布 → 用户没动过，跟着新版默认走
-  if (sameLayout(raw, LEGACY_DEFAULT_DASHBOARD)) {
+  // 两种「用户没动过布局」的情形 → 跟着新版默认走：
+  //  1. 存下来的正好是上一版的默认排布；
+  //  2. 存档里还带着已下线的卡片 id（说明自那个版本起就没回写过布局）。
+  // 不认的话就是「默认值改了、老用户永远看不到」：他们存档里仍是旧顺序、旧档位，
+  // 页面上「近 30 天活动」「模块概览」还是通栏、中间照旧空一块，而我们以为改好了。
+  if (sameLayout(raw, LEGACY_DEFAULT_DASHBOARD) || hasRetiredWidget(raw)) {
     return DEFAULT_DASHBOARD.map((item) => ({ ...item }));
   }
 

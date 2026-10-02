@@ -122,6 +122,36 @@ describe('normalizeDashboard', () => {
     expect(sizeOf(widgets, 'goals')).toBe('sm');
   });
 
+  /**
+   * 这条对应真实事故：用户的 `lm:ui` 停在 `7ad5a4c` 那版（`activity:lg` / `modules:lg`，
+   * 还带已下线的 `timeline` / `capture` / `todos`）。归一化只丢掉了认不出的 id，
+   * **档位照旧生效** —— 于是「近 30 天活动」「模块概览」仍是通栏、和「今天」不对齐，
+   * 中间空一大块；而我们改默认值完全救不到他，只会越改越远。
+   *
+   * 判据是「回写」：布局一改就整份写回，早被洗掉的 id 还在，说明用户没动过布局编辑器。
+   */
+  it('存档里还带着已下线的卡片 id → 整体升到新默认，通栏不再留下', () => {
+    const widgets = normalizeDashboard([
+      { id: 'stats', size: 'lg', hidden: false },
+      { id: 'timeline', size: 'lg', hidden: false },
+      { id: 'capture', size: 'md', hidden: false },
+      { id: 'focus', size: 'sm', hidden: false },
+      { id: 'todos', size: 'md', hidden: false },
+      { id: 'memos', size: 'sm', hidden: false },
+      { id: 'habits', size: 'md', hidden: false },
+      { id: 'body', size: 'sm', hidden: false },
+      { id: 'journal', size: 'sm', hidden: false },
+      { id: 'goals', size: 'md', hidden: false },
+      { id: 'activity', size: 'lg', hidden: false },
+      { id: 'modules', size: 'lg', hidden: false },
+    ]);
+
+    expect(idsOf(widgets)).toEqual([...DASHBOARD_WIDGET_IDS]);
+    // 关键：这两张不再通栏，回到主列和「今天」同宽
+    expect(sizeOf(widgets, 'activity')).toBe('md');
+    expect(sizeOf(widgets, 'modules')).toBe('md');
+  });
+
   it('用户自己挪过的排布一律保留，不跟着默认值走', () => {
     // 只跟上一版默认差「统计挪到了第二位」
     const widgets = normalizeDashboard([
