@@ -1,6 +1,6 @@
 # V2.0 同步服务端：本机服务
 
-Status: needs-triage
+Status: ready-for-agent
 Type: spec
 来源：`/to-spec`（2026-10-02），从 ADR-0002 的取舍展开 —— ADR 定「做不做、代价是什么」，
 本文定「这个进程长什么样、按什么接口说话、什么时候算赢」。

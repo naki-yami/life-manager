@@ -1,6 +1,8 @@
 # 01 把饮食目标与饮水打卡补进备份
 
-Status: ready-for-agent
+Status: resolved
+实现：`4aa45da`（2026-10-02。验收用例：`src/services/backup.test.ts` 的往返 / 旧文件不清空 /
+逐键合并，`src/components/ErrorBoundary.test.tsx` 的兜底导出）。
 Type: task
 Part of: `.scratch/backup-diet-targets/spec.md`
 Blocked by: 无

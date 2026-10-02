@@ -16,6 +16,7 @@ Blocked by: 01
   - 信封沿用备份：`{ schemaVersion, exportedAt, data, ... }`，`data` 用备份的模块名
     （`tasks` / `books` / … / `dietGoals` / `dietWater`）。**前置**：模块表要与
     `.scratch/backup-diet-targets` 落地后的 `BACKUP_MODULES` 对齐（schema 20）。
+    该前置已落地（`4aa45da`）：`BACKUP_MODULES` 现为 23 条，schema 20。
   - 另加 `sync` 段：`{ seq, rev, tombstones, devices }`。
   - 多出来的 `sync` 键会被客户端导入路径忽略，所以副本文件同时是一份合法备份。
 - 结构守卫（**不校验业务字段**）：模块名在册、`id` 是非空字符串、记录是对象；其余字段原样存。

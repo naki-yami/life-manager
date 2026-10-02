@@ -18,7 +18,7 @@ v1.0.0 的存档与导出的 JSON 可以直接用，不需要迁移。逐条变�
 
 | 项           | 读数                                              |
 | ------------ | ------------------------------------------------- |
-| 单元与组件   | `npm test` **1569 条 / 93 个文件**全过            |
+| 单元与组件   | `npm test` **1595 条 / 94 个文件**全过            |
 | 真浏览器冒烟 | `npm run e2e` **35 条**全过（本机 Edge，不进 CI） |
 | 首屏体积     | gzip **167.3 KB**（预算 300 KB）                  |
 | 静态检查     | `tsc -b` / `eslint` / `prettier --check` 全绿     |
@@ -144,7 +144,7 @@ scripts/       构建产物体积预算、PWA 图标生成等小工具
 | `npm run typecheck`    | TypeScript 全量类型检查（`tsc -b`）          |
 | `npm run lint`         | ESLint（含 `jsx-a11y` 全量规则）             |
 | `npm run format:check` | Prettier 全仓格式检查                        |
-| `npm run test`         | vitest 单元与组件测试（1569 条 / 93 个文件） |
+| `npm run test`         | vitest 单元与组件测试（1595 条 / 94 个文件） |
 | `npm run build`        | 生产构建                                     |
 | `npm run size`         | 首屏 gzip 体积预算（≤ 300KB，构建后跑）      |
 | `npm run e2e`          | 真浏览器冒烟（35 条，需本机 Edge，不进 CI）  |

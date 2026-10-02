@@ -1,6 +1,6 @@
 # V2.0 同步客户端接入
 
-Status: needs-triage
+Status: ready-for-agent
 Type: spec
 来源：`/to-spec`（2026-10-02）。与 `.scratch/sync-service/spec.md` 配对：那份管本机服务端，
 这份管浏览器这边怎么推、怎么拉、怎么落库、怎么告诉用户。
