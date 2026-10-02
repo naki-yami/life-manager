@@ -1,7 +1,8 @@
 import React, { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
   CalendarDays,
+  Check,
   ChevronDown,
   ChevronRight,
   Code2,
@@ -334,6 +335,25 @@ export const TasksPage: React.FC = () => {
       });
   }, [statusFilteredTasks, priorityFilter]);
 
+  /*
+   * 右栏详情（对齐开发页的 ?project= 模式）：选中任务写进 URL，
+   * 没传或被筛掉时落到第一个可见任务 —— 右栏常驻有内容，不再等着用户先点「编辑」。
+   */
+  const [searchParams, setSearchParams] = useSearchParams();
+  const selectedTaskId = useMemo(() => {
+    const param = searchParams.get('task');
+    if (param && visibleTasks.some((task) => task.id === param)) return param;
+    return visibleTasks[0]?.id ?? null;
+  }, [searchParams, visibleTasks]);
+  const selectedTask = tasks.find((task) => task.id === selectedTaskId) ?? null;
+  const selectTask = (id: string): void => {
+    setSearchParams((previous) => {
+      const next = new URLSearchParams(previous);
+      next.set('task', id);
+      return next;
+    });
+  };
+
   const editingTask = tasks.find((task) => task.id === editingTaskId) ?? null;
   const deletingTask = tasks.find((task) => task.id === pendingDeleteId) ?? null;
 
@@ -423,6 +443,7 @@ export const TasksPage: React.FC = () => {
   };
 
   const openEdit = (task: Task): void => {
+    selectTask(task.id);
     setEditingTaskId(task.id);
     setForm({
       title: task.title,
@@ -541,6 +562,28 @@ export const TasksPage: React.FC = () => {
         title="今日计划"
         description="把要做的事写下来，按优先级推进"
         icon={ListTodo}
+        meta={
+          tasks.length > 0 ? (
+            <>
+              <span className="text-sm text-content-secondary tabular">
+                今日到期{' '}
+                {tasks.filter((task) => task.status === 'pending' && task.dueDate === today).length}
+              </span>
+              <span className="text-sm text-content-secondary tabular">
+                已逾期{' '}
+                {
+                  tasks.filter(
+                    (task) =>
+                      task.status === 'pending' && task.dueDate !== '' && task.dueDate < today,
+                  ).length
+                }
+              </span>
+              <span className="text-sm text-content-secondary tabular">
+                已完成 {tasks.filter((task) => task.status === 'completed').length}/{tasks.length}
+              </span>
+            </>
+          ) : undefined
+        }
         actions={
           <Button
             icon={<Plus size={16} aria-hidden />}
@@ -554,32 +597,122 @@ export const TasksPage: React.FC = () => {
         }
       />
 
+      {/*
+       * 右栏详情：宽屏常驻显示当前选中任务（对齐开发页），窄屏点「编辑」才滑出抽屉。
+       * 编辑表单从「整个右栏」退化为详情里的一个内联分区 —— 存完回到 hero，不再变占位。
+       */}
       <MasterDetail
-        detailTitle="编辑任务"
+        detailTitle="任务详情"
         detailOpen={editingTask !== null}
         onCloseDetail={closeEdit}
         drawerWidth="lg"
         emptyDetail={
           <EmptyState
-            icon={<Edit3 size={20} aria-hidden />}
-            title="还没有选中任务"
-            description="点左边任意一条任务的「编辑」，就能在这里改标题、优先级和重复规则。"
+            icon={<ListTodo size={20} aria-hidden />}
+            title="还没有任务"
+            description="从「添加任务」开始，选中一条就能在这里看详情、就地改。"
             className="py-6"
           />
         }
         detail={
-          editingTask ? (
-            <SubmitForm id="task-edit-form" onSubmit={handleEdit} className="space-y-4">
-              <TaskFormFields form={form} onChange={setForm} tagSuggestions={tagSuggestions} />
-              <div className="flex flex-wrap items-center justify-end gap-2">
-                <Button variant="secondary" onClick={closeEdit}>
-                  取消
-                </Button>
-                <Button type="submit" form="task-edit-form" disabled={!form.title.trim()}>
-                  保存
-                </Button>
+          selectedTask ? (
+            <div>
+              <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h2
+                      className={`min-w-0 truncate text-base font-[650] text-content ${
+                        selectedTask.status === 'completed'
+                          ? 'text-content-tertiary line-through'
+                          : ''
+                      }`}
+                    >
+                      {selectedTask.title}
+                    </h2>
+                    <Badge tone={PRIORITY_BADGE[selectedTask.priority].tone} dot>
+                      {PRIORITY_BADGE[selectedTask.priority].label}
+                    </Badge>
+                    <DueBadge task={selectedTask} />
+                    {selectedTask.repeat && (
+                      <span className="inline-flex items-center gap-1 text-xs text-content-tertiary">
+                        <Repeat size={11} aria-hidden />
+                        {repeatLabel(selectedTask.repeat)}
+                      </span>
+                    )}
+                  </div>
+                  {selectedTask.description && (
+                    <p className="mt-1 text-sm text-content-secondary">
+                      {selectedTask.description}
+                    </p>
+                  )}
+                  {selectedTask.subtasks.length > 0 && (
+                    <p className="mt-2 text-xs text-content-tertiary tabular">
+                      子任务 {selectedTask.subtasks.filter((item) => item.done).length}/
+                      {selectedTask.subtasks.length} 已完成
+                    </p>
+                  )}
+                  <div className="mt-2.5">
+                    <TagEditor
+                      tags={selectedTask.tags}
+                      suggestions={tagSuggestions}
+                      onChange={(tags) => updateTask(selectedTask.id, { tags })}
+                    />
+                  </div>
+                </div>
+
+                {/* 不挂 shrink-0：窄屏抽屉里按钮行要能收缩换行 */}
+                <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    icon={<Check size={13} aria-hidden />}
+                    onClick={() => toggleWithUndo(selectedTask)}
+                  >
+                    {selectedTask.status === 'pending' ? '标记完成' : '恢复待办'}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    icon={<Edit3 size={13} aria-hidden />}
+                    aria-expanded={editingTaskId === selectedTask.id}
+                    onClick={() =>
+                      editingTaskId === selectedTask.id ? closeEdit() : openEdit(selectedTask)
+                    }
+                  >
+                    {editingTaskId === selectedTask.id ? '收起编辑' : '编辑'}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    icon={<Trash2 size={13} aria-hidden />}
+                    onClick={() => setPendingDeleteId(selectedTask.id)}
+                    className="text-danger hover:text-danger"
+                  >
+                    删除
+                  </Button>
+                </div>
               </div>
-            </SubmitForm>
+
+              {editingTaskId === selectedTask.id && (
+                <div className="mt-4 border-t border-line-subtle pt-4">
+                  <SubmitForm id="task-edit-form" onSubmit={handleEdit} className="space-y-4">
+                    <TaskFormFields
+                      form={form}
+                      onChange={setForm}
+                      tagSuggestions={tagSuggestions}
+                    />
+                    <div className="flex flex-wrap items-center justify-end gap-2">
+                      <Button variant="secondary" onClick={closeEdit}>
+                        取消
+                      </Button>
+                      <Button type="submit" form="task-edit-form" disabled={!form.title.trim()}>
+                        保存
+                      </Button>
+                    </div>
+                  </SubmitForm>
+                </div>
+              )}
+            </div>
           ) : null
         }
       >
@@ -733,13 +866,20 @@ export const TasksPage: React.FC = () => {
                       )}
 
                       <div className="min-w-0 flex-1">
-                        <p
-                          className={`font-medium transition-colors duration-fast ${
+                        {/*
+                         * 点标题 = 选中进右栏（?task= 写进 URL）。
+                         * aria-current 让读屏知道右栏详情说的是哪一条。
+                         */}
+                        <button
+                          type="button"
+                          onClick={() => selectTask(task.id)}
+                          aria-current={task.id === selectedTaskId ? 'true' : undefined}
+                          className={`min-w-0 rounded-sm text-left font-medium transition-colors duration-fast hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-line-focus ${
                             done ? 'text-content-tertiary line-through' : 'text-content'
                           }`}
                         >
                           {task.title}
-                        </p>
+                        </button>
                         {task.description && (
                           <p className="mt-0.5 truncate text-sm text-content-tertiary">
                             {task.description}

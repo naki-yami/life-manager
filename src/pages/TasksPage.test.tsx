@@ -22,19 +22,27 @@ describe('TasksPage 从命令面板打开', () => {
 
   it('聚焦某条任务时打开它的编辑弹窗', () => {
     seed();
-    render(<TasksPage />);
+    render(
+      <MemoryRouter>
+        <TasksPage />
+      </MemoryRouter>,
+    );
     const task = useTaskStore.getState().tasks.find((item) => item.title === '紧急任务')!;
 
     act(() => {
       requestPaletteFocus('/tasks', task.id);
     });
 
-    const dialog = screen.getByRole('dialog', { name: '编辑任务' });
+    const dialog = screen.getByRole('dialog', { name: '任务详情' });
     expect(within(dialog).getByLabelText(/^标题/)).toHaveValue('紧急任务');
   });
 
   it('聚焦一条不存在的任务时安静跳过', () => {
-    render(<TasksPage />);
+    render(
+      <MemoryRouter>
+        <TasksPage />
+      </MemoryRouter>,
+    );
 
     act(() => {
       requestPaletteFocus('/tasks', 'missing');
@@ -56,7 +64,11 @@ const seed = () => {
 
 describe('TasksPage', () => {
   it('没有任务时给出空态与主操作', async () => {
-    render(<TasksPage />);
+    render(
+      <MemoryRouter>
+        <TasksPage />
+      </MemoryRouter>,
+    );
 
     expect(screen.getByText('还没有任务')).toBeInTheDocument();
     await userEvent.click(screen.getAllByRole('button', { name: '添加任务' })[0]!);
@@ -66,11 +78,15 @@ describe('TasksPage', () => {
 
   it('按优先级排序，紧急在前', () => {
     seed();
-    render(<TasksPage />);
+    render(
+      <MemoryRouter>
+        <TasksPage />
+      </MemoryRouter>,
+    );
 
     const titles = screen
       .getAllByRole('checkbox')
-      .map((box) => box.closest('li')?.querySelector('p')?.textContent);
+      .map((box) => box.closest('li')?.querySelector('button')?.textContent);
 
     expect(titles[0]).toBe('紧急任务');
     expect(titles[1]).toBe('中等任务');
@@ -80,7 +96,11 @@ describe('TasksPage', () => {
   it('筛选项显示数量并可切换', async () => {
     seed();
     useTaskStore.getState().toggleTaskStatus(useTaskStore.getState().tasks[0]!.id);
-    render(<TasksPage />);
+    render(
+      <MemoryRouter>
+        <TasksPage />
+      </MemoryRouter>,
+    );
 
     const all = screen.getByRole('button', { name: /全部/ });
     expect(all).toHaveTextContent('3');
@@ -93,7 +113,11 @@ describe('TasksPage', () => {
 
   it('搜索可以按描述命中', async () => {
     seed();
-    render(<TasksPage />);
+    render(
+      <MemoryRouter>
+        <TasksPage />
+      </MemoryRouter>,
+    );
 
     await userEvent.type(screen.getByRole('textbox', { name: '搜索' }), '马上');
 
@@ -103,7 +127,11 @@ describe('TasksPage', () => {
 
   it('搜索无结果时提示可以清除筛选', async () => {
     seed();
-    render(<TasksPage />);
+    render(
+      <MemoryRouter>
+        <TasksPage />
+      </MemoryRouter>,
+    );
 
     await userEvent.type(screen.getByRole('textbox', { name: '搜索' }), 'zzz');
     expect(screen.getByText('没有符合条件的任务')).toBeInTheDocument();
@@ -115,7 +143,11 @@ describe('TasksPage', () => {
   it('今天截止与逾期分别用不同角标，逾期显示天数', () => {
     useTaskStore.getState().addTask('今天做', '', 'medium', todayKey());
     useTaskStore.getState().addTask('早就该做', '', 'medium', '2020-01-01');
-    render(<TasksPage />);
+    render(
+      <MemoryRouter>
+        <TasksPage />
+      </MemoryRouter>,
+    );
 
     expect(screen.getByText('今天截止')).toBeInTheDocument();
     expect(screen.getByText(/已逾期 \d+ 天/)).toBeInTheDocument();
@@ -123,7 +155,11 @@ describe('TasksPage', () => {
   });
 
   it('可以新增任务，标题为空时禁用提交', async () => {
-    render(<TasksPage />);
+    render(
+      <MemoryRouter>
+        <TasksPage />
+      </MemoryRouter>,
+    );
 
     await userEvent.click(screen.getAllByRole('button', { name: '添加任务' })[0]!);
     const dialog = screen.getByRole('dialog', { name: '添加任务' });
@@ -140,11 +176,15 @@ describe('TasksPage', () => {
 
   it('编辑会带出原值并写回', async () => {
     seed();
-    render(<TasksPage />);
+    render(
+      <MemoryRouter>
+        <TasksPage />
+      </MemoryRouter>,
+    );
 
     await userEvent.click(screen.getByRole('button', { name: '编辑「中等任务」' }));
 
-    const dialog = screen.getByRole('dialog', { name: '编辑任务' });
+    const dialog = screen.getByRole('dialog', { name: '任务详情' });
     const titleInput = within(dialog).getByLabelText(/^标题/);
     expect(titleInput).toHaveValue('中等任务');
 
@@ -157,7 +197,11 @@ describe('TasksPage', () => {
 
   it('删除需要二次确认，取消则不动数据', async () => {
     seed();
-    render(<TasksPage />);
+    render(
+      <MemoryRouter>
+        <TasksPage />
+      </MemoryRouter>,
+    );
 
     await userEvent.click(screen.getByRole('button', { name: '删除「中等任务」' }));
     const dialog = screen.getByRole('dialog', { name: '删除任务' });
@@ -177,7 +221,11 @@ describe('TasksPage', () => {
 
   it('勾选可以切换完成状态', async () => {
     seed();
-    render(<TasksPage />);
+    render(
+      <MemoryRouter>
+        <TasksPage />
+      </MemoryRouter>,
+    );
 
     await userEvent.click(screen.getByRole('checkbox', { name: '完成「紧急任务」' }));
 
@@ -188,9 +236,11 @@ describe('TasksPage', () => {
   it('删除后可以点「撤销」把任务放回去', async () => {
     seed();
     render(
-      <ToastProvider>
-        <TasksPage />
-      </ToastProvider>,
+      <MemoryRouter>
+        <ToastProvider>
+          <TasksPage />
+        </ToastProvider>
+      </MemoryRouter>,
     );
 
     await userEvent.click(screen.getByRole('button', { name: '删除「中等任务」' }));
@@ -213,9 +263,11 @@ describe('TasksPage', () => {
   it('勾选完成后出现撤销提示，撤销会恢复待办', async () => {
     seed();
     render(
-      <ToastProvider>
-        <TasksPage />
-      </ToastProvider>,
+      <MemoryRouter>
+        <ToastProvider>
+          <TasksPage />
+        </ToastProvider>
+      </MemoryRouter>,
     );
 
     await userEvent.click(screen.getByRole('checkbox', { name: '完成「紧急任务」' }));
@@ -228,7 +280,11 @@ describe('TasksPage', () => {
 
   it('优先级筛选只保留对应任务', async () => {
     seed();
-    render(<TasksPage />);
+    render(
+      <MemoryRouter>
+        <TasksPage />
+      </MemoryRouter>,
+    );
 
     await userEvent.selectOptions(screen.getByRole('combobox', { name: '按优先级筛选' }), 'low');
 
@@ -240,7 +296,11 @@ describe('TasksPage', () => {
   it('看板视图把任务分到待办与已完成两列', async () => {
     seed();
     useTaskStore.getState().toggleTaskStatus(useTaskStore.getState().tasks[0]!.id);
-    render(<TasksPage />);
+    render(
+      <MemoryRouter>
+        <TasksPage />
+      </MemoryRouter>,
+    );
 
     await userEvent.click(screen.getByRole('button', { name: '看板' }));
 
@@ -259,7 +319,11 @@ describe('TasksPage', () => {
 
   it('四象限视图把任务分进对应格子', async () => {
     seed();
-    render(<TasksPage />);
+    render(
+      <MemoryRouter>
+        <TasksPage />
+      </MemoryRouter>,
+    );
 
     await userEvent.click(screen.getByRole('button', { name: '四象限' }));
 
@@ -277,7 +341,11 @@ describe('TasksPage', () => {
 
   it('展开后可以添加并勾选子任务，进度实时同步', async () => {
     seed();
-    render(<TasksPage />);
+    render(
+      <MemoryRouter>
+        <TasksPage />
+      </MemoryRouter>,
+    );
 
     // 列表按优先级排序，第一张卡是「紧急任务」
     await userEvent.click(screen.getAllByRole('button', { name: '添加子任务' })[0]!);
@@ -293,7 +361,11 @@ describe('TasksPage', () => {
   });
 
   it('创建每天重复的任务，完成后自动生成下一次', async () => {
-    render(<TasksPage />);
+    render(
+      <MemoryRouter>
+        <TasksPage />
+      </MemoryRouter>,
+    );
 
     await userEvent.click(screen.getAllByRole('button', { name: '添加任务' })[0]!);
     const dialog = screen.getByRole('dialog', { name: '添加任务' });
@@ -318,7 +390,11 @@ describe('TasksPage', () => {
   });
 
   it('选择每周重复时可以挑选星期', async () => {
-    render(<TasksPage />);
+    render(
+      <MemoryRouter>
+        <TasksPage />
+      </MemoryRouter>,
+    );
 
     await userEvent.click(screen.getAllByRole('button', { name: '添加任务' })[0]!);
     const dialog = screen.getByRole('dialog', { name: '添加任务' });
@@ -371,7 +447,11 @@ describe('TasksPage 来源回链', () => {
 
 describe('TasksPage 标签', () => {
   it('添加任务时能打标签，卡片上会显示', async () => {
-    render(<TasksPage />);
+    render(
+      <MemoryRouter>
+        <TasksPage />
+      </MemoryRouter>,
+    );
 
     await userEvent.click(screen.getAllByRole('button', { name: '添加任务' })[0]!);
     const dialog = screen.getByRole('dialog', { name: '添加任务' });
@@ -385,7 +465,11 @@ describe('TasksPage 标签', () => {
 
   it('卡片上可以就地补标签，标签会写回 store', async () => {
     useTaskStore.getState().addTask('整理发票', '', 'medium', '');
-    render(<TasksPage />);
+    render(
+      <MemoryRouter>
+        <TasksPage />
+      </MemoryRouter>,
+    );
 
     await userEvent.click(screen.getByRole('button', { name: '添加标签' }));
     await userEvent.type(screen.getByLabelText('编辑标签'), '财务{Enter}');
@@ -399,7 +483,11 @@ describe('TasksPage 标签', () => {
     const store = useTaskStore.getState();
     store.addTask('整理发票', '', 'medium', '', null, ['财务']);
     store.addTask('写周报', '', 'medium', '', null, ['工作']);
-    render(<TasksPage />);
+    render(
+      <MemoryRouter>
+        <TasksPage />
+      </MemoryRouter>,
+    );
 
     await userEvent.type(screen.getByRole('textbox', { name: '搜索' }), '#财务');
 
@@ -413,23 +501,63 @@ describe('TasksPage 宽屏双栏', () => {
   });
 
   const expectWideLayout = (): void => mockMediaQueries({ [MASTER_DETAIL_QUERY]: true });
-  const panel = (): HTMLElement => screen.getByRole('complementary', { name: '编辑任务' });
+  const panel = (): HTMLElement => screen.getByRole('complementary', { name: '任务详情' });
 
-  it('宽屏右栏常驻，没选中任务时是占位内容', () => {
+  it('宽屏右栏常驻，默认选中第一个可见任务（优先级最高的待办）', () => {
     seed();
     expectWideLayout();
 
-    render(<TasksPage />);
+    render(
+      <MemoryRouter>
+        <TasksPage />
+      </MemoryRouter>,
+    );
 
-    expect(within(panel()).getByText('还没有选中任务')).toBeInTheDocument();
+    expect(within(panel()).getByRole('heading', { name: '紧急任务' })).toBeInTheDocument();
     expect(list().getByText('中等任务')).toBeInTheDocument();
   });
 
-  it('点「编辑」在右栏就地改，不再弹对话框，列表也还在', async () => {
+  it('一条任务都没有时右栏给占位引导', () => {
+    expectWideLayout();
+
+    render(
+      <MemoryRouter>
+        <TasksPage />
+      </MemoryRouter>,
+    );
+
+    expect(within(panel()).getByText('还没有任务')).toBeInTheDocument();
+  });
+
+  it('点标题选中进右栏，行上带 aria-current', async () => {
     seed();
     expectWideLayout();
 
-    render(<TasksPage />);
+    render(
+      <MemoryRouter>
+        <TasksPage />
+      </MemoryRouter>,
+    );
+    await userEvent.click(list().getByRole('button', { name: '中等任务' }));
+
+    // 右栏 hero 换成被点的这条；行上标出「右栏说的就是你」
+    expect(within(panel()).getByRole('heading', { name: '中等任务' })).toBeInTheDocument();
+    expect(list().getByRole('button', { name: '中等任务' })).toHaveAttribute(
+      'aria-current',
+      'true',
+    );
+    expect(list().getByRole('button', { name: '紧急任务' })).not.toHaveAttribute('aria-current');
+  });
+
+  it('点「编辑」在右栏就地改，保存后回到 hero，不再变占位', async () => {
+    seed();
+    expectWideLayout();
+
+    render(
+      <MemoryRouter>
+        <TasksPage />
+      </MemoryRouter>,
+    );
     await userEvent.click(screen.getByRole('button', { name: '编辑「中等任务」' }));
 
     // 焦点没被搬进对话框，列表也没被遮住
@@ -444,15 +572,20 @@ describe('TasksPage 宽屏双栏', () => {
     await userEvent.click(within(panel()).getByRole('button', { name: '保存' }));
 
     expect(useTaskStore.getState().tasks.some((task) => task.title === '改名后的任务')).toBe(true);
-    // 存完右栏回到占位，不留上一条的残影
-    expect(within(panel()).getByText('还没有选中任务')).toBeInTheDocument();
+    // 存完表单收起，hero 还在、标题已更新
+    expect(within(panel()).getByRole('heading', { name: '改名后的任务' })).toBeInTheDocument();
+    expect(within(panel()).queryByLabelText(/^标题/)).not.toBeInTheDocument();
   });
 
   it('编辑右栏里在标题框按回车也直接保存（U7 尾巴）', async () => {
     seed();
     expectWideLayout();
 
-    render(<TasksPage />);
+    render(
+      <MemoryRouter>
+        <TasksPage />
+      </MemoryRouter>,
+    );
     await userEvent.click(screen.getByRole('button', { name: '编辑「中等任务」' }));
 
     const titleInput = within(panel()).getByLabelText(/^标题/);
@@ -462,14 +595,18 @@ describe('TasksPage 宽屏双栏', () => {
     expect(useTaskStore.getState().tasks.some((task) => task.title === '回车改名的任务')).toBe(
       true,
     );
-    expect(within(panel()).getByText('还没有选中任务')).toBeInTheDocument();
+    expect(within(panel()).getByRole('heading', { name: '回车改名的任务' })).toBeInTheDocument();
   });
 
   it('宽屏下命令面板聚焦某条任务，也直接进右栏', () => {
     seed();
     expectWideLayout();
 
-    render(<TasksPage />);
+    render(
+      <MemoryRouter>
+        <TasksPage />
+      </MemoryRouter>,
+    );
     const task = useTaskStore.getState().tasks.find((item) => item.title === '紧急任务')!;
 
     act(() => {
@@ -484,7 +621,11 @@ describe('TasksPage 宽屏双栏', () => {
     seed();
     expectWideLayout();
 
-    render(<TasksPage />);
+    render(
+      <MemoryRouter>
+        <TasksPage />
+      </MemoryRouter>,
+    );
     await userEvent.click(screen.getByRole('button', { name: '编辑「中等任务」' }));
 
     const titleInput = within(panel()).getByLabelText(/^标题/);
@@ -492,7 +633,9 @@ describe('TasksPage 宽屏双栏', () => {
     await userEvent.type(titleInput, '不该被保存');
     await userEvent.click(within(panel()).getByRole('button', { name: '取消' }));
 
-    expect(within(panel()).getByText('还没有选中任务')).toBeInTheDocument();
+    // 表单收起，hero 还停在原任务上，store 没被写
+    expect(within(panel()).getByRole('heading', { name: '中等任务' })).toBeInTheDocument();
+    expect(within(panel()).queryByLabelText(/^标题/)).not.toBeInTheDocument();
     expect(useTaskStore.getState().tasks).toHaveLength(3);
     expect(useTaskStore.getState().tasks.some((task) => task.title === '不该被保存')).toBe(false);
   });
@@ -501,7 +644,11 @@ describe('TasksPage 宽屏双栏', () => {
     seed();
     expectWideLayout();
 
-    render(<TasksPage />);
+    render(
+      <MemoryRouter>
+        <TasksPage />
+      </MemoryRouter>,
+    );
     await userEvent.click(screen.getByRole('button', { name: '编辑「中等任务」' }));
     expect(within(panel()).getByLabelText(/^标题/)).toHaveValue('中等任务');
 
@@ -513,7 +660,11 @@ describe('TasksPage 宽屏双栏', () => {
 describe('TasksPage 批量操作', () => {
   it('点「批量」进入批量模式：操作条出现，单条操作图标藏起来', async () => {
     seed();
-    render(<TasksPage />);
+    render(
+      <MemoryRouter>
+        <TasksPage />
+      </MemoryRouter>,
+    );
 
     expect(screen.queryByRole('toolbar', { name: '批量操作' })).not.toBeInTheDocument();
 
@@ -531,7 +682,11 @@ describe('TasksPage 批量操作', () => {
 
   it('勾选框换成「选中」，完成勾选框让位', async () => {
     seed();
-    render(<TasksPage />);
+    render(
+      <MemoryRouter>
+        <TasksPage />
+      </MemoryRouter>,
+    );
 
     expect(screen.getByLabelText('完成「中等任务」')).toBeInTheDocument();
 
@@ -543,7 +698,11 @@ describe('TasksPage 批量操作', () => {
 
   it('点卡片上的勾选框能加减选中，计数跟着变', async () => {
     seed();
-    render(<TasksPage />);
+    render(
+      <MemoryRouter>
+        <TasksPage />
+      </MemoryRouter>,
+    );
     await userEvent.click(screen.getByRole('button', { name: '批量' }));
 
     const bar = () => within(screen.getByRole('toolbar', { name: '批量操作' }));
@@ -558,7 +717,11 @@ describe('TasksPage 批量操作', () => {
 
   it('全选选的是当前筛出来的那批，不是全部', async () => {
     seed();
-    render(<TasksPage />);
+    render(
+      <MemoryRouter>
+        <TasksPage />
+      </MemoryRouter>,
+    );
 
     // 先筛出「待办」：三条都是待办，再按优先级筛成一条
     await userEvent.click(screen.getByRole('button', { name: /已完成/ }));
@@ -575,7 +738,11 @@ describe('TasksPage 批量操作', () => {
 
   it('批量改优先级对选中的每一条都生效', async () => {
     seed();
-    render(<TasksPage />);
+    render(
+      <MemoryRouter>
+        <TasksPage />
+      </MemoryRouter>,
+    );
     await userEvent.click(screen.getByRole('button', { name: '批量' }));
     await userEvent.click(screen.getByRole('button', { name: '全选' }));
 
@@ -590,7 +757,11 @@ describe('TasksPage 批量操作', () => {
     const store = useTaskStore.getState();
     store.updateTask(store.tasks[0]!.id, { tags: ['已有'] });
 
-    render(<TasksPage />);
+    render(
+      <MemoryRouter>
+        <TasksPage />
+      </MemoryRouter>,
+    );
     await userEvent.click(screen.getByRole('button', { name: '批量' }));
     await userEvent.click(screen.getByRole('button', { name: '全选' }));
     await userEvent.click(screen.getByRole('button', { name: '打标签' }));
@@ -610,7 +781,11 @@ describe('TasksPage 批量操作', () => {
     const store = useTaskStore.getState();
     for (const task of store.tasks) store.updateTask(task.id, { tags: ['保留', '要去掉'] });
 
-    render(<TasksPage />);
+    render(
+      <MemoryRouter>
+        <TasksPage />
+      </MemoryRouter>,
+    );
     await userEvent.click(screen.getByRole('button', { name: '批量' }));
     await userEvent.click(screen.getByRole('button', { name: '全选' }));
     await userEvent.click(screen.getByRole('button', { name: '打标签' }));
@@ -628,9 +803,11 @@ describe('TasksPage 批量操作', () => {
   it('批量删除要二次确认，删完能整体撤销', async () => {
     seed();
     render(
-      <ToastProvider>
-        <TasksPage />
-      </ToastProvider>,
+      <MemoryRouter>
+        <ToastProvider>
+          <TasksPage />
+        </ToastProvider>
+      </MemoryRouter>,
     );
     await userEvent.click(screen.getByRole('button', { name: '批量' }));
     await userEvent.click(screen.getByRole('button', { name: '全选' }));
@@ -650,7 +827,11 @@ describe('TasksPage 批量操作', () => {
 
   it('批量改截止日能设为今天，也能清空', async () => {
     seed();
-    render(<TasksPage />);
+    render(
+      <MemoryRouter>
+        <TasksPage />
+      </MemoryRouter>,
+    );
     await userEvent.click(screen.getByRole('button', { name: '批量' }));
     await userEvent.click(screen.getByRole('button', { name: '全选' }));
 
@@ -663,7 +844,11 @@ describe('TasksPage 批量操作', () => {
 
   it('筛掉已选中的条目后，它自动退出选中集', async () => {
     seed();
-    render(<TasksPage />);
+    render(
+      <MemoryRouter>
+        <TasksPage />
+      </MemoryRouter>,
+    );
     await userEvent.click(screen.getByRole('button', { name: '批量' }));
     await userEvent.click(screen.getByRole('button', { name: '全选' }));
     expect(
@@ -678,7 +863,11 @@ describe('TasksPage 批量操作', () => {
   });
 
   it('新建弹窗里在标题框按回车直接提交（U7）', async () => {
-    render(<TasksPage />);
+    render(
+      <MemoryRouter>
+        <TasksPage />
+      </MemoryRouter>,
+    );
 
     await userEvent.click(screen.getAllByRole('button', { name: '添加任务' })[0]!);
     const dialog = screen.getByRole('dialog', { name: '添加任务' });
@@ -696,7 +885,11 @@ describe('TasksPage 行间键盘导航（U8）', () => {
     const store = useTaskStore.getState();
     store.addTask('写周报', '', 'high', '');
     store.addTask('回邮件', '', 'low', '');
-    render(<TasksPage />);
+    render(
+      <MemoryRouter>
+        <TasksPage />
+      </MemoryRouter>,
+    );
 
     const boxes = screen.getAllByRole('checkbox', { name: /完成|标记/ });
     expect(boxes).toHaveLength(2);
