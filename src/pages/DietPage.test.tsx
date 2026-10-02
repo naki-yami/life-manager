@@ -443,3 +443,44 @@ describe('DietPage', () => {
     expect(useLibraryStore.getState().recentFoodNames[0]).toBe('鸡胸肉');
   });
 });
+
+/*
+ * 流水就地编辑：以前写错热量只能整条删了重录（一餐好几个条目）。
+ * 现在记录行上有「改」，走的是同一个弹窗，只是标题与提交路径不同。
+ */
+describe('DietPage 改一餐', () => {
+  it('点「改」带出原值，保存后原记录被更新而不是新增一条', async () => {
+    addMeal(today, 'lunch', [{ name: '牛肉面', category: '主食', calories: 620 }]);
+    render(<DietPage />);
+
+    await userEvent.click(screen.getByRole('button', { name: /改「牛肉面」这条记录/ }));
+
+    const dialog = screen.getByRole('dialog', { name: '改这一餐' });
+    expect(within(dialog).getByLabelText('第 1 个食物名称')).toHaveValue('牛肉面');
+    expect(within(dialog).getByLabelText('第 1 个食物的热量')).toHaveValue(620);
+
+    const calories = within(dialog).getByLabelText('第 1 个食物的热量');
+    await userEvent.clear(calories);
+    await userEvent.type(calories, '700');
+    await userEvent.click(within(dialog).getByRole('button', { name: '保存' }));
+
+    // 只有一条记录（不是又加了一条），热量与合计数一起变了
+    const records = useDietStore.getState().records;
+    expect(records).toHaveLength(1);
+    expect(records[0]!.items[0]!.calories).toBe(700);
+    expect(records[0]!.totalCalories).toBe(700);
+  });
+
+  it('改完点「取消」不落盘', async () => {
+    addMeal(today, 'lunch', [{ name: '牛肉面', category: '主食', calories: 620 }]);
+    render(<DietPage />);
+
+    await userEvent.click(screen.getByRole('button', { name: /改「牛肉面」这条记录/ }));
+    const dialog = screen.getByRole('dialog', { name: '改这一餐' });
+    await userEvent.clear(within(dialog).getByLabelText('第 1 个食物的热量'));
+    await userEvent.type(within(dialog).getByLabelText('第 1 个食物的热量'), '999');
+    await userEvent.click(within(dialog).getByRole('button', { name: '取消' }));
+
+    expect(useDietStore.getState().records[0]!.totalCalories).toBe(620);
+  });
+});

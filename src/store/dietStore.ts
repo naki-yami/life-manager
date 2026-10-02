@@ -18,6 +18,11 @@ interface DietState {
   water: Record<string, number>;
   addRecord: (date: string, type: MealType, items: FoodItem[], tags?: string[]) => void;
   deleteRecord: (id: string) => void;
+  /**
+   * 就地改一条记录（日期 / 餐次 / 食物清单 / 标签）。
+   * 四个合计数会按新的 items 重算，调用方不必自己算。
+   */
+  updateRecord: (id: string, patch: Partial<Omit<MealRecord, 'id'>>) => void;
   /** 把一餐存成模板（复制食物清单，连带当时选的餐次）；名字重复时自动加序号 */
   addTemplateFromRecord: (record: MealRecord, name?: string) => void;
   deleteTemplate: (id: string) => void;
@@ -93,6 +98,30 @@ export const useDietStore = create<DietState>()(
         }));
       },
       deleteRecord: (id) => set((state) => ({ records: state.records.filter((r) => r.id !== id) })),
+      /*
+       * 就地改一条记录。四个合计数必须跟着重算 —— 它们是从 items 派生出来的，
+       * 只改 items 会让卡片上的热量和条目对不上（那才是「两个真相源」）。
+       */
+      updateRecord: (id, patch) =>
+        set((state) => ({
+          records: state.records.map((record) => {
+            if (record.id !== id) return record;
+            const next = { ...record, ...patch };
+            const items = (patch.items ?? record.items).map((item) => ({
+              ...item,
+              id: item.id || createId(),
+            }));
+            return {
+              ...next,
+              items,
+              tags: patch.tags ? normalizeTags(patch.tags) : record.tags,
+              totalCalories: items.reduce((sum, item) => sum + item.calories, 0),
+              totalProtein: items.reduce((sum, item) => sum + (item.protein ?? 0), 0),
+              totalCarbs: items.reduce((sum, item) => sum + (item.carbs ?? 0), 0),
+              totalFat: items.reduce((sum, item) => sum + (item.fat ?? 0), 0),
+            };
+          }),
+        })),
       addTemplateFromRecord: (record, name) =>
         set((state) => {
           const wanted = (name ?? defaultTemplateName(record)).trim() || '未命名模板';

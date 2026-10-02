@@ -177,6 +177,7 @@ export const FitnessPage: React.FC = () => {
     deletePlan,
     addRecord,
     deleteRecord,
+    updateRecord,
     replacePlans,
     replaceRecords,
   } = useFitnessStore();
@@ -363,6 +364,7 @@ export const FitnessPage: React.FC = () => {
         : [emptyExercise()];
 
     setWorkoutForm({ ...emptyWorkoutForm(), planName, exercises: seeded });
+    setEditingRecordId(null);
     setShowWorkoutModal(true);
   };
 
@@ -480,6 +482,7 @@ export const FitnessPage: React.FC = () => {
       })),
       notes: '',
     });
+    setEditingRecordId(null);
     setShowWorkoutModal(true);
   };
 
@@ -520,6 +523,21 @@ export const FitnessPage: React.FC = () => {
     if (validExercises.length === 0) return;
     const trimmed = validExercises.map((exercise) => ({ ...exercise, name: exercise.name.trim() }));
 
+    /*
+     * 改一笔已有记录：走 `updateRecord`，**跳过破纪录检测** —— 那套是给「新练了一次」
+     * 用的，改个写错的重量不该弹「🎉 新纪录」。
+     */
+    if (editingRecordId !== null) {
+      updateRecord(editingRecordId, {
+        planName: workoutForm.planName,
+        date: workoutForm.date,
+        exercises: trimmed,
+        notes: workoutForm.notes.trim(),
+      });
+      closeWorkoutModal();
+      return;
+    }
+
     // 破纪录检测：这次的动作 1RM 超过历史最佳才算（第一次录入不算破纪录）
     const previousBests = new Map(personalBests(records).map((pr) => [pr.exercise, pr.oneRm]));
     const brokenRecords = trimmed
@@ -544,6 +562,35 @@ export const FitnessPage: React.FC = () => {
     }
 
     setShowWorkoutModal(false);
+  };
+
+  /**
+   * 记一次 / 改一次共用同一个弹窗。
+   *
+   * `editingRecordId` 有值就是「改」：保存走 `updateRecord`，且不触发破纪录提示。
+   * 以前写错重量只能整条删了重录 —— 一次训练五六个动作，改一个数要输六遍。
+   */
+  const [editingRecordId, setEditingRecordId] = useState<string | null>(null);
+
+  const openEditWorkoutModal = (record: WorkoutRecord): void => {
+    setWorkoutForm({
+      planName: record.planName,
+      date: record.date,
+      exercises: record.exercises.map(({ name, sets, reps, weight }) => ({
+        name,
+        sets,
+        reps,
+        weight,
+      })),
+      notes: record.notes,
+    });
+    setEditingRecordId(record.id);
+    setShowWorkoutModal(true);
+  };
+
+  const closeWorkoutModal = (): void => {
+    setShowWorkoutModal(false);
+    setEditingRecordId(null);
   };
 
   const canSaveWorkout = workoutForm.exercises.some((exercise) => exercise.name.trim());
@@ -1085,6 +1132,12 @@ export const FitnessPage: React.FC = () => {
                             />
                           )}
                           <IconButton
+                            label={`改 ${record.date} 的训练记录`}
+                            size="sm"
+                            icon={<Pencil size={15} />}
+                            onClick={() => openEditWorkoutModal(record)}
+                          />
+                          <IconButton
                             label={`删除 ${record.date} 的训练记录`}
                             size="sm"
                             icon={<Trash2 size={15} />}
@@ -1236,13 +1289,13 @@ export const FitnessPage: React.FC = () => {
 
       <Modal
         isOpen={showWorkoutModal}
-        onClose={() => setShowWorkoutModal(false)}
-        title="记录训练"
+        onClose={closeWorkoutModal}
+        title={editingRecordId ? '改这次训练' : '记录训练'}
         description="只填有做过的动作，重量可以留 0 表示自重"
         size="lg"
         footer={
           <>
-            <Button variant="secondary" onClick={() => setShowWorkoutModal(false)}>
+            <Button variant="secondary" onClick={closeWorkoutModal}>
               取消
             </Button>
             <Button type="submit" form="fitness-workout-form" disabled={!canSaveWorkout}>

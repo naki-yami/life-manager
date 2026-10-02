@@ -944,3 +944,81 @@ describe('统一标签', () => {
     expect(useTaskStore.getState().tasks[0]!.tags).toEqual(['工作']);
   });
 });
+
+/*
+ * 流水就地编辑（第三梯队最后一块录入摩擦）。
+ * 以前写错重量 / 热量只能整条删了重录：一餐五六个条目、一次训练五六个动作，
+ * 改一个数要输六遍。两个 store 因此各多了一个 `updateRecord`。
+ */
+describe('流水就地编辑', () => {
+  it('饮食：改条目后四个合计数跟着重算，不用调用方自己算', () => {
+    useDietStore.setState({ records: [] });
+    useDietStore
+      .getState()
+      .addRecord('2026-10-02', 'lunch', [
+        { name: '米饭', category: '主食', calories: 200, protein: 4, carbs: 44, fat: 1 },
+      ]);
+    const id = useDietStore.getState().records[0]!.id;
+
+    useDietStore.getState().updateRecord(id, {
+      items: [{ name: '米饭', category: '主食', calories: 300, protein: 6, carbs: 66, fat: 2 }],
+    });
+
+    const record = useDietStore.getState().records[0]!;
+    // 合计数是从 items 派生的：只改 items 会让卡片上的热量和条目对不上
+    expect(record.totalCalories).toBe(300);
+    expect(record.totalProtein).toBe(6);
+    expect(record.totalCarbs).toBe(66);
+    expect(record.totalFat).toBe(2);
+  });
+
+  it('饮食：也能改日期与餐次，条目原样留着', () => {
+    useDietStore.setState({ records: [] });
+    useDietStore
+      .getState()
+      .addRecord('2026-10-02', 'lunch', [{ name: '米饭', category: '主食', calories: 200 }]);
+    const id = useDietStore.getState().records[0]!.id;
+
+    useDietStore.getState().updateRecord(id, { date: '2026-10-01', type: 'dinner' });
+
+    const record = useDietStore.getState().records[0]!;
+    expect(record.date).toBe('2026-10-01');
+    expect(record.type).toBe('dinner');
+    expect(record.items).toHaveLength(1);
+    expect(record.totalCalories).toBe(200);
+  });
+
+  it('健身：改重量后记录跟着变，缺 id 的动作会补上', () => {
+    useFitnessStore.setState({ records: [] });
+    useFitnessStore
+      .getState()
+      .addRecord('推日', '2026-10-02', [{ name: '卧推', sets: 5, reps: 5, weight: 60 }], '');
+    const id = useFitnessStore.getState().records[0]!.id;
+
+    useFitnessStore.getState().updateRecord(id, {
+      exercises: [{ name: '卧推', sets: 5, reps: 5, weight: 70 }],
+    });
+
+    const record = useFitnessStore.getState().records[0]!;
+    expect(record.exercises[0]!.weight).toBe(70);
+    expect(record.exercises[0]!.id).toBeTruthy();
+  });
+
+  it('改一条不影响别的记录', () => {
+    useDietStore.setState({ records: [] });
+    useDietStore
+      .getState()
+      .addRecord('2026-10-02', 'lunch', [{ name: '米饭', category: '主食', calories: 200 }]);
+    useDietStore
+      .getState()
+      .addRecord('2026-10-02', 'dinner', [{ name: '面条', category: '主食', calories: 500 }]);
+    const [first, second] = useDietStore.getState().records;
+
+    useDietStore.getState().updateRecord(first!.id, { date: '2026-09-30' });
+
+    const after = useDietStore.getState().records;
+    expect(after.find((r) => r.id === first!.id)!.date).toBe('2026-09-30');
+    expect(after.find((r) => r.id === second!.id)!.date).toBe('2026-10-02');
+    expect(after.find((r) => r.id === second!.id)!.totalCalories).toBe(500);
+  });
+});

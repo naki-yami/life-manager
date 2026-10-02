@@ -8,6 +8,7 @@ import {
   Droplet,
   Flame,
   Moon,
+  Pencil,
   Plus,
   Sun,
   Sunrise,
@@ -121,6 +122,7 @@ export const DietPage: React.FC = () => {
     templates,
     addRecord,
     deleteRecord,
+    updateRecord,
     replaceRecords,
     addTemplateFromRecord,
     deleteTemplate,
@@ -271,6 +273,7 @@ export const DietPage: React.FC = () => {
         : [emptyItem()];
 
     setForm({ type: template?.type ?? type, date, items: seeded });
+    setEditingId(null);
     setShowAddModal(true);
   };
 
@@ -342,6 +345,36 @@ export const DietPage: React.FC = () => {
 
   const canSave = form.items.some((item) => item.name.trim());
 
+  /**
+   * 记一笔 / 改一笔共用同一个弹窗。
+   *
+   * `editingId` 有值就是「改」：保存走 `updateRecord`，合计数由 store 按新条目重算。
+   * 以前写错重量或热量只能整条删了重录 —— 一餐五六个条目，改一个数要输六遍。
+   */
+  const [editingId, setEditingId] = useState<string | null>(null);
+
+  const openEditModal = (record: MealRecord): void => {
+    setForm({
+      type: record.type,
+      date: record.date,
+      items: record.items.map((item) => ({
+        name: item.name,
+        category: item.category,
+        calories: item.calories,
+        protein: item.protein ?? 0,
+        carbs: item.carbs ?? 0,
+        fat: item.fat ?? 0,
+      })),
+    });
+    setEditingId(record.id);
+    setShowAddModal(true);
+  };
+
+  const closeMealModal = (): void => {
+    setShowAddModal(false);
+    setEditingId(null);
+  };
+
   const handleAdd = (): void => {
     const validItems: FoodItem[] = form.items
       .filter((item) => item.name.trim())
@@ -353,9 +386,14 @@ export const DietPage: React.FC = () => {
         fat: item.fat > 0 ? item.fat : undefined,
       }));
     if (validItems.length === 0) return;
-    addRecord(form.date, form.type, validItems);
+
+    if (editingId) {
+      updateRecord(editingId, { date: form.date, type: form.type, items: validItems });
+    } else {
+      addRecord(form.date, form.type, validItems);
+    }
     setSelectedDate(form.date);
-    setShowAddModal(false);
+    closeMealModal();
   };
 
   const itemNames = (items: FoodItem[]): string => items.map((item) => item.name).join('、');
@@ -396,6 +434,12 @@ export const DietPage: React.FC = () => {
               onClick={() => addTemplateFromRecord(record)}
             />
           )}
+          <IconButton
+            label={`改「${itemNames(record.items)}」这条记录`}
+            size="sm"
+            icon={<Pencil size={15} />}
+            onClick={() => openEditModal(record)}
+          />
           <IconButton
             label={`删除「${itemNames(record.items)}」这条记录`}
             size="sm"
@@ -803,13 +847,15 @@ export const DietPage: React.FC = () => {
 
       <Modal
         isOpen={showAddModal}
-        onClose={() => setShowAddModal(false)}
-        title="记录饮食"
-        description="热量可以估算，先记下来再慢慢校准"
+        onClose={closeMealModal}
+        title={editingId ? '改这一餐' : '记录饮食'}
+        description={
+          editingId ? '改完保存，合计数会按新条目重算' : '热量可以估算，先记下来再慢慢校准'
+        }
         size="lg"
         footer={
           <>
-            <Button variant="secondary" onClick={() => setShowAddModal(false)}>
+            <Button variant="secondary" onClick={closeMealModal}>
               取消
             </Button>
             <Button type="submit" form="diet-add-form" disabled={!canSave}>

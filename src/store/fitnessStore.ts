@@ -25,6 +25,11 @@ interface FitnessState {
     tags?: string[],
   ) => void;
   deleteRecord: (id: string) => void;
+  /**
+   * 就地改一次训练（计划名 / 日期 / 动作 / 备注 / 标签）。
+   * 动作里缺 id 的会补上，和 `addRecord` 一个口径。
+   */
+  updateRecord: (id: string, patch: Partial<Omit<WorkoutRecord, 'id'>>) => void;
   replacePlans: (plans: FitnessPlan[]) => void;
   replaceRecords: (records: WorkoutRecord[]) => void;
 }
@@ -93,6 +98,26 @@ export const useFitnessStore = create<FitnessState>()(
           ],
         })),
       deleteRecord: (id) => set((state) => ({ records: state.records.filter((r) => r.id !== id) })),
+      updateRecord: (id, patch) =>
+        set((state) => ({
+          records: state.records.map((record) =>
+            record.id === id
+              ? {
+                  ...record,
+                  ...patch,
+                  ...(patch.exercises
+                    ? {
+                        exercises: patch.exercises.map((ex) => ({
+                          ...ex,
+                          id: ex.id || createId(),
+                        })),
+                      }
+                    : {}),
+                  ...(patch.tags ? { tags: normalizeTags(patch.tags) } : {}),
+                }
+              : record,
+          ),
+        })),
       replacePlans: (plans) => set({ plans }),
       replaceRecords: (records) => set({ records }),
     }),

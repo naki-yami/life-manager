@@ -603,3 +603,36 @@ describe('FitnessPage 视图切换器在页头', () => {
     );
   });
 });
+
+/*
+ * 流水就地编辑：以前写错重量只能整条删了重录（一次训练好几个动作）。
+ * 现在记录行上有「改」，走同一个弹窗 —— 但**不触发破纪录提示**，
+ * 那套是给「新练了一次」用的，改个写错的数字不该弹「🎉 新纪录」。
+ */
+describe('FitnessPage 改一次训练', () => {
+  it('点「改」带出原值，保存后更新原记录且不弹破纪录提示', async () => {
+    render(
+      <ToastProvider>
+        <FitnessPage />
+      </ToastProvider>,
+    );
+    addRecord('推日', todayKey(), 60);
+    await userEvent.click(screen.getByRole('button', { name: /^训练记录/ }));
+
+    await userEvent.click(screen.getByRole('button', { name: /改 .* 的训练记录/ }));
+
+    const dialog = screen.getByRole('dialog', { name: '改这次训练' });
+    expect(within(dialog).getByDisplayValue('推日')).toBeInTheDocument();
+
+    // 把重量从 60 抬到 100 —— 会超过历史最佳，但改记录不该报「新纪录」
+    const weightBox = within(dialog).getByLabelText('第 1 个动作的重量');
+    await userEvent.clear(weightBox);
+    await userEvent.type(weightBox, '100');
+    await userEvent.click(within(dialog).getByRole('button', { name: '保存记录' }));
+
+    const records = useFitnessStore.getState().records;
+    expect(records).toHaveLength(1);
+    expect(records[0]!.exercises[0]!.weight).toBe(100);
+    expect(screen.queryByText(/新纪录/)).not.toBeInTheDocument();
+  });
+});
