@@ -1,3 +1,10 @@
+# 健身与饮食记录：卡片上补标签编辑器
+
+Status: ready-for-agent
+Type: spec
+来源：`/to-spec`（2026-10-02）。原拟发布到 GitHub Issues，因当前 PAT 只有 Issues 读权限
+（创建 issue 与标签均被拒）改为本地 markdown 跟踪。
+
 ## Problem Statement
 
 健身与饮食这两页的记录，已经有「标签」这个数据字段，也已经被全局搜索索引到了（在搜索框里敲 `#胸`、`#外食` 都能搜到对应的训练与饮食记录），但**页面上完全看不到、也改不了**。

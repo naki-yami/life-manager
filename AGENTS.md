@@ -9,7 +9,7 @@
 
 ### Issue tracker
 
-Issues and specs live as GitHub issues in `naki-yami/life-manager` (via the `gh` CLI). See `docs/agents/issue-tracker.md`.
+Issues and specs live as local markdown files under `.scratch/<feature-slug>/` (this repo's PAT cannot write GitHub issues). See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 
