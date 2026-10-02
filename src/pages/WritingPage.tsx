@@ -96,7 +96,6 @@ export const WritingPage: React.FC = () => {
     addProject,
     deleteProject,
     updateStatus,
-    updateWordCount,
     updateNotes,
     updateContent,
     setTargetWords,
@@ -234,7 +233,7 @@ export const WritingPage: React.FC = () => {
   };
 
   return (
-    <div className="space-y-section">
+    <div className="stagger-enter space-y-section">
       <PageHeader
         title="写作"
         description="长文、文案与书稿的进度和灵感都在这里"
@@ -403,18 +402,14 @@ export const WritingPage: React.FC = () => {
                       )}
 
                       <div className="mt-3 flex flex-wrap items-end gap-3">
-                        <div className="w-36">
-                          <NumberInput
-                            ariaLabel={`「${project.title}」的字数`}
-                            value={project.wordCount}
-                            onChange={(value) =>
-                              updateWordCount(project.id, value === '' ? 0 : value)
-                            }
-                            min={0}
-                            step={100}
-                            suffix="字"
-                          />
-                        </div>
+                        {/*
+                         * 字数只读展示：保存正文时 store 会按 content.length 重算并覆盖，
+                         * 这里再放一个手填输入框就是两个真相源，填了也保不住。
+                         * 目标字数没有自动来源，保留手填。
+                         */}
+                        <span className="text-sm text-content-secondary tabular">
+                          已写 {formatNumber(project.wordCount)} 字
+                        </span>
                         <div className="w-36">
                           <NumberInput
                             ariaLabel={`「${project.title}」的目标字数`}

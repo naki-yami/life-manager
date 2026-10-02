@@ -101,6 +101,8 @@ export const ReviewPage: React.FC = () => {
   // 「换周期就重置表单」用渲染期同步而不是 useEffect：effect 会先渲染一次旧内容再闪一下
   const [loadedKey, setLoadedKey] = useState(activeKey);
   const [draft, setDraft] = useState<ReviewAnswers>(() => answersOf(stored));
+  /** 往期复盘默认只露 HISTORY_LIMIT 条，点「查看全部」展开 */
+  const [showAllHistory, setShowAllHistory] = useState(false);
   if (loadedKey !== activeKey) {
     setLoadedKey(activeKey);
     setDraft(answersOf(stored));
@@ -195,7 +197,7 @@ export const ReviewPage: React.FC = () => {
   };
 
   return (
-    <div className="space-y-section">
+    <div className="stagger-enter space-y-section">
       <PageHeader
         icon={NotebookPen}
         title="复盘"
@@ -350,6 +352,14 @@ export const ReviewPage: React.FC = () => {
                   </button>
                 </li>
               ))}
+
+              {history.length > HISTORY_LIMIT && !showAllHistory && (
+                <li>
+                  <Button variant="secondary" onClick={() => setShowAllHistory(true)}>
+                    查看全部 {history.length} 次
+                  </Button>
+                </li>
+              )}
             </ul>
           )}
         </CardBody>

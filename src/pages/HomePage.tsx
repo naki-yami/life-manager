@@ -28,6 +28,7 @@ import {
   Input,
   Kbd,
   StatStrip,
+  useToast,
 } from '../components/ui';
 import { MetaSeparator, PageHeader } from '../components/layout';
 import { DashboardGrid, type DashboardWidgetView } from '../components/dashboard';
@@ -184,6 +185,7 @@ export const HomePage: React.FC = () => {
   const games = useGameStore((state) => state.games);
   const habits = useHabitStore((state) => state.habits);
   const journalEntries = useJournalStore((state) => state.entries);
+  const saveJournalEntry = useJournalStore((state) => state.saveEntry);
   const toggleHabitLog = useHabitStore((state) => state.toggleHabitLog);
   const bodyRecords = useBodyStore((state) => state.records);
   const readingSessions = useBookStore((state) => state.sessions);
@@ -275,6 +277,46 @@ export const HomePage: React.FC = () => {
   /** 今日心情卡：只读今天这一条，没有就提示去写 */
   const todayJournal = journalEntryOn(journalEntries, today);
   const journalStreak = currentStreak(journalSeries, today);
+  const { toast } = useToast();
+
+  /**
+   * 点表情直接记下今天的心情（saveEntry 按天 upsert，标签与正文原样保留）。
+   * 以前这里只会跳日记页，副标题却写着「挑一档就行」——affordance 骗人。
+   * 点同一档是无效操作，不给 toast。
+   */
+  const recordMood = (level: MoodLevel): void => {
+    if (todayJournal && clampMood(todayJournal.mood) === level) return;
+    const previous = todayJournal;
+    saveJournalEntry(today, {
+      mood: level,
+      tags: previous?.tags ?? [],
+      text: previous?.text ?? '',
+    });
+    toast({
+      tone: 'success',
+      title: `已记下今天的心情：${moodLabel(level)}`,
+      description: previous
+        ? '心情已更新，写错了点「撤销」。'
+        : '想补几个字？点右上角「写今天的日记」。',
+      action: {
+        label: '撤销',
+        onClick: () => {
+          if (previous) {
+            saveJournalEntry(today, {
+              mood: previous.mood,
+              tags: previous.tags,
+              text: previous.text,
+            });
+          } else {
+            const created = useJournalStore
+              .getState()
+              .entries.find((entry) => entry.date === today);
+            if (created) useJournalStore.getState().deleteEntry(created.id);
+          }
+        },
+      },
+    });
+  };
 
   /** 页头那行元信息要念「已专注 N 次」，所以这里也得有一份今日专注汇总 */
   const todayFocus = useMemo(() => focusSummary(focusSessions, today), [focusSessions, today]);
@@ -762,8 +804,9 @@ export const HomePage: React.FC = () => {
                     type="button"
                     aria-label={`记今天的心情：${moodLabel(level)}`}
                     aria-current={active ? 'true' : undefined}
-                    onClick={() => navigate('/growth/journal')}
-                    className={`grid h-8 w-8 place-items-center rounded-lg text-base transition-colors duration-fast ease-standard ${
+                    aria-pressed={active}
+                    onClick={() => recordMood(level)}
+                    className={`grid h-8 w-8 place-items-center rounded-lg text-base transition-transform duration-fast ease-standard active:scale-90 motion-reduce:active:scale-100 ${
                       active
                         ? 'bg-accent-soft ring-1 ring-inset ring-accent-ring'
                         : 'bg-inset hover:bg-accent-soft'

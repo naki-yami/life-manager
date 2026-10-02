@@ -192,7 +192,7 @@ export const GoalsPage: React.FC = () => {
   const formCurrent = form ? metricValue(form.metric, snapshot, goalRange(form.period, today)) : 0;
 
   return (
-    <div className="space-y-section">
+    <div className="stagger-enter space-y-section">
       <PageHeader
         title="目标"
         description={

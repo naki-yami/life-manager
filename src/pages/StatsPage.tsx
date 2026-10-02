@@ -480,7 +480,7 @@ export const StatsPage: React.FC = () => {
   ];
 
   return (
-    <div className="space-y-section">
+    <div className="stagger-enter space-y-section">
       <PageHeader
         title="统计"
         description={

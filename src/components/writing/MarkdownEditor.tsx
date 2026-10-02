@@ -31,17 +31,24 @@ interface ToolButton {
 }
 
 /** 工具栏顺序按使用频率排：先标题 / 强调，再块级结构 */
-const TOOLS: ToolButton[] = [
-  { action: 'heading', label: '标题', icon: <Heading2 size={15} aria-hidden /> },
-  { action: 'bold', label: '加粗', icon: <Bold size={15} aria-hidden /> },
-  { action: 'italic', label: '斜体', icon: <Italic size={15} aria-hidden /> },
-  { action: 'strike', label: '删除线', icon: <Strikethrough size={15} aria-hidden /> },
-  { action: 'inlineCode', label: '行内代码', icon: <Code size={15} aria-hidden /> },
-  { action: 'bulletList', label: '无序列表', icon: <List size={15} aria-hidden /> },
-  { action: 'orderedList', label: '有序列表', icon: <ListOrdered size={15} aria-hidden /> },
-  { action: 'quote', label: '引用', icon: <Quote size={15} aria-hidden /> },
-  { action: 'link', label: '链接', icon: <LinkIcon size={15} aria-hidden /> },
-  { action: 'codeBlock', label: '代码块', icon: <SquareCode size={15} aria-hidden /> },
+/** 快捷插入按用途分三组，组间画一条竖线 —— 一排 10 个按钮不分组就是一堵字 */
+const TOOL_GROUPS: ToolButton[][] = [
+  [
+    { action: 'heading', label: '标题', icon: <Heading2 size={15} aria-hidden /> },
+    { action: 'bold', label: '加粗', icon: <Bold size={15} aria-hidden /> },
+    { action: 'italic', label: '斜体', icon: <Italic size={15} aria-hidden /> },
+    { action: 'strike', label: '删除线', icon: <Strikethrough size={15} aria-hidden /> },
+    { action: 'inlineCode', label: '行内代码', icon: <Code size={15} aria-hidden /> },
+  ],
+  [
+    { action: 'bulletList', label: '无序列表', icon: <List size={15} aria-hidden /> },
+    { action: 'orderedList', label: '有序列表', icon: <ListOrdered size={15} aria-hidden /> },
+    { action: 'quote', label: '引用', icon: <Quote size={15} aria-hidden /> },
+  ],
+  [
+    { action: 'link', label: '链接', icon: <LinkIcon size={15} aria-hidden /> },
+    { action: 'codeBlock', label: '代码块', icon: <SquareCode size={15} aria-hidden /> },
+  ],
 ];
 
 const VIEW_OPTIONS: Array<{ value: MarkdownView; label: string; icon: React.ReactNode }> = [
@@ -213,15 +220,20 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
             aria-label="Markdown 快捷插入"
             className="flex flex-wrap items-center gap-0.5"
           >
-            {TOOLS.map((tool) => (
-              <IconButton
-                key={tool.action}
-                size="sm"
-                label={tool.label}
-                icon={tool.icon}
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={() => runAction(tool.action)}
-              />
+            {TOOL_GROUPS.map((group, groupIndex) => (
+              <React.Fragment key={group[0]!.action}>
+                {groupIndex > 0 && <span aria-hidden className="mx-1 h-5 w-px shrink-0 bg-line" />}
+                {group.map((tool) => (
+                  <IconButton
+                    key={tool.action}
+                    size="sm"
+                    label={tool.label}
+                    icon={tool.icon}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => runAction(tool.action)}
+                  />
+                ))}
+              </React.Fragment>
             ))}
           </div>
         )}
@@ -254,14 +266,23 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
         </div>
       </div>
 
-      {view === 'edit' && editor}
-      {view === 'preview' && preview}
-      {view === 'split' && (
-        <div className="grid gap-3 md:grid-cols-2">
-          {editor}
-          {preview}
-        </div>
-      )}
+      {/*
+       * 换视图做一次 120ms 淡入，消掉「整块内容凭空跳变」的生硬感。
+       * 分栏时预览不套 max-h：grid 默认拉伸会把它拉到与编辑器同高
+       * （专注模式 rows=22 时比 28rem 还高，不取消上限就会差一截）。
+       */}
+      <div key={view} className="animate-fade-in motion-reduce:animate-none">
+        {view === 'edit' && editor}
+        {view === 'preview' && preview}
+        {view === 'split' && (
+          <div className="grid items-stretch gap-3 md:grid-cols-2">
+            {editor}
+            <div className="min-h-[12rem] overflow-y-auto rounded border border-line-subtle bg-surface p-3 md:max-h-none">
+              <MarkdownPreview source={value} />
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 };

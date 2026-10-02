@@ -746,6 +746,15 @@ export const GamesPage: React.FC = () => {
                     已玩 {formatNumber(Math.round(nextUpGame.hoursPlayed * 10) / 10)} 小时
                     {nextUpGame.status === 'backlog' ? ' · 还没开过' : ' · 进行中'}
                   </span>
+                  {/* 推荐不能是死胡同：看中了就顺手把流水记了 */}
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    icon={<Clock size={13} aria-hidden />}
+                    onClick={() => openSessionModal(nextUpGame.id)}
+                  >
+                    记录游玩
+                  </Button>
                 </div>
               ) : (
                 <p className="text-sm text-content-tertiary">没有搁置的游戏，随便玩！</p>

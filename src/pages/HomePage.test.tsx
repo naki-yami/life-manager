@@ -16,6 +16,7 @@ import { useBodyStore } from '../store/bodyStore';
 import { useFocusStore } from '../store/focusStore';
 import { useGoalStore } from '../store/goalStore';
 import { useJournalStore } from '../store/journalStore';
+import { ToastProvider } from '../components/ui';
 import { DASHBOARD_WIDGET_IDS, DEFAULT_DASHBOARD, useUiStore } from '../store/uiStore';
 
 import { STORAGE_KEYS } from '../utils/storageKeys';
@@ -24,11 +25,13 @@ import { formatShortDate, todayKey } from '../utils/date';
 const renderHome = () =>
   render(
     <MemoryRouter initialEntries={['/']}>
-      <Routes>
-        <Route path="/" element={<HomePage />} />
-        <Route path="/study/books" element={<div>读书页面</div>} />
-        <Route path="/growth/journal" element={<div>日记页面</div>} />
-      </Routes>
+      <ToastProvider>
+        <Routes>
+          <Route path="/" element={<HomePage />} />
+          <Route path="/study/books" element={<div>读书页面</div>} />
+          <Route path="/growth/journal" element={<div>日记页面</div>} />
+        </Routes>
+      </ToastProvider>
     </MemoryRouter>,
   );
 
@@ -415,7 +418,7 @@ describe('HomePage', () => {
     expect(screen.getByText(/已连续记录 1 天/)).toBeInTheDocument();
   });
 
-  it('今日心情卡摆出五个情绪档，点一下去日记页', async () => {
+  it('今日心情卡摆出五个情绪档，点表情直接记下今天的心情并可撤销', async () => {
     renderHome();
 
     for (const label of ['很糟', '不佳', '一般', '不错', '很好']) {
@@ -424,7 +427,34 @@ describe('HomePage', () => {
 
     await userEvent.click(screen.getByRole('button', { name: '记今天的心情：很好' }));
 
-    expect(screen.getByText('日记页面')).toBeInTheDocument();
+    // 不跳页：直接写库，今天的日记有了 mood=5
+    const saved = useJournalStore.getState().entries.find((entry) => entry.date === todayKey());
+    expect(saved?.mood).toBe(5);
+    expect(screen.getByText('今天已记')).toBeInTheDocument();
+    expect(screen.getByText(/已记下今天的心情：很好/)).toBeInTheDocument();
+
+    // 撤销：当天记录被移除，回到「今天还没写」
+    await userEvent.click(screen.getByRole('button', { name: '撤销' }));
+    expect(
+      useJournalStore.getState().entries.find((entry) => entry.date === todayKey()),
+    ).toBeUndefined();
+    expect(screen.getByText('今天还没写')).toBeInTheDocument();
+  });
+
+  it('已有心情时点另一档是修改并保留原文，撤销回到旧值', async () => {
+    useJournalStore.getState().saveEntry(todayKey(), { mood: 3, tags: [], text: '平平无奇' });
+    renderHome();
+
+    await userEvent.click(screen.getByRole('button', { name: '记今天的心情：很好' }));
+
+    const saved = useJournalStore.getState().entries.find((entry) => entry.date === todayKey());
+    expect(saved?.mood).toBe(5);
+    expect(saved?.text).toBe('平平无奇');
+
+    await userEvent.click(screen.getByRole('button', { name: '撤销' }));
+    const restored = useJournalStore.getState().entries.find((entry) => entry.date === todayKey());
+    expect(restored?.mood).toBe(3);
+    expect(restored?.text).toBe('平平无奇');
   });
 
   it('今天还没写时，今日心情卡给一句引导而不是空白', () => {

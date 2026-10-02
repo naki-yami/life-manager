@@ -257,6 +257,29 @@ describe('GamesPage', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
+  it('「下一步玩什么」推荐卡可以直接记一笔游玩', async () => {
+    // 两个候选才会出推荐卡；积压最久的排前面
+    addGame('旧坑');
+    useGameStore.getState().updateGameStatus(gameOf('旧坑').id, 'backlog');
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    addGame('新坑');
+    useGameStore.getState().updateGameStatus(gameOf('新坑').id, 'backlog');
+    render(<GamesPage />);
+
+    const card = screen.getByText('下一步玩什么').closest('div.rounded-lg') as HTMLElement;
+    await userEvent.click(within(card).getByRole('button', { name: '记录游玩' }));
+
+    const dialog = screen.getByRole('dialog', { name: '记录游玩' });
+    fireEvent.change(within(dialog).getByRole('spinbutton', { name: '时长' }), {
+      target: { value: '1' },
+    });
+    await userEvent.click(within(dialog).getByRole('button', { name: '保存' }));
+
+    const { sessions } = useGameStore.getState();
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0]!.gameId).toBe(gameOf('旧坑').id);
+  });
+
   it('年度卡片汇总今年游玩的小时数与天数', () => {
     addGame('哈迪斯');
     const gameId = gameOf('哈迪斯').id;

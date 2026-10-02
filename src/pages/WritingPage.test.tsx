@@ -151,14 +151,17 @@ describe('WritingPage', () => {
     expect(screen.queryByText('C')).not.toBeInTheDocument();
   });
 
-  it('可以改字数、改状态与一键标记完成', async () => {
+  it('字数是只读展示（由正文自动统计），可以改目标字数、状态与一键标记完成', async () => {
     useWritingStore.getState().addProject('长文', 'article');
     render(<WritingPage />);
 
-    const wordCount = screen.getByRole('spinbutton', { name: '「长文」的字数' });
-    await userEvent.clear(wordCount);
-    await userEvent.type(wordCount, '1500');
-    expect(projectOf('长文').wordCount).toBe(1500);
+    expect(screen.getByText('已写 0 字')).toBeInTheDocument();
+    expect(screen.queryByRole('spinbutton', { name: '「长文」的字数' })).not.toBeInTheDocument();
+
+    const target = screen.getByRole('spinbutton', { name: '「长文」的目标字数' });
+    await userEvent.clear(target);
+    await userEvent.type(target, '10000');
+    expect(projectOf('长文').targetWords).toBe(10000);
 
     await userEvent.selectOptions(
       screen.getByRole('combobox', { name: '调整「长文」的状态' }),

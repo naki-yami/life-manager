@@ -271,7 +271,7 @@ export const HabitsPage: React.FC = () => {
                               ? `给「${habit.name}」记一次，当前 ${amount}/${target}`
                               : `打卡「${habit.name}」`
                           }
-                          className="flex items-center gap-2 rounded-full border border-line-subtle bg-inset px-3 py-1.5 text-sm text-content-secondary transition-colors duration-fast ease-standard hover:border-accent hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-line-focus"
+                          className="flex items-center gap-2 rounded-full border border-line-subtle bg-inset px-3 py-1.5 text-sm text-content-secondary transition-[background-color,border-color,transform] duration-fast ease-standard hover:border-accent hover:text-accent active:scale-95 motion-reduce:active:scale-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-line-focus"
                         >
                           <Plus size={14} aria-hidden />
                           <span>{habit.name}</span>
@@ -361,7 +361,7 @@ export const HabitsPage: React.FC = () => {
                                       : '打卡'
                                 }`}
                                 onClick={() => toggleHabitLog(habit.id, day)}
-                                className={`flex h-11 w-9 flex-col items-center justify-center gap-0.5 rounded-sm border text-2xs transition-colors duration-fast ease-standard focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-line-focus ${
+                                className={`flex h-11 w-9 flex-col items-center justify-center gap-0.5 rounded-sm border text-2xs transition-[background-color,border-color,transform] duration-fast ease-standard active:scale-90 motion-reduce:active:scale-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-line-focus ${
                                   done
                                     ? 'border-accent bg-accent-soft text-accent'
                                     : amount > 0
