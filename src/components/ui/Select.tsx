@@ -41,7 +41,18 @@ export const Select: React.FC<SelectProps> = ({
   const describedBy = error ? `${fieldId}-error` : hint ? `${fieldId}-hint` : undefined;
 
   return (
-    <div className="w-full">
+    /*
+     * className 加在**最外层**，不是内层 <select>。
+     *
+     * 内层 <select> 自带 `w-full`，而 Tailwind 里 `w-full` 排在 `w-32` 之后 ——
+     * 所以「把 w-32 写在 Select 上」以前是**静默失效**的：控件照样撑满整行，
+     * 在工具条里会把同一行的其它控件挤到下一行，看上去就是「没对齐」。
+     * 全应用有 12 处这么写（`w-28` / `w-32` / `w-40` / `flex-1`），一直没生效。
+     *
+     * 默认仍是 `w-full`（表单里一格一控件，本来就该占满）；调用方一旦传了类名，
+     * 就整个接管外层宽度 —— 传宽度类时不能再保留 `w-full`，否则还是它赢。
+     */
+    <div className={className || 'w-full'}>
       {label && (
         <label
           htmlFor={fieldId}
@@ -66,7 +77,6 @@ export const Select: React.FC<SelectProps> = ({
             invalid ? 'border-danger' : 'border-line hover:border-line-strong',
             'focus:outline-none focus:border-line-focus focus:ring-2 focus:ring-focus',
             'disabled:cursor-not-allowed disabled:bg-inset disabled:text-content-disabled',
-            className,
           ].join(' ')}
           {...rest}
         >

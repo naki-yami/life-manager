@@ -17,6 +17,7 @@ import {
   Input,
   Modal,
   SegmentedControl,
+  Select,
   Slider,
   StatStrip,
   Switch,
@@ -664,5 +665,43 @@ describe('换肤后的公共件不变量', () => {
     const group = screen.getByRole('group', { name: '概览统计' });
     expect(group.className).not.toContain('shadow');
     expect(screen.getByText('3')).toHaveClass('text-xl');
+  });
+});
+
+/**
+ * `Select` 的 className 落在哪一层。
+ *
+ * 这条对应一次真实事故：全应用有 12 处把 `w-28` / `w-32` / `w-40` 写在 `<Select>` 上，
+ * 而 className 当时是加在内层 `<select>` 的 —— 它自带 `w-full`，Tailwind 里 `w-full`
+ * 又排在 `w-32` 之后，于是那些宽度**静默失效**：控件照样占满整行，
+ * 在「今日计划」工具条里把同一行的其它控件挤到下一行，看起来就是「搜索框和优先级没对齐」。
+ */
+describe('Select 的宽度类落在最外层', () => {
+  const options = [{ value: 'all', label: '全部' }];
+
+  it('传了 className 就加在最外层，内层 select 只保留 w-full', () => {
+    const { container } = render(
+      <Select
+        aria-label="按优先级筛选"
+        className="w-32"
+        value="all"
+        onChange={() => {}}
+        options={options}
+      />,
+    );
+
+    const wrap = container.firstElementChild as HTMLElement;
+    expect(wrap).toHaveClass('w-32');
+    // 内层不能再带 w-32：它自己的 w-full 会把它盖掉，等于没写
+    expect(screen.getByRole('combobox')).toHaveClass('w-full');
+    expect(screen.getByRole('combobox')).not.toHaveClass('w-32');
+  });
+
+  it('不传 className 时外层默认 w-full，表单里照旧占满一格', () => {
+    const { container } = render(
+      <Select aria-label="状态" value="all" onChange={() => {}} options={options} />,
+    );
+
+    expect(container.firstElementChild).toHaveClass('w-full');
   });
 });
