@@ -39,7 +39,6 @@ import {
 } from '../components/ui';
 import { ListEmptyState, PageHeader, Toolbar } from '../components/layout';
 import { BarChart, Sparkline } from '../components/charts';
-import { MonthCalendar, type CalendarMark } from '../components/ui';
 import { useDietStore } from '../store/dietStore';
 import { allFoods, useLibraryStore, type LibraryFood } from '../store/libraryStore';
 import { FOOD_CATEGORIES, type FoodCategory } from '../data/foodCategories';
@@ -202,18 +201,6 @@ export const DietPage: React.FC = () => {
   const proteinGoal = goals.protein > 0 ? goals.protein : 0;
   const waterGlasses = water[selectedDate] ?? 0;
   const WATER_GOAL = 8;
-
-  /** 日历标记：每天记录的条数 */
-  const calendarMarks = useMemo(() => {
-    const map: Record<string, CalendarMark> = {};
-    for (const record of records) {
-      const entry = map[record.date] ?? { count: 0, label: '' };
-      entry.count += 1;
-      entry.label = `${entry.count} 条记录`;
-      map[record.date] = entry;
-    }
-    return map;
-  }, [records]);
 
   const yesterday = addDays(selectedDate, -1);
   const yesterdayRecords = records.filter((record) => record.date === yesterday);
@@ -422,14 +409,51 @@ export const DietPage: React.FC = () => {
 
   return (
     <div className="space-y-section">
+      {/*
+        「这是哪一天」是这一页的主控，收进页头 actions：
+        以前它和工具条里那套「前一天 / 日期框 / 后一天」各管一头，
+        再加一整张「饮食日历」卡，同一天的状态有三个入口。现在只留这一处。
+      */}
       <PageHeader
         title="饮食"
         description="按天记录三餐与加餐，顺带看看热量"
         icon={UtensilsCrossed}
         actions={
-          <Button icon={<Plus size={16} aria-hidden />} onClick={() => openAddModal(form.type)}>
-            记录饮食
-          </Button>
+          <>
+            {view === 'day' && (
+              <>
+                <IconButton
+                  label="前一天"
+                  size="sm"
+                  icon={<ChevronLeft size={16} />}
+                  onClick={() => setSelectedDate((date) => addDays(date, -1))}
+                />
+                <div className="w-40">
+                  <Input
+                    aria-label="选择日期"
+                    type="date"
+                    value={selectedDate}
+                    onChange={(event) => setSelectedDate(event.target.value)}
+                  />
+                </div>
+                <IconButton
+                  label="后一天"
+                  size="sm"
+                  icon={<ChevronRight size={16} />}
+                  disabled={selectedDate >= today}
+                  onClick={() => setSelectedDate((date) => addDays(date, 1))}
+                />
+                {selectedDate !== today && (
+                  <Button size="sm" variant="ghost" onClick={() => setSelectedDate(today)}>
+                    回到今天
+                  </Button>
+                )}
+              </>
+            )}
+            <Button icon={<Plus size={16} aria-hidden />} onClick={() => openAddModal(form.type)}>
+              记录饮食
+            </Button>
+          </>
         }
       />
 
@@ -625,51 +649,16 @@ export const DietPage: React.FC = () => {
           />
         }
       >
-        {view === 'day' && (
-          <div className="flex items-center gap-2">
-            <IconButton
-              label="前一天"
-              size="sm"
-              icon={<ChevronLeft size={16} />}
-              onClick={() => setSelectedDate((date) => addDays(date, -1))}
-            />
-            <div className="w-40">
-              <Input
-                aria-label="选择日期"
-                type="date"
-                value={selectedDate}
-                onChange={(event) => setSelectedDate(event.target.value)}
-              />
-            </div>
-            <IconButton
-              label="后一天"
-              size="sm"
-              icon={<ChevronRight size={16} />}
-              disabled={selectedDate >= today}
-              onClick={() => setSelectedDate((date) => addDays(date, 1))}
-            />
-            {selectedDate !== today && (
-              <Button size="sm" variant="ghost" onClick={() => setSelectedDate(today)}>
-                回到今天
-              </Button>
-            )}
-          </div>
+        {view === 'day' && records.length > 0 && (
+          <span className="text-xs text-content-tertiary">这一天有 {dayRecords.length} 条记录</span>
         )}
       </Toolbar>
 
-      {view === 'day' && (
-        <Card>
-          <CardHeader title="饮食日历" subtitle="点一天可以切换到那天查看与记录" />
-          <CardBody>
-            <MonthCalendar
-              label="饮食日历"
-              selected={selectedDate}
-              onSelect={setSelectedDate}
-              marks={calendarMarks}
-            />
-          </CardBody>
-        </Card>
-      )}
+      {/*
+        「饮食日历」卡收掉：它和页头那套日期控件干的是同一件事，
+        而「哪天有记录」这个信息点格上的小圆点已经表达过了 ——
+        挪进详情/页头只会再添一个入口。
+      */}
 
       {/*
         餐次模板（F16）：只在日视图出现，因为它的用途就是「给这一天快速铺一餐」。

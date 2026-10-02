@@ -288,17 +288,27 @@ describe('DietPage', () => {
     expect(todays[0]!.items[0]!.name).toBe('燕麦');
   });
 
-  it('饮食日历可以切换日期', async () => {
+  /*
+   * 以前同一天有三个入口：工具条那套「前一天 / 日期框 / 后一天」、页头，
+   * 再加一整张「饮食日历」卡。现在只留页头这一处 —— 这条盯着它真的能切日期。
+   */
+  it('页头的日期控件能切换日期（日历卡已收掉）', async () => {
     addMeal(today, 'lunch', [{ name: '牛肉面', category: '主食', calories: 620 }]);
     render(<DietPage />);
 
-    expect(screen.getByText('饮食日历')).toBeInTheDocument();
-    // 点昨天：如果昨天跨月（今天是 1 号），日历的点格会带出上月的日期键，
-    // 所以断言只针对「切走之后当天没记录」这个行为，不钉死具体日期
-    const yesterday = addDays(today, -1);
-    await userEvent.click(screen.getByRole('button', { name: new RegExp(yesterday) }));
+    expect(screen.queryByText('饮食日历')).not.toBeInTheDocument();
 
-    expect(screen.getByText(/这天还是空的/)).toBeInTheDocument();
+    const dateBox = (): HTMLElement => screen.getByLabelText('选择日期');
+    expect(dateBox()).toHaveValue(today);
+
+    await userEvent.click(screen.getByRole('button', { name: '前一天' }));
+
+    // 切走之后日期框跟着倒退，「回到今天」出现说明确实不在今天了
+    expect(dateBox()).toHaveValue(addDays(today, -1));
+    expect(screen.getByRole('button', { name: '回到今天' })).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: '回到今天' }));
+    expect(dateBox()).toHaveValue(today);
   });
 
   it('从食物库选择：搜索、填入表单', async () => {
