@@ -578,3 +578,28 @@ describe('FitnessPage', () => {
     expect(useLibraryStore.getState().customExercises).toHaveLength(0);
   });
 });
+
+/*
+ * 视图切换器原来在工具条里 —— 而工具条在两屏内容之后，切个视图要先滚回顶部。
+ * 现在它在页头，和「记录训练」这些主操作待在一起。这条盯着它别再掉回去。
+ */
+describe('FitnessPage 视图切换器在页头', () => {
+  it('切换器落在 header 里，切换照常生效', async () => {
+    render(
+      <ToastProvider>
+        <FitnessPage />
+      </ToastProvider>,
+    );
+
+    const switcher = screen.getByRole('group', { name: '切换健身视图' });
+    const header = document.querySelector('header');
+    expect(header).not.toBeNull();
+    expect(header!.contains(switcher)).toBe(true);
+
+    await userEvent.click(within(switcher).getByRole('button', { name: /身体指标/ }));
+    expect(within(switcher).getByRole('button', { name: /身体指标/ })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+  });
+});

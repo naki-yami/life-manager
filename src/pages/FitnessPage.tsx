@@ -559,33 +559,49 @@ export const FitnessPage: React.FC = () => {
         }
         icon={Dumbbell}
         actions={
-          view === 'body' ? (
-            <Button icon={<Plus size={16} aria-hidden />} onClick={() => openBodyModal()}>
-              记录身体数据
-            </Button>
-          ) : (
-            <>
-              {records.length > 0 && (
+          <>
+            {/*
+              视图切换器上移到页头：它原来在工具条里，而那要滚过概览卡与明细卡才够得着 ——
+              切个视图还得先滚回顶部。页头是这一页唯一常驻的位置。
+            */}
+            <SegmentedControl
+              label="切换健身视图"
+              value={view}
+              onChange={setView}
+              options={[
+                { value: 'plans', label: '训练计划', count: plans.length },
+                { value: 'records', label: '训练记录', count: records.length },
+                { value: 'body', label: '身体指标', count: bodyRecords.length },
+              ]}
+            />
+            {view === 'body' ? (
+              <Button icon={<Plus size={16} aria-hidden />} onClick={() => openBodyModal()}>
+                记录身体数据
+              </Button>
+            ) : (
+              <>
+                {records.length > 0 && (
+                  <Button
+                    variant="secondary"
+                    icon={<Copy size={16} aria-hidden />}
+                    onClick={copyLastWorkout}
+                  >
+                    复制上次训练
+                  </Button>
+                )}
                 <Button
                   variant="secondary"
-                  icon={<Copy size={16} aria-hidden />}
-                  onClick={copyLastWorkout}
+                  icon={<Plus size={16} aria-hidden />}
+                  onClick={() => openWorkoutModal()}
                 >
-                  复制上次训练
+                  记录训练
                 </Button>
-              )}
-              <Button
-                variant="secondary"
-                icon={<Plus size={16} aria-hidden />}
-                onClick={() => openWorkoutModal()}
-              >
-                记录训练
-              </Button>
-              <Button icon={<Plus size={16} aria-hidden />} onClick={() => openPlanModal()}>
-                新建计划
-              </Button>
-            </>
-          )
+                <Button icon={<Plus size={16} aria-hidden />} onClick={() => openPlanModal()}>
+                  新建计划
+                </Button>
+              </>
+            )}
+          </>
         }
       />
 
@@ -791,25 +807,16 @@ export const FitnessPage: React.FC = () => {
         </Card>
       )}
 
-      <Toolbar
-        search={
-          view === 'body'
-            ? undefined
-            : { value: keyword, onChange: setKeyword, placeholder: '搜索计划、动作或备注…' }
-        }
-        actions={
-          <SegmentedControl
-            label="切换健身视图"
-            value={view}
-            onChange={setView}
-            options={[
-              { value: 'plans', label: '训练计划', count: plans.length },
-              { value: 'records', label: '训练记录', count: records.length },
-              { value: 'body', label: '身体指标', count: bodyRecords.length },
-            ]}
-          />
-        }
-      />
+      {/* 视图切换器已经上移到页头，工具条只剩搜索 —— 没有搜索的视图（身体指标）整条不渲染 */}
+      {(view !== 'body' || keyword !== '') && (
+        <Toolbar
+          search={
+            view === 'body'
+              ? undefined
+              : { value: keyword, onChange: setKeyword, placeholder: '搜索计划、动作或备注…' }
+          }
+        />
+      )}
 
       {view === 'records' && (
         <Card>
