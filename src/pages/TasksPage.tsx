@@ -34,7 +34,6 @@ import {
 } from '../components/ui';
 import { ListEmptyState, MasterDetail, PageHeader, Toolbar } from '../components/layout';
 import { BarChart } from '../components/charts';
-import { PlanBoard } from '../components/timeline/PlanBoard';
 import { useTaskStore } from '../store/taskStore';
 import { useUndoableRemove } from '../hooks/useUndoableRemove';
 import { useMultiSelect } from '../hooks/useMultiSelect';
@@ -569,8 +568,6 @@ export const TasksPage: React.FC = () => {
           </Button>
         }
       />
-
-      <PlanBoard />
 
       {tasks.length > 0 && (
         <Card>
