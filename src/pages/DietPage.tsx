@@ -29,6 +29,7 @@ import {
   EmptyState,
   IconButton,
   Input,
+  LibraryPicker,
   Modal,
   NumberInput,
   ProgressBar,
@@ -982,60 +983,35 @@ export const DietPage: React.FC = () => {
         </SubmitForm>
       </Modal>
 
-      <Modal
+      <LibraryPicker
         isOpen={showFoodPicker}
         onClose={() => setShowFoodPicker(false)}
         title="从食物库选择"
         description="数值按 100g 可食部分记，填进来之后按实际吃的量改"
-        size="lg"
+        search={{
+          value: foodKeyword,
+          onChange: setFoodKeyword,
+          placeholder: '如：鸡胸、米饭、拿铁…',
+        }}
+        filters={[
+          {
+            label: '分类',
+            value: foodCategory,
+            onChange: (value) => setFoodCategory(value as 'all' | FoodCategory),
+            width: 'w-36',
+            options: [
+              { value: 'all', label: '全部分类' },
+              ...FOOD_CATEGORIES.map((category) => ({ value: category, label: category })),
+            ],
+          },
+        ]}
+        recent={recentFoods.map((food) => ({
+          name: food.name,
+          detail: `${food.calories} kcal`,
+          onPick: () => fillFromLibrary(food),
+        }))}
       >
         <div className="space-y-4">
-          <div className="flex flex-wrap items-end gap-2">
-            <div className="min-w-40 flex-1">
-              <Input
-                label="搜索"
-                value={foodKeyword}
-                onChange={(event) => setFoodKeyword(event.target.value)}
-                placeholder="如：鸡胸、米饭、拿铁…"
-              />
-            </div>
-            <div className="w-36">
-              <Select
-                label="分类"
-                value={foodCategory}
-                onChange={(value) => setFoodCategory(value as 'all' | FoodCategory)}
-                options={[
-                  { value: 'all', label: '全部分类' },
-                  ...FOOD_CATEGORIES.map((category) => ({
-                    value: category,
-                    label: category,
-                  })),
-                ]}
-              />
-            </div>
-          </div>
-
-          {foodKeyword.trim() === '' && foodCategory === 'all' && recentFoods.length > 0 && (
-            <div>
-              <p className="mb-1.5 text-sm font-medium text-content-secondary">最近使用</p>
-              <div className="flex flex-wrap gap-1.5">
-                {recentFoods.map((food) => (
-                  <button
-                    key={food.name}
-                    type="button"
-                    onClick={() => fillFromLibrary(food)}
-                    className="inline-flex items-center gap-1 rounded-full bg-inset px-3 py-1 text-xs text-content-secondary transition-colors duration-fast ease-standard hover:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-line-focus"
-                  >
-                    {food.name}
-                    <span className="text-2xs text-content-tertiary tabular">
-                      {food.calories} kcal
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
           <ul className="max-h-64 divide-y divide-line-subtle overflow-y-auto rounded border border-line-subtle">
             {visibleFoods.length === 0 ? (
               <li className="px-3 py-6 text-center text-sm text-content-tertiary">
@@ -1128,7 +1104,7 @@ export const DietPage: React.FC = () => {
             </div>
           </div>
         </div>
-      </Modal>
+      </LibraryPicker>
 
       <ConfirmDialog
         isOpen={pendingRecord !== null}

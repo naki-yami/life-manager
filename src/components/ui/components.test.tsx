@@ -17,10 +17,12 @@ import {
   EmptyState,
   IconButton,
   Input,
+  LibraryPicker,
   Modal,
   ScorePicker,
   SegmentedControl,
   Select,
+  SessionDialog,
   Slider,
   StatStrip,
   Switch,
@@ -847,5 +849,139 @@ describe('批量弹窗', () => {
     expect(
       screen.getByText('确定要删除选中的 4 条任务吗？删完可以点「撤销」全部放回去。'),
     ).toBeInTheDocument();
+  });
+});
+
+/**
+ * `SessionDialog`：阅读 / 游玩 / 工时三处「记一笔」的骨架相同，抽出来共用。
+ * 断言盯「三处的差异真的由 props 驱动」（单位、步长、备注行数、对象下拉）。
+ */
+describe('SessionDialog', () => {
+  const base = {
+    isOpen: true,
+    onClose: () => {},
+    formId: 'session-form',
+    onSubmit: () => {},
+    entity: {
+      label: '项目',
+      value: 'p1',
+      onChange: () => {},
+      options: [{ value: 'p1', label: 'Life Manager' }],
+    },
+    date: { value: '2026-10-02', onChange: () => {} },
+    canSave: true,
+  };
+
+  it('对象下拉、日期、时长、备注都在，且确认按钮走 form 提交', () => {
+    render(
+      <SessionDialog
+        {...base}
+        title="记录工时"
+        description="记一次会写进流水"
+        duration={{ label: '工时', value: 2, onChange: () => {}, unit: '小时', step: 0.5 }}
+        note={{ value: '', onChange: () => {}, placeholder: '今天推进了什么…', multiline: true }}
+      />,
+    );
+
+    const dialog = screen.getByRole('dialog', { name: '记录工时' });
+    expect(within(dialog).getByLabelText('项目')).toHaveValue('p1');
+    expect(within(dialog).getByLabelText('日期')).toHaveValue('2026-10-02');
+    expect(within(dialog).getByLabelText('工时')).toHaveValue(2);
+    // 确认按钮是 form= 提交，不是 onClick —— 这条防它被改成普通按钮后丢提交
+    expect(within(dialog).getByRole('button', { name: '保存' })).toHaveAttribute(
+      'form',
+      'session-form',
+    );
+  });
+
+  it('时长的单位与备注行数由调用方给（阅读页单行、另两页三行）', () => {
+    render(
+      <SessionDialog
+        {...base}
+        title="记录阅读"
+        description="记一次会写进阅读流水"
+        duration={{ label: '时长', value: 30, onChange: () => {}, unit: '分钟', step: 10 }}
+        note={{ value: '', onChange: () => {}, placeholder: '读到哪一章…' }}
+      />,
+    );
+
+    const dialog = screen.getByRole('dialog', { name: '记录阅读' });
+    expect(within(dialog).getByText('分钟')).toBeInTheDocument();
+    expect(within(dialog).getByLabelText('备注').tagName).toBe('INPUT');
+  });
+
+  it('canSave 为假时确认按钮是灰的', () => {
+    render(
+      <SessionDialog
+        {...base}
+        canSave={false}
+        title="记录游玩"
+        description="记一次会写进流水"
+        duration={{ label: '时长', value: 0, onChange: () => {}, unit: '小时', step: 0.5 }}
+        note={{ value: '', onChange: () => {}, placeholder: '…', multiline: true }}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: '保存' })).toBeDisabled();
+  });
+});
+
+/**
+ * `LibraryPicker`：食物库 / 动作库两个选择器的外壳。
+ * 「最近使用」的显隐条件是抽出来的重点 —— 两处原来各判一次，多一个筛选维度就多一处漏判。
+ */
+describe('LibraryPicker', () => {
+  const renderPicker = (props: Partial<React.ComponentProps<typeof LibraryPicker>> = {}) =>
+    render(
+      <LibraryPicker
+        isOpen
+        onClose={() => {}}
+        title="从食物库选择"
+        description="数值按 100g 记"
+        search={{ value: '', onChange: () => {}, placeholder: '如：鸡胸' }}
+        recent={[{ name: '鸡胸肉', detail: '133 kcal', onPick: () => {} }]}
+        {...props}
+      >
+        <p>列表占位</p>
+      </LibraryPicker>,
+    );
+
+  it('搜索框与「最近使用」都在，chips 带上那一截小字', () => {
+    renderPicker();
+
+    expect(screen.getByLabelText('搜索')).toBeInTheDocument();
+    expect(screen.getByText('最近使用')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /鸡胸肉/ })).toBeInTheDocument();
+    expect(screen.getByText('133 kcal')).toBeInTheDocument();
+  });
+
+  it('有搜索词时收起「最近使用」—— 那时它和当前语境无关', () => {
+    renderPicker({ search: { value: '米饭', onChange: () => {}, placeholder: '' } });
+
+    expect(screen.queryByText('最近使用')).not.toBeInTheDocument();
+  });
+
+  it('筛选项离开默认值也收起「最近使用」', () => {
+    renderPicker({
+      filters: [
+        {
+          label: '分类',
+          value: '主食',
+          onChange: () => {},
+          options: [
+            { value: 'all', label: '全部分类' },
+            { value: '主食', label: '主食' },
+          ],
+        },
+      ],
+    });
+
+    expect(screen.queryByText('最近使用')).not.toBeInTheDocument();
+  });
+
+  it('一条最近记录都没有时整块不渲染', () => {
+    renderPicker({ recent: [] });
+
+    expect(screen.queryByText('最近使用')).not.toBeInTheDocument();
   });
 });

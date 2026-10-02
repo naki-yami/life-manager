@@ -24,6 +24,7 @@ import {
   EmptyState,
   IconButton,
   Input,
+  LibraryPicker,
   Modal,
   NumberInput,
   SegmentedControl,
@@ -1489,69 +1490,43 @@ export const FitnessPage: React.FC = () => {
         </SubmitForm>
       </Modal>
 
-      <Modal
+      <LibraryPicker
         isOpen={showExercisePicker}
         onClose={() => setShowExercisePicker(false)}
         title="从动作库选择"
         description="挑常见动作直接填入，组次重量再按当天的量改"
-        size="lg"
+        search={{
+          value: exerciseKeyword,
+          onChange: setExerciseKeyword,
+          placeholder: '如：卧推、深蹲、划船…',
+        }}
+        filters={[
+          {
+            label: '肌群',
+            value: exerciseMuscle,
+            onChange: setExerciseMuscle,
+            options: [
+              { value: 'all', label: '全部肌群' },
+              ...MUSCLE_GROUPS.map((group) => ({ value: group, label: group })),
+            ],
+          },
+          {
+            label: '器械',
+            value: exerciseEquipment,
+            onChange: setExerciseEquipment,
+            options: [
+              { value: 'all', label: '全部器械' },
+              ...EQUIPMENTS.map((equipment) => ({ value: equipment, label: equipment })),
+            ],
+          },
+        ]}
+        recent={recentExercises.map((exercise) => ({
+          name: exercise.name,
+          detail: exercise.muscleGroup,
+          onPick: () => fillFromExerciseLibrary(exercise),
+        }))}
       >
         <div className="space-y-4">
-          <div className="flex flex-wrap items-end gap-2">
-            <div className="min-w-40 flex-1">
-              <Input
-                label="搜索"
-                value={exerciseKeyword}
-                onChange={(event) => setExerciseKeyword(event.target.value)}
-                placeholder="如：卧推、深蹲、划船…"
-              />
-            </div>
-            <div className="w-28">
-              <Select
-                label="肌群"
-                value={exerciseMuscle}
-                onChange={(value) => setExerciseMuscle(value)}
-                options={[
-                  { value: 'all', label: '全部肌群' },
-                  ...MUSCLE_GROUPS.map((group) => ({ value: group, label: group })),
-                ]}
-              />
-            </div>
-            <div className="w-28">
-              <Select
-                label="器械"
-                value={exerciseEquipment}
-                onChange={(value) => setExerciseEquipment(value)}
-                options={[
-                  { value: 'all', label: '全部器械' },
-                  ...EQUIPMENTS.map((equipment) => ({ value: equipment, label: equipment })),
-                ]}
-              />
-            </div>
-          </div>
-
-          {exerciseKeyword.trim() === '' &&
-            exerciseMuscle === 'all' &&
-            exerciseEquipment === 'all' &&
-            recentExercises.length > 0 && (
-              <div>
-                <p className="mb-1.5 text-sm font-medium text-content-secondary">最近使用</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {recentExercises.map((exercise) => (
-                    <button
-                      key={exercise.name}
-                      type="button"
-                      onClick={() => fillFromExerciseLibrary(exercise)}
-                      className="inline-flex items-center gap-1 rounded-full bg-inset px-3 py-1 text-xs text-content-secondary transition-colors duration-fast ease-standard hover:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-line-focus"
-                    >
-                      {exercise.name}
-                      <span className="text-2xs text-content-tertiary">{exercise.muscleGroup}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
           <ul className="max-h-64 divide-y divide-line-subtle overflow-y-auto rounded border border-line-subtle">
             {visibleExercises.length === 0 ? (
               <li className="px-3 py-6 text-center text-sm text-content-tertiary">
@@ -1640,7 +1615,7 @@ export const FitnessPage: React.FC = () => {
             </div>
           </div>
         </div>
-      </Modal>
+      </LibraryPicker>
 
       <ConfirmDialog
         isOpen={pendingPlan !== null}

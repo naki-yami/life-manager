@@ -27,6 +27,8 @@ export { BulkTagDialog, BulkDeleteDialog } from './BulkDialogs';
 export type { BulkTagDialogProps, BulkDeleteDialogProps } from './BulkDialogs';
 export { SessionDialog } from './SessionDialog';
 export type { SessionDialogProps } from './SessionDialog';
+export { LibraryPicker } from './LibraryPicker';
+export type { LibraryPickerProps, LibraryPickerFilter, LibraryPickerRecent } from './LibraryPicker';
 export { Spinner, Skeleton, Alert, EmptyState, ErrorState } from './Feedback';
 export type {
   SpinnerProps,
