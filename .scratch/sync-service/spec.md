@@ -6,6 +6,8 @@ Type: spec
 本文定「这个进程长什么样、按什么接口说话、什么时候算赢」。
 关联：`docs/adr/0002-跨设备同步以本机服务实现，纯本地降为默认.md`；
 `CONTEXT.md` 的同步 / 令牌 / 设备 / 服务端副本 / 记录版本 / 墓碑 / 冲突七个词条。
+工单：`issues/01-server-skeleton.md` … `issues/07-mirror-and-observability.md`（七条，按编号顺序，
+后一条依赖前一条）。
 
 ## Problem Statement
 

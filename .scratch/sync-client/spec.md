@@ -6,6 +6,8 @@ Type: spec
 这份管浏览器这边怎么推、怎么拉、怎么落库、怎么告诉用户。
 关联：`docs/adr/0002-…`；`CONTEXT.md` 的同步 / 令牌 / 设备 / 记录版本 / 墓碑 / 冲突六个词条；
 `.scratch/backup-diet-targets/spec.md`（同步的前置：副本必须与备份模块对得上）。
+工单：`issues/01-sync-meta-and-token.md` … `issues/06-settings-card-and-triggers.md`（六条，
+按编号顺序，后一条依赖前一条）。
 
 ## Problem Statement
 

@@ -1,0 +1,32 @@
+# 06 自带备份、历史与 `/v1/restore`
+
+Status: needs-triage
+Type: task
+Part of: `.scratch/sync-service/spec.md`
+Blocked by: 05
+
+## 目标
+
+ADR 要求「不能只依赖客户端的自动快照」：服务端自己留每日备份与覆盖历史，并有一条人工取回路径。
+
+## 改动点
+
+- `backups/`：每日一份副本快照，保留 10 份（与客户端 `MAX_AUTO_BACKUPS` 同量级）。
+- `history.jsonl`：被 LWW 覆盖或被删除的旧版本，保留 30 天。
+- `POST /v1/restore`：从 `backups/` 或 `history` 取回指定版本，要求令牌 **+ 显式确认参数**；
+  落回前把当前副本先写进 `backups/`。
+- 清理策略启动时跑一次，之后每天一次。
+
+## 验收
+
+- 用 `history` 里的旧版本 restore → 副本等于那一版，且此前那份副本出现在 `backups/` 里。
+- 第 11 天的每日快照会把最旧的一份清掉，始终 ≤ 10 份。
+- 缺确认参数 → 拒绝，副本不变。
+
+## 测试
+
+对应 spec 的 Testing Decisions 第 10 条。
+
+## 不做
+
+客户端侧的自动快照（已有）；把备份做成可下载的界面。
