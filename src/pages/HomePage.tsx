@@ -12,6 +12,7 @@ import {
   PenTool,
   Plus,
   Send,
+  Target,
   Trash2,
   UtensilsCrossed,
   type LucideIcon,
@@ -33,7 +34,7 @@ import { DashboardGrid, type DashboardWidgetView } from '../components/dashboard
 import { GoalProgressList } from '../components/goals';
 import { FocusCard } from '../components/timeline/FocusCard';
 import { useUndoableRemove } from '../hooks/useUndoableRemove';
-import { Heatmap, Sparkline } from '../components/charts';
+import { ChartEmpty, Heatmap, Sparkline } from '../components/charts';
 import { useTaskStore } from '../store/taskStore';
 import { useBookStore } from '../store/bookStore';
 import { useDevStore } from '../store/devStore';
@@ -788,58 +789,84 @@ export const HomePage: React.FC = () => {
     {
       id: 'goals',
       title: '目标达成',
-      content:
-        goalProgressList.length > 0 ? (
-          <Card>
-            <CardHeader
-              title="目标达成"
-              subtitle={`${goalSummary.reached}/${goalSummary.total} 个已达成 · 数字从各模块记录现算`}
-              action={
-                <Button variant="ghost" size="sm" onClick={() => navigate('/growth/goals')}>
-                  管理目标
-                </Button>
-              }
-            />
-            <CardBody>
+      /*
+       * 样稿里「目标」是常驻的右列卡片。以前一条目标都没有就整张不渲染，
+       * 首页看上去像「少了一块」；现在留着卡、给一句引导 —— 位置稳定，
+       * 也不会因为今天没定目标就让右列忽然变短。
+       */
+      content: (
+        <Card>
+          <CardHeader
+            title="目标达成"
+            subtitle={
+              goalProgressList.length > 0
+                ? `${goalSummary.reached}/${goalSummary.total} 个已达成 · 数字从各模块记录现算`
+                : '还没有目标'
+            }
+            action={
+              <Button variant="ghost" size="sm" onClick={() => navigate('/growth/goals')}>
+                管理目标
+              </Button>
+            }
+          />
+          <CardBody>
+            {goalProgressList.length > 0 ? (
               <GoalProgressList items={goalProgressList.slice(0, 4)} />
-            </CardBody>
-          </Card>
-        ) : null,
+            ) : (
+              <p className="flex items-center gap-2 rounded bg-inset px-3 py-2 text-sm text-content-secondary">
+                <Target size={16} className="shrink-0 text-content-tertiary" aria-hidden />
+                给「读书」「训练」这类指标定个数，这里就会长出进度条。
+              </p>
+            )}
+          </CardBody>
+        </Card>
+      ),
     },
     {
       id: 'activity',
       title: '近 30 天活动',
-      content:
-        activityTotal > 0 ? (
-          <Card>
-            <CardHeader
-              title="近 30 天活动"
-              subtitle="完成任务 / 训练 / 饮食 / 写日记都算一次"
-              action={<Badge tone={streak > 0 ? 'success' : 'default'}>连续 {streak} 天</Badge>}
-            />
-            <CardBody className="flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-8">
+      /*
+       * 同样改成常驻：这 30 天一次记录都没有时，热力图位置交给 `ChartEmpty`
+       * 写「暂无数据」，而不是让整张卡消失 —— 样稿里它是固定的一张。
+       * 四个 KPI 照常摆出来（都是 0），那本身也是有用的读数。
+       */
+      content: (
+        <Card>
+          <CardHeader
+            title="近 30 天活动"
+            subtitle="完成任务 / 训练 / 饮食 / 写日记都算一次"
+            action={<Badge tone={streak > 0 ? 'success' : 'default'}>连续 {streak} 天</Badge>}
+          />
+          <CardBody className="flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-8">
+            {activityTotal > 0 ? (
               <Heatmap data={activitySeries} label="近 30 天活动热力图" />
-              <dl className="grid min-w-0 flex-1 grid-cols-2 gap-x-6 gap-y-4">
-                {[
-                  { label: '30 天合计', value: `${activityTotal} 次` },
-                  { label: '近 7 天', value: `${weekActivity.current} 次` },
-                  { label: '最长连续', value: `${longestStreak(activitySeries)} 天` },
-                  {
-                    label: '有记录的天数',
-                    value: `${activeDays(activitySeries).length} / ${activitySeries.length}`,
-                  },
-                ].map((item) => (
-                  <div key={item.label}>
-                    <dt className="text-2sm text-content-tertiary">{item.label}</dt>
-                    <dd className="mt-1 text-[17px] font-[620] tabular text-content">
-                      {item.value}
-                    </dd>
-                  </div>
-                ))}
-              </dl>
-            </CardBody>
-          </Card>
-        ) : null,
+            ) : (
+              <ChartEmpty
+                label="近 30 天活动热力图"
+                height={108}
+                suffix="这 30 天还没有记录"
+                className="shrink-0 sm:w-44"
+              />
+            )}
+            <dl className="grid min-w-0 flex-1 grid-cols-2 gap-x-6 gap-y-4">
+              {[
+                { label: '30 天合计', value: `${activityTotal} 次` },
+                { label: '近 7 天', value: `${weekActivity.current} 次` },
+                { label: '最长连续', value: `${longestStreak(activitySeries)} 天` },
+                {
+                  label: '有记录的天数',
+                  value: `${activeDays(activitySeries).length} / ${activitySeries.length}`,
+                },
+              ].map((item) => (
+                <div key={item.label}>
+                  <dt className="text-2sm text-content-tertiary">{item.label}</dt>
+                  <dd className="mt-1 text-[17px] font-[620] tabular text-content">{item.value}</dd>
+                </div>
+              ))}
+            </dl>
+          </CardBody>
+        </Card>
+      ),
     },
     {
       id: 'modules',

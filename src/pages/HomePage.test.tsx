@@ -335,11 +335,18 @@ describe('HomePage', () => {
 
     expect(screen.getByText('点一下进对应模块')).toBeInTheDocument();
   });
-  it('没有活动数据时不渲染热力图卡片', () => {
+  it('没有活动数据时卡片照样在，热力图位置写「这 30 天还没有记录」', () => {
     renderHome();
 
-    expect(screen.queryByRole('img', { name: /活动热力图/ })).not.toBeInTheDocument();
-    expect(screen.queryByText('近 30 天活动')).not.toBeInTheDocument();
+    // 样稿里这张卡是常驻的；以前没数据就整张消失，首页看着像少了一块
+    expect(screen.getByRole('heading', { name: '近 30 天活动' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('img', { name: '近 30 天活动热力图（这 30 天还没有记录）' }),
+    ).toBeInTheDocument();
+    // 四个 KPI 照常摆出来，都是 0
+    expect(screen.getByText('30 天合计')).toBeInTheDocument();
+    expect(screen.getByText('最长连续')).toBeInTheDocument();
+    expect(screen.getByText('有记录的天数')).toBeInTheDocument();
   });
 
   it('有活动时展示近 30 天热力图与连续天数', () => {
@@ -511,8 +518,9 @@ describe('HomePage 仪表盘', () => {
 
     const enter = screen.getByRole('button', { name: '编辑布局' });
     expect(enter).toHaveAttribute('aria-pressed', 'false');
-    // 浏览态：没有活动数据就不显示热力图卡片
-    expect(screen.queryByText('近 30 天活动暂无数据')).not.toBeInTheDocument();
+    // 浏览态：一个习惯都没有，这张卡不占位
+    // （「近 30 天活动」「目标达成」现在是常驻卡，不能再拿它们当「没数据」的例子）
+    expect(screen.queryByText('今日习惯暂无数据')).not.toBeInTheDocument();
 
     await userEvent.click(enter);
 
@@ -521,7 +529,7 @@ describe('HomePage 仪表盘', () => {
     expect(screen.getByRole('button', { name: '拖动「今天」调整顺序' })).toBeInTheDocument();
     expect(screen.getByRole('group', { name: '「今天」的宽度' })).toBeInTheDocument();
     // 编辑态渲染占位卡，否则用户没法把一张暂时没数据的卡片拖走或隐藏
-    expect(screen.getByText('近 30 天活动暂无数据')).toBeInTheDocument();
+    expect(screen.getByText('今日习惯暂无数据')).toBeInTheDocument();
 
     await userEvent.click(exit);
     expect(screen.queryByRole('button', { name: '拖动「今天」调整顺序' })).not.toBeInTheDocument();
@@ -670,10 +678,13 @@ describe('HomePage 仪表盘', () => {
 });
 
 describe('HomePage 目标达成卡片', () => {
-  it('没有目标时不出这张卡片', () => {
+  it('没有目标时卡片照样在，给一句引导而不是消失', () => {
     renderHome();
 
-    expect(screen.queryByText('目标达成')).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '目标达成' })).toBeInTheDocument();
+    expect(screen.getByText('还没有目标')).toBeInTheDocument();
+    expect(screen.getByText(/给「读书」「训练」这类指标定个数/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '管理目标' })).toBeInTheDocument();
   });
 
   it('有目标时显示进度，数字来自各模块记录', () => {
