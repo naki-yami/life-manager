@@ -18,6 +18,7 @@ import {
   SegmentedControl,
   Select,
   SelectionBar,
+  SessionDialog,
   Slider,
   StatStrip,
   SubmitForm,
@@ -1048,54 +1049,38 @@ export const GamesPage: React.FC = () => {
         )}
       </MasterDetail>
 
-      <Modal
+      <SessionDialog
         isOpen={showSessionModal}
         onClose={() => setShowSessionModal(false)}
         title="记录游玩"
         description="记一次会写进流水，同时把时长累加到这款游戏上"
-        footer={
-          <>
-            <Button variant="secondary" onClick={() => setShowSessionModal(false)}>
-              取消
-            </Button>
-            <Button type="submit" form="game-session-form" disabled={!canSaveSession}>
-              保存
-            </Button>
-          </>
-        }
-      >
-        <SubmitForm id="game-session-form" onSubmit={handleAddSession} className="space-y-4">
-          <Select
-            label="游戏"
-            value={sessionForm.gameId}
-            onChange={(value) => setSessionForm({ ...sessionForm, gameId: value })}
-            options={games.map((game) => ({ value: game.id, label: game.name }))}
-          />
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Input
-              label="日期"
-              type="date"
-              value={sessionForm.date}
-              onChange={(event) => setSessionForm({ ...sessionForm, date: event.target.value })}
-            />
-            <NumberInput
-              label="时长"
-              value={sessionForm.hours}
-              onChange={(value) => setSessionForm({ ...sessionForm, hours: value })}
-              min={0}
-              step={0.5}
-              suffix="小时"
-            />
-          </div>
-          <Textarea
-            label="备注"
-            value={sessionForm.note}
-            onChange={(event) => setSessionForm({ ...sessionForm, note: event.target.value })}
-            rows={3}
-            placeholder="打到哪一章、和谁一起玩…（可选）"
-          />
-        </SubmitForm>
-      </Modal>
+        formId="game-session-form"
+        onSubmit={handleAddSession}
+        entity={{
+          label: '游戏',
+          value: sessionForm.gameId,
+          onChange: (value) => setSessionForm({ ...sessionForm, gameId: value }),
+          options: games.map((game) => ({ value: game.id, label: game.name })),
+        }}
+        date={{
+          value: sessionForm.date,
+          onChange: (value) => setSessionForm({ ...sessionForm, date: value }),
+        }}
+        duration={{
+          label: '时长',
+          value: sessionForm.hours,
+          onChange: (value) => setSessionForm({ ...sessionForm, hours: value }),
+          unit: '小时',
+          step: 0.5,
+        }}
+        note={{
+          value: sessionForm.note,
+          onChange: (value) => setSessionForm({ ...sessionForm, note: value }),
+          placeholder: '打到哪一章、和谁一起玩…（可选）',
+          multiline: true,
+        }}
+        canSave={canSaveSession}
+      />
 
       <Modal
         isOpen={showAddModal}

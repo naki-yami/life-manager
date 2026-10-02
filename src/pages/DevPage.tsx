@@ -9,10 +9,8 @@ import {
   EmptyState,
   Input,
   Modal,
-  NumberInput,
-  Select,
+  SessionDialog,
   SubmitForm,
-  Textarea,
 } from '../components/ui';
 import { PageHeader } from '../components/layout';
 import {
@@ -382,54 +380,38 @@ export const DevPage: React.FC = () => {
         </SubmitForm>
       </Modal>
 
-      <Modal
+      <SessionDialog
         isOpen={showSessionModal}
         onClose={() => setShowSessionModal(false)}
         title="记录工时"
         description="记一次会写进流水，同时把工时累加到这个项目上"
-        footer={
-          <>
-            <Button variant="secondary" onClick={() => setShowSessionModal(false)}>
-              取消
-            </Button>
-            <Button type="submit" form="dev-session-form" disabled={!canSaveSession}>
-              保存
-            </Button>
-          </>
-        }
-      >
-        <SubmitForm id="dev-session-form" onSubmit={handleAddSession} className="space-y-4">
-          <Select
-            label="项目"
-            value={sessionForm.projectId}
-            onChange={(value) => setSessionForm({ ...sessionForm, projectId: value })}
-            options={projects.map((project) => ({ value: project.id, label: project.name }))}
-          />
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Input
-              label="日期"
-              type="date"
-              value={sessionForm.date}
-              onChange={(event) => setSessionForm({ ...sessionForm, date: event.target.value })}
-            />
-            <NumberInput
-              label="工时"
-              value={sessionForm.hours}
-              onChange={(value) => setSessionForm({ ...sessionForm, hours: value })}
-              min={0}
-              step={0.5}
-              suffix="小时"
-            />
-          </div>
-          <Textarea
-            label="备注"
-            value={sessionForm.note}
-            onChange={(event) => setSessionForm({ ...sessionForm, note: event.target.value })}
-            rows={3}
-            placeholder="今天推进了什么…（可选）"
-          />
-        </SubmitForm>
-      </Modal>
+        formId="dev-session-form"
+        onSubmit={handleAddSession}
+        entity={{
+          label: '项目',
+          value: sessionForm.projectId,
+          onChange: (value) => setSessionForm({ ...sessionForm, projectId: value }),
+          options: projects.map((project) => ({ value: project.id, label: project.name })),
+        }}
+        date={{
+          value: sessionForm.date,
+          onChange: (value) => setSessionForm({ ...sessionForm, date: value }),
+        }}
+        duration={{
+          label: '工时',
+          value: sessionForm.hours,
+          onChange: (value) => setSessionForm({ ...sessionForm, hours: value }),
+          unit: '小时',
+          step: 0.5,
+        }}
+        note={{
+          value: sessionForm.note,
+          onChange: (value) => setSessionForm({ ...sessionForm, note: value }),
+          placeholder: '今天推进了什么…（可选）',
+          multiline: true,
+        }}
+        canSave={canSaveSession}
+      />
 
       <ConfirmDialog
         isOpen={deletingProject !== null}

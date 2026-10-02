@@ -25,6 +25,8 @@ export { TagChips, TagInput, TagEditor } from './Tags';
 export type { TagChipsProps, TagInputProps, TagEditorProps } from './Tags';
 export { BulkTagDialog, BulkDeleteDialog } from './BulkDialogs';
 export type { BulkTagDialogProps, BulkDeleteDialogProps } from './BulkDialogs';
+export { SessionDialog } from './SessionDialog';
+export type { SessionDialogProps } from './SessionDialog';
 export { Spinner, Skeleton, Alert, EmptyState, ErrorState } from './Feedback';
 export type {
   SpinnerProps,

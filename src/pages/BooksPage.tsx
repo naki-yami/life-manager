@@ -32,6 +32,7 @@ import {
   SegmentedControl,
   Select,
   SelectionBar,
+  SessionDialog,
   Slider,
   SubmitForm,
   TagEditor,
@@ -1002,53 +1003,37 @@ export const BooksPage: React.FC = () => {
         </SubmitForm>
       </Modal>
 
-      <Modal
+      <SessionDialog
         isOpen={showSessionModal}
         onClose={() => setShowSessionModal(false)}
         title="记录阅读"
         description="记一次会写进阅读流水，用于统计每周阅读时长"
-        footer={
-          <>
-            <Button variant="secondary" onClick={() => setShowSessionModal(false)}>
-              取消
-            </Button>
-            <Button type="submit" form="reading-session-form" disabled={!canSaveSession}>
-              保存
-            </Button>
-          </>
-        }
-      >
-        <SubmitForm id="reading-session-form" onSubmit={handleAddSession} className="space-y-4">
-          <Select
-            label="书籍"
-            value={sessionForm.bookId}
-            onChange={(value) => setSessionForm({ ...sessionForm, bookId: value })}
-            options={books.map((book) => ({ value: book.id, label: book.title }))}
-          />
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Input
-              label="日期"
-              type="date"
-              value={sessionForm.date}
-              onChange={(event) => setSessionForm({ ...sessionForm, date: event.target.value })}
-            />
-            <NumberInput
-              label="时长"
-              value={sessionForm.minutes}
-              onChange={(value) => setSessionForm({ ...sessionForm, minutes: value })}
-              min={0}
-              step={10}
-              suffix="分钟"
-            />
-          </div>
-          <Input
-            label="备注"
-            value={sessionForm.note}
-            onChange={(event) => setSessionForm({ ...sessionForm, note: event.target.value })}
-            placeholder="读到哪一章…（可选）"
-          />
-        </SubmitForm>
-      </Modal>
+        formId="reading-session-form"
+        onSubmit={handleAddSession}
+        entity={{
+          label: '书籍',
+          value: sessionForm.bookId,
+          onChange: (value) => setSessionForm({ ...sessionForm, bookId: value }),
+          options: books.map((book) => ({ value: book.id, label: book.title })),
+        }}
+        date={{
+          value: sessionForm.date,
+          onChange: (value) => setSessionForm({ ...sessionForm, date: value }),
+        }}
+        duration={{
+          label: '时长',
+          value: sessionForm.minutes,
+          onChange: (value) => setSessionForm({ ...sessionForm, minutes: value }),
+          unit: '分钟',
+          step: 10,
+        }}
+        note={{
+          value: sessionForm.note,
+          onChange: (value) => setSessionForm({ ...sessionForm, note: value }),
+          placeholder: '读到哪一章…（可选）',
+        }}
+        canSave={canSaveSession}
+      />
 
       <ConfirmDialog
         isOpen={pendingSession !== null}
