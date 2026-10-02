@@ -58,6 +58,7 @@ import { Book, BookStatus, ReadingSession } from '../types';
 import { useNewEntryShortcut } from '../hooks/useShortcuts';
 import { usePaletteFocus } from '../hooks/usePaletteFocus';
 import { useTagSuggestions } from '../hooks/useTagSuggestions';
+import { useUrlSelection } from '../hooks/useUrlSelection';
 
 /** 年度阅读目标：一年读完 12 本，进度环按它算 */
 const YEARLY_GOAL = 12;
@@ -127,7 +128,6 @@ export const BooksPage: React.FC = () => {
   const [showAddModal, setShowAddModal] = useState(false);
   useNewEntryShortcut(() => setShowAddModal(true));
 
-  const [noteBookId, setNoteBookId] = useState<string | null>(null);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [noteInput, setNoteInput] = useState('');
   const [noteError, setNoteError] = useState<string | undefined>();
@@ -190,6 +190,13 @@ export const BooksPage: React.FC = () => {
    * 进度和四个操作按钮。
    */
   const listNav = useRovingList({ ids: shownBookIds, onToggleSelect: selection.toggle });
+
+  /*
+   * 右栏常驻：选中哪本书进 URL（`?book=`），没传或被筛掉时落到第一本可见的。
+   * 以前是「点「笔记」才有右栏，否则一句『还没有选中书』」—— 那正是开发页
+   * 刚改掉的反模式。
+   */
+  const [noteBookId, setNoteBookId] = useUrlSelection('book', shownBookIds);
   const [bulkTagModal, setBulkTagModal] = useState(false);
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
 
@@ -295,8 +302,8 @@ export const BooksPage: React.FC = () => {
     setRatingInput(target.rating);
     setReviewInput(target.review);
     setNoteBookId(bookId);
+    setNotesOpen(true);
   };
-
   usePaletteFocus('/study/books', openNotes);
 
   const sessionMinutes = typeof sessionForm.minutes === 'number' ? sessionForm.minutes : 0;
@@ -336,6 +343,20 @@ export const BooksPage: React.FC = () => {
   const noteBook = books.find((book) => book.id === noteBookId) ?? null;
   const deletingBook = books.find((book) => book.id === pendingDeleteId) ?? null;
 
+  /*
+   * 选中项一变就把评分 / 短评草稿对齐到那一本书。
+   *
+   * 以前只在 `openNotes()` 里播种 —— 那时候「打开」是一个明确的动作。现在右栏常驻、
+   * 切换靠点标题或地址栏，没有那个动作了，所以改成跟着 `noteBookId` 走。
+   * 依赖里只放 id：`books` 每次 store 变动都是新数组，带上它会在保存后把草稿重置掉。
+   */
+  const bookIdForDraft = noteBook?.id ?? null;
+  React.useEffect(() => {
+    const target = useBookStore.getState().books.find((book) => book.id === bookIdForDraft);
+    if (!target) return;
+    setRatingInput(target.rating);
+    setReviewInput(target.review);
+  }, [bookIdForDraft]);
   const handleAdd = (): void => {
     if (!form.title.trim()) return;
     addBook(form.title.trim(), form.author.trim(), form.category.trim(), form.tags);
@@ -355,8 +376,18 @@ export const BooksPage: React.FC = () => {
     setNoteError(undefined);
   };
 
+  /**
+   * 窄屏抽屉的开合。
+   *
+   * 宽屏右栏是**常驻**的（选中项由 `?book=` 决定，永远有值），所以不能再拿
+   * 「有没有选中」当开合条件 —— 否则窄屏一进来抽屉就是开的。
+   * 这个状态只服务窄屏：点「笔记」打开、点关闭 / 存完收起。
+   */
+  const [notesOpen, setNotesOpen] = useState(false);
+
+  /** 收起窄屏抽屉，并把草稿清干净（下次打开是干净的） */
   const closeNotes = (): void => {
-    setNoteBookId(null);
+    setNotesOpen(false);
     setNoteInput('');
     setNoteError(undefined);
     setNotePage('');
@@ -366,7 +397,9 @@ export const BooksPage: React.FC = () => {
   const handleSaveEntry = (): void => {
     if (!noteBook) return;
     updateBook(noteBook.id, { rating: ratingInput, review: reviewInput.trim() });
-    closeNotes();
+    setNoteInput('');
+    setNoteError(undefined);
+    setNotePage('');
   };
 
   const progressTone = (book: Book) => (book.progress >= 100 ? 'success' : 'accent');
@@ -611,13 +644,13 @@ export const BooksPage: React.FC = () => {
 
       <MasterDetail
         detailTitle={noteBook ? `《${noteBook.title}》的笔记` : '读书笔记'}
-        detailOpen={noteBook !== null}
+        detailOpen={notesOpen}
         onCloseDetail={closeNotes}
         emptyDetail={
           <EmptyState
             icon={<NotebookPen size={20} aria-hidden />}
-            title="还没有选中书"
-            description="点左边任意一本书的「笔记」，就能在这里随手记。"
+            title="书架上还没有书"
+            description="点右上角「添加书籍」，选中一本就能在这里记笔记。"
             className="py-6"
           />
         }
@@ -700,7 +733,17 @@ export const BooksPage: React.FC = () => {
                     )}
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="font-semibold text-content">{book.title}</h3>
+                        {/* 点书名 = 选中进右栏（`?book=`）；aria-current 让读屏知道右栏说的是哪一本 */}
+                        <button
+                          type="button"
+                          onClick={() => openNotes(book.id)}
+                          aria-current={book.id === noteBookId ? 'true' : undefined}
+                          className={`min-w-0 rounded-sm text-left font-semibold transition-colors duration-fast hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-line-focus ${
+                            book.id === noteBookId ? 'text-accent' : 'text-content'
+                          }`}
+                        >
+                          {book.title}
+                        </button>
                         <button
                           type="button"
                           aria-pressed={book.favorite}

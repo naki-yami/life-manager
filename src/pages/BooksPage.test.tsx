@@ -1,6 +1,7 @@
 import React from 'react';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { BooksPage } from './BooksPage';
 import { ToastProvider } from '../components/ui';
@@ -15,6 +16,14 @@ beforeEach(() => {
 
 const bookId = (title: string) => useBookStore.getState().books.find((b) => b.title === title)!.id;
 
+/** 选中项进 URL（`?book=`）之后，页面必须在 Router 里渲染 */
+const renderBooks = (): ReturnType<typeof render> =>
+  render(
+    <MemoryRouter initialEntries={['/study/books']}>
+      <BooksPage />
+    </MemoryRouter>,
+  );
+
 describe('BooksPage 从命令面板打开', () => {
   afterEach(() => {
     resetPaletteFocus();
@@ -22,7 +31,7 @@ describe('BooksPage 从命令面板打开', () => {
 
   it('聚焦某本书时打开它的笔记面板', () => {
     useBookStore.getState().addBook('置身事内', '兰小欢', '');
-    render(<BooksPage />);
+    renderBooks();
 
     act(() => {
       requestPaletteFocus('/study/books', bookId('置身事内'));
@@ -32,7 +41,7 @@ describe('BooksPage 从命令面板打开', () => {
   });
 
   it('聚焦一本不存在的书时不弹面板', () => {
-    render(<BooksPage />);
+    renderBooks();
 
     act(() => {
       requestPaletteFocus('/study/books', 'missing');
@@ -44,7 +53,7 @@ describe('BooksPage 从命令面板打开', () => {
 
 describe('BooksPage', () => {
   it('空态引导添加第一本书', async () => {
-    render(<BooksPage />);
+    renderBooks();
     expect(screen.getByText('书单还是空的')).toBeInTheDocument();
 
     await userEvent.click(screen.getAllByRole('button', { name: '添加书籍' })[0]!);
@@ -66,7 +75,7 @@ describe('BooksPage', () => {
     useBookStore.getState().updateBookStatus(bookId('A'), 'reading');
     useBookStore.getState().updateBookStatus(bookId('B'), 'finished');
 
-    render(<BooksPage />);
+    renderBooks();
 
     expect(screen.getByRole('button', { name: /全部/ })).toHaveTextContent('3');
 
@@ -79,7 +88,7 @@ describe('BooksPage', () => {
     useBookStore.getState().addBook('人类简史', 'Harari', '历史');
     useBookStore.getState().addBook('深入理解计算机系统', 'Randal', '技术');
 
-    render(<BooksPage />);
+    renderBooks();
     await userEvent.type(screen.getByRole('textbox', { name: '搜索' }), 'harari');
 
     expect(screen.getByText('人类简史')).toBeInTheDocument();
@@ -88,7 +97,7 @@ describe('BooksPage', () => {
 
   it('开始阅读后出现进度条，拖动能改进度', async () => {
     useBookStore.getState().addBook('人类简史', 'Harari', '历史');
-    render(<BooksPage />);
+    renderBooks();
 
     await userEvent.click(screen.getByRole('button', { name: '开始阅读' }));
 
@@ -101,7 +110,7 @@ describe('BooksPage', () => {
 
   it('标记已读会把进度置为 100', async () => {
     useBookStore.getState().addBook('人类简史', 'Harari', '历史');
-    render(<BooksPage />);
+    renderBooks();
 
     await userEvent.click(screen.getByRole('button', { name: '标记已读' }));
 
@@ -112,7 +121,7 @@ describe('BooksPage', () => {
 
   it('笔记可以新增与删除，空内容有提示', async () => {
     useBookStore.getState().addBook('人类简史', 'Harari', '历史');
-    render(<BooksPage />);
+    renderBooks();
 
     await userEvent.click(screen.getByRole('button', { name: /笔记（0）/ }));
     const dialog = screen.getByRole('dialog', { name: /人类简史/ });
@@ -134,7 +143,7 @@ describe('BooksPage', () => {
     useBookStore.getState().addBook('人类简史', 'Harari', '历史');
     useBookStore.getState().addNote(bookId('人类简史'), '一句话笔记');
 
-    render(<BooksPage />);
+    renderBooks();
     await userEvent.click(screen.getByRole('button', { name: '删除《人类简史》' }));
 
     const dialog = screen.getByRole('dialog', { name: '删除书籍' });
@@ -152,7 +161,7 @@ describe('BooksPage', () => {
     expect(useBookStore.getState().books).toHaveLength(0);
   });
   it('书单为空时不显示年度目标环', () => {
-    render(<BooksPage />);
+    renderBooks();
 
     expect(
       screen.queryByRole('progressbar', { name: '年度阅读目标完成度' }),
@@ -182,7 +191,7 @@ describe('BooksPage', () => {
         ),
     });
 
-    render(<BooksPage />);
+    renderBooks();
 
     expect(screen.getByRole('progressbar', { name: '年度阅读目标完成度' })).toHaveAttribute(
       'aria-valuenow',
@@ -199,7 +208,7 @@ describe('BooksPage', () => {
     const store = useBookStore.getState();
     store.addBook('人类简史', '赫拉利', '历史');
     store.updateBookStatus(bookId('人类简史'), 'reading');
-    render(<BooksPage />);
+    renderBooks();
 
     await userEvent.click(screen.getByRole('button', { name: '记阅读' }));
     const dialog = screen.getByRole('dialog', { name: '记录阅读' });
@@ -222,7 +231,7 @@ describe('BooksPage', () => {
     store.addBook('深入理解计算机系统', '', '技术');
     store.updateBookStatus(bookId('深入理解计算机系统'), 'reading');
     store.updateBook(bookId('深入理解计算机系统'), { totalPages: 200 });
-    render(<BooksPage />);
+    renderBooks();
 
     // 逐位输入：1 -> 0.5%，10 -> 5%，100 -> 50%
     await userEvent.type(screen.getByLabelText('当前页码'), '100');
@@ -237,9 +246,11 @@ describe('BooksPage', () => {
     store.addBook('人类简史', '', '历史');
     store.addReadingSession(bookId('人类简史'), '2026-09-28', 45, '');
     render(
-      <ToastProvider>
-        <BooksPage />
-      </ToastProvider>,
+      <MemoryRouter initialEntries={['/study/books']}>
+        <ToastProvider>
+          <BooksPage />
+        </ToastProvider>
+      </MemoryRouter>,
     );
 
     await userEvent.click(screen.getByRole('button', { name: /删除 .* 的《人类简史》阅读记录/ }));
@@ -267,12 +278,12 @@ describe('BooksPage', () => {
       progress: 20,
     });
 
-    render(<BooksPage />);
+    renderBooks();
     expect(screen.getByText(/开读 40 天未完/)).toBeInTheDocument();
   });
 
   it('添加时能打标签，标签会显示在卡片上', async () => {
-    render(<BooksPage />);
+    renderBooks();
 
     await userEvent.click(screen.getAllByRole('button', { name: '添加书籍' })[0]!);
     const dialog = screen.getByRole('dialog', { name: '添加书籍' });
@@ -287,7 +298,7 @@ describe('BooksPage', () => {
 
   it('卡片上可以就地补标签，标签会写回 store', async () => {
     useBookStore.getState().addBook('置身事内', '兰小欢', '');
-    render(<BooksPage />);
+    renderBooks();
 
     await userEvent.click(screen.getByRole('button', { name: '添加标签' }));
     await userEvent.type(screen.getByLabelText('编辑标签'), '经济{Enter}');
@@ -301,7 +312,7 @@ describe('BooksPage', () => {
     const store = useBookStore.getState();
     store.addBook('置身事内', '兰小欢', '经济', ['经济']);
     store.addBook('人类简史', 'Harari', '历史', ['历史']);
-    render(<BooksPage />);
+    renderBooks();
 
     await userEvent.type(screen.getByRole('textbox', { name: /搜索/ }), '#经济');
     expect(screen.getByText('置身事内')).toBeInTheDocument();
@@ -316,22 +327,55 @@ describe('BooksPage 宽屏双栏', () => {
 
   const expectWideLayout = (): void => mockMediaQueries({ [MASTER_DETAIL_QUERY]: true });
 
-  it('宽屏右栏常驻，没选中书时是占位内容', () => {
+  /*
+   * 「右栏选完就空」是设计文档点名要改掉的反模式（开发页先改的）。
+   * 现在默认选中第一本可见的书，右栏一进来就有内容；一本书都没有时才走空态。
+   */
+  it('宽屏右栏常驻，默认选中第一本可见的书', () => {
     useBookStore.getState().addBook('人类简史', 'Harari', '历史');
     expectWideLayout();
 
-    render(<BooksPage />);
+    renderBooks();
+
+    const panel = screen.getByRole('complementary', { name: '《人类简史》的笔记' });
+    expect(within(panel).getByRole('group', { name: '给《人类简史》评分' })).toBeInTheDocument();
+    // 列表里也标出「右栏说的就是这本」
+    expect(screen.getByRole('button', { name: '人类简史' })).toHaveAttribute(
+      'aria-current',
+      'true',
+    );
+  });
+
+  it('一本书都没有时右栏给空态引导', () => {
+    expectWideLayout();
+
+    renderBooks();
 
     const panel = screen.getByRole('complementary', { name: '读书笔记' });
-    expect(within(panel).getByText('还没有选中书')).toBeInTheDocument();
-    expect(screen.getByText('人类简史')).toBeInTheDocument();
+    expect(within(panel).getByText('书架上还没有书')).toBeInTheDocument();
+  });
+
+  it('点书名就选中它，右栏跟着换，行上有 aria-current', async () => {
+    useBookStore.getState().addBook('人类简史', 'Harari', '历史');
+    useBookStore.getState().addBook('置身事内', '兰小欢', '经济');
+    expectWideLayout();
+
+    renderBooks();
+    await userEvent.click(screen.getByRole('button', { name: '置身事内' }));
+
+    expect(screen.getByRole('complementary', { name: '《置身事内》的笔记' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '置身事内' })).toHaveAttribute(
+      'aria-current',
+      'true',
+    );
+    expect(screen.getByRole('button', { name: '人类简史' })).not.toHaveAttribute('aria-current');
   });
 
   it('点「笔记」在右栏就地编辑，不再弹对话框', async () => {
     useBookStore.getState().addBook('人类简史', 'Harari', '历史');
     expectWideLayout();
 
-    render(<BooksPage />);
+    renderBooks();
     await userEvent.click(screen.getByRole('button', { name: /笔记（0）/ }));
 
     // 焦点没有被搬进对话框，列表也还在
@@ -353,7 +397,7 @@ describe('BooksPage 宽屏双栏', () => {
     useBookStore.getState().addBook('置身事内', '兰小欢', '');
     expectWideLayout();
 
-    render(<BooksPage />);
+    renderBooks();
     act(() => {
       requestPaletteFocus('/study/books', bookId('置身事内'));
     });
@@ -369,7 +413,7 @@ describe('BooksPage 宽屏双栏', () => {
     store.addNote(bookId('置身事内'), '地方政府的经济逻辑');
     expectWideLayout();
 
-    render(<BooksPage />);
+    renderBooks();
     await userEvent.click(screen.getByRole('button', { name: /笔记（1）/ }));
 
     let panel = screen.getByRole('complementary', { name: '《置身事内》的笔记' });
@@ -391,7 +435,7 @@ describe('BooksPage F11 条目化媒体库', () => {
   it('列表里的星标立即生效，评分以角标显示', async () => {
     useBookStore.getState().addBook('人类简史', 'Harari', '历史');
 
-    render(<BooksPage />);
+    renderBooks();
 
     expect(screen.queryByText('★ 9')).not.toBeInTheDocument();
 
@@ -409,7 +453,7 @@ describe('BooksPage F11 条目化媒体库', () => {
     useBookStore.getState().addBook('人类简史', 'Harari', '历史');
     expectWideLayout();
 
-    render(<BooksPage />);
+    renderBooks();
 
     // 先点一堆草稿再取消
     await userEvent.click(screen.getByRole('button', { name: /笔记（0）/ }));
@@ -440,7 +484,7 @@ describe('BooksPage F11 条目化媒体库', () => {
     useBookStore.getState().addBook('人类简史', 'Harari', '历史');
     expectWideLayout();
 
-    render(<BooksPage />);
+    renderBooks();
     await userEvent.click(screen.getByRole('button', { name: /笔记（0）/ }));
     const panel = panelOf('人类简史');
     await userEvent.click(within(panel).getByRole('button', { name: '8' }));
@@ -460,7 +504,7 @@ describe('BooksPage F11 条目化媒体库', () => {
     });
     expectWideLayout();
 
-    render(<BooksPage />);
+    renderBooks();
     await userEvent.click(screen.getByRole('button', { name: /笔记（0）/ }));
 
     const timeline = within(panelOf('人类简史')).getByText('状态时间线').parentElement!;
@@ -473,7 +517,7 @@ describe('BooksPage F11 条目化媒体库', () => {
     useBookStore.getState().addBook('人类简史', 'Harari', '历史');
     expectWideLayout();
 
-    render(<BooksPage />);
+    renderBooks();
     await userEvent.click(screen.getByRole('button', { name: /笔记（0）/ }));
 
     const panel = panelOf('人类简史');
@@ -493,7 +537,7 @@ describe('BooksPage F11 条目化媒体库', () => {
     useBookStore.getState().addBook('1984', 'Orwell', '小说');
     expectWideLayout();
 
-    render(<BooksPage />);
+    renderBooks();
     expect(screen.getByText('人类简史')).toBeInTheDocument();
     expect(screen.getByText('1984')).toBeInTheDocument();
 
@@ -519,7 +563,7 @@ describe('BooksPage F11 条目化媒体库', () => {
     useBookStore.getState().addBook('人类简史', 'Harari', '历史');
     expectWideLayout();
 
-    render(<BooksPage />);
+    renderBooks();
     await userEvent.click(screen.getByRole('button', { name: /只看收藏/ }));
 
     // 有数据、被筛空 → 走「没有符合条件」，而不是「书单还是空的」
@@ -547,7 +591,7 @@ describe('BooksPage 批量操作', () => {
 
   it('点「批量」进入批量模式，单条删除图标藏起来', async () => {
     seed();
-    render(<BooksPage />);
+    renderBooks();
 
     expect(screen.queryByRole('toolbar', { name: '批量操作' })).not.toBeInTheDocument();
 
@@ -560,7 +604,7 @@ describe('BooksPage 批量操作', () => {
 
   it('全选后批量改阅读状态', async () => {
     seed();
-    render(<BooksPage />);
+    renderBooks();
     await userEvent.click(screen.getByRole('button', { name: '批量' }));
     await userEvent.click(screen.getByRole('button', { name: '全选' }));
 
@@ -572,7 +616,7 @@ describe('BooksPage 批量操作', () => {
 
   it('批量打标签只影响选中的那几本', async () => {
     seed();
-    render(<BooksPage />);
+    renderBooks();
     await userEvent.click(screen.getByRole('button', { name: '批量' }));
 
     // 只勾一本，验证「批量」不会顺手改到没选的
@@ -592,9 +636,11 @@ describe('BooksPage 批量操作', () => {
   it('批量删除要二次确认，删完能整体撤销', async () => {
     seed();
     render(
-      <ToastProvider>
-        <BooksPage />
-      </ToastProvider>,
+      <MemoryRouter initialEntries={['/study/books']}>
+        <ToastProvider>
+          <BooksPage />
+        </ToastProvider>
+      </MemoryRouter>,
     );
     await userEvent.click(screen.getByRole('button', { name: '批量' }));
     await userEvent.click(screen.getByRole('button', { name: '全选' }));
@@ -613,7 +659,7 @@ describe('BooksPage 批量操作', () => {
 
   it('「只看收藏」把已选中的书筛掉后，它自动退出选中集', async () => {
     seed();
-    render(<BooksPage />);
+    renderBooks();
     await userEvent.click(screen.getByRole('button', { name: '批量' }));
     await userEvent.click(screen.getByRole('button', { name: '全选' }));
     expect(bar().getByText('3')).toBeInTheDocument();
@@ -624,7 +670,7 @@ describe('BooksPage 批量操作', () => {
   });
 
   it('添加书籍弹窗里按回车直接提交（U7）', async () => {
-    render(<BooksPage />);
+    renderBooks();
 
     await userEvent.click(screen.getAllByRole('button', { name: '添加书籍' })[0]!);
     const dialog = screen.getByRole('dialog', { name: '添加书籍' });
@@ -640,7 +686,7 @@ describe('BooksPage 行间键盘导航（U8）', () => {
     const user = userEvent.setup();
     useBookStore.getState().addBook('置身事内', '兰小欢', '');
     useBookStore.getState().addBook('万历十五年', '黄仁宇', '');
-    render(<BooksPage />);
+    renderBooks();
 
     const notes = screen.getAllByRole('button', { name: /^笔记/ });
     expect(notes).toHaveLength(2);
