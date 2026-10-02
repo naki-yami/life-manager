@@ -333,6 +333,7 @@ describe('设计令牌 · 双皮肤', () => {
     '--lm-line-subtle',
     '--lm-line',
     '--lm-line-strong',
+    '--lm-card-line',
     '--lm-shadow-xs',
     '--lm-shadow-sm',
     '--lm-shadow-md',
@@ -351,7 +352,13 @@ describe('设计令牌 · 双皮肤', () => {
 
   it('两套皮的表面真的不一样（防手滑把覆盖块写成基线复制品）', () => {
     // 画布色两套皮允许相同（暗色下玻璃靠光晕而不是底色区分），表面层必须不同
-    for (const name of ['--lm-bg-surface', '--lm-bg-elevated', '--lm-bg-inset', '--lm-shadow-md']) {
+    for (const name of [
+      '--lm-bg-surface',
+      '--lm-bg-elevated',
+      '--lm-bg-inset',
+      '--lm-card-line',
+      '--lm-shadow-md',
+    ]) {
       expect(tokenOf(':root', name)).not.toBe(tokenOf("[data-appearance='paper']", name));
       expect(tokenOf('.dark', name)).not.toBe(tokenOf("[data-appearance='paper'].dark", name));
     }

@@ -97,7 +97,7 @@ export const ProjectRail: React.FC<ProjectRailProps> = ({
               className={`lift w-full rounded-lg border p-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-line-focus ${
                 selected
                   ? 'border-accent bg-accent-soft'
-                  : 'border-line-subtle bg-surface hover:border-line'
+                  : 'border-card-line bg-surface hover:border-line'
               }`}
             >
               <div className="flex items-center gap-1.5">

@@ -35,6 +35,8 @@ export default {
           focus: 'var(--lm-line-focus)',
         },
 
+        cardLine: 'var(--lm-card-line)',
+
         content: {
           DEFAULT: 'var(--lm-content)',
           secondary: 'var(--lm-content-secondary)',
@@ -146,7 +148,7 @@ export default {
       },
 
       transitionTimingFunction: {
-        standard: 'cubic-bezier(0.32, 0.72, 0, 1)',
+        standard: 'cubic-bezier(0.2, 0, 0, 1)',
       },
 
       transitionDuration: {
@@ -195,13 +197,13 @@ export default {
       },
 
       animation: {
-        'fade-in': 'fade-in 180ms cubic-bezier(0.32, 0.72, 0, 1)',
-        'slide-up': 'slide-up 200ms cubic-bezier(0.32, 0.72, 0, 1)',
-        'slide-in-left': 'slide-in-left 200ms cubic-bezier(0.32, 0.72, 0, 1)',
-        'slide-in-right': 'slide-in-right 200ms cubic-bezier(0.32, 0.72, 0, 1)',
-        'scale-in': 'scale-in 180ms cubic-bezier(0.32, 0.72, 0, 1)',
+        'fade-in': 'fade-in 180ms cubic-bezier(0.2, 0, 0, 1)',
+        'slide-up': 'slide-up 200ms cubic-bezier(0.2, 0, 0, 1)',
+        'slide-in-left': 'slide-in-left 200ms cubic-bezier(0.2, 0, 0, 1)',
+        'slide-in-right': 'slide-in-right 200ms cubic-bezier(0.2, 0, 0, 1)',
+        'scale-in': 'scale-in 180ms cubic-bezier(0.2, 0, 0, 1)',
         shimmer: 'shimmer 1.6s infinite',
-        'page-in': 'page-in 230ms cubic-bezier(0.32, 0.72, 0, 1)',
+        'page-in': 'page-in 230ms cubic-bezier(0.2, 0, 0, 1)',
         breathe: 'breathe 2.6s ease-in-out infinite',
       },
     },
