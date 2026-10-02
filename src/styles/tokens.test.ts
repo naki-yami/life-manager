@@ -58,6 +58,29 @@ function tokenOf(selector: string, name: string): string {
   return value;
 }
 
+/**
+ * 读某套皮肤下的令牌：皮肤覆盖块里没有的（文字色、语义色这类两套皮共用的）
+ * 落回基线 —— 与浏览器层叠行为一致。
+ */
+function tokenOfSkin(skinSelector: string | null, base: ':root' | '.dark', name: string): string {
+  if (skinSelector) {
+    const matched = blocks.filter(
+      (block) => block.selector === skinSelector && name in block.declarations,
+    );
+    const value = matched[matched.length - 1]?.declarations[name];
+    if (value) return value;
+  }
+  return tokenOf(base, name);
+}
+
+/** 皮肤 × 明暗的四个组合：基线就是玻璃皮，纸面皮是覆盖块 */
+const SKIN_BASES: Array<{ label: string; skin: string | null; base: ':root' | '.dark' }> = [
+  { label: '玻璃亮色', skin: null, base: ':root' },
+  { label: '玻璃暗色', skin: null, base: '.dark' },
+  { label: '纸面亮色', skin: "[data-appearance='paper']", base: ':root' },
+  { label: '纸面暗色', skin: "[data-appearance='paper'].dark", base: '.dark' },
+];
+
 const px = (value: string): number => Number.parseFloat(value);
 
 type Rgba = [number, number, number, number];
@@ -182,15 +205,15 @@ const TEXT_PAIRS: Pair[] = [
 ];
 
 describe('设计令牌 · 文字对比度', () => {
-  it.each([':root', '.dark'])('%s 主题下所有文字组合达到 WCAG AA（4.5:1）', (selector) => {
+  it.each(SKIN_BASES)('$label 下所有文字组合达到 WCAG AA（4.5:1）', ({ skin, base }) => {
     const failures = TEXT_PAIRS.flatMap((pair) => {
-      const foreground = parseColor(tokenOf(selector, pair.fg));
-      const raw = parseColor(tokenOf(selector, pair.bg));
+      const foreground = parseColor(tokenOfSkin(skin, base, pair.fg));
+      const raw = parseColor(tokenOfSkin(skin, base, pair.bg));
       // 半透明底色要先叠在它实际所在的层上，才是眼睛看到的颜色；
       // 没写 over 时按页面底算，避免默认值把深色主题当成白底。
       const background =
         raw[3] < 1
-          ? composite(raw, parseColor(tokenOf(selector, pair.over ?? '--lm-bg-canvas')))
+          ? composite(raw, parseColor(tokenOfSkin(skin, base, pair.over ?? '--lm-bg-canvas')))
           : raw;
       const ratio = contrastRatio(foreground, background);
       return ratio >= 4.5 ? [] : [`${pair.name}：${ratio.toFixed(2)}:1`];
@@ -215,15 +238,20 @@ describe('设计令牌 · 主题色预设', () => {
   ];
 
   it.each(
-    PALETTES.flatMap((palette) => [
-      { accent: palette.accent, selector: palette.light, base: ':root', mode: '亮色' },
-      { accent: palette.accent, selector: palette.dark, base: '.dark', mode: '暗色' },
-    ]),
-  )('$accent（$mode）下主色相关组合达到 WCAG AA（4.5:1）', ({ selector, base }) => {
+    PALETTES.flatMap((palette) =>
+      SKIN_BASES.map(({ label, skin, base }) => ({
+        accent: palette.accent,
+        label: `${palette.accent}（${label}）`,
+        selector: palette[base === '.dark' ? 'dark' : 'light'],
+        skin,
+        base,
+      })),
+    ),
+  )('$label 下主色相关组合达到 WCAG AA（4.5:1）', ({ selector, skin, base }) => {
     const failures = ACCENT_PAIRS.flatMap((pair) => {
-      // accent 令牌从色板覆盖块读；底色类令牌（bg-surface / canvas）仍在基础层
+      // accent 令牌从色板覆盖块读；底色类令牌（bg-surface / canvas）在皮肤层
       const accentToken = (name: string): string =>
-        name.startsWith('--lm-accent') ? tokenOf(selector, name) : tokenOf(base, name);
+        name.startsWith('--lm-accent') ? tokenOf(selector, name) : tokenOfSkin(skin, base, name);
       const foreground = parseColor(accentToken(pair.fg));
       const raw = parseColor(accentToken(pair.bg));
       const background =
@@ -256,10 +284,10 @@ describe('设计令牌 · 图表分类色板', () => {
   const distance = (a: Rgba, b: Rgba): number =>
     Math.sqrt((a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2);
 
-  it.each([':root', '.dark'])('%s 下 8 个序列色齐全且两两可区分', (selector) => {
+  it.each(SKIN_BASES)('$label 下 8 个序列色齐全且两两可区分', ({ skin, base }) => {
     const palette = SERIES.map((index) => ({
       index,
-      rgba: parseColor(tokenOf(selector, seriesToken(selector, index))),
+      rgba: parseColor(tokenOfSkin(skin, base, seriesToken(base, index))),
     }));
 
     const tooClose: string[] = [];
@@ -278,16 +306,72 @@ describe('设计令牌 · 图表分类色板', () => {
     expect(new Set(palette.map((entry) => entry.rgba.join(','))).size).toBe(SERIES.length);
   });
 
-  it.each([':root', '.dark'])('%s 下每个序列色对卡片底与页面底都达到 3:1', (selector) => {
+  it.each(SKIN_BASES)('$label 下每个序列色对卡片底与页面底都达到 3:1', ({ skin, base }) => {
     const failures = SERIES.flatMap((index) => {
-      const color = parseColor(tokenOf(selector, seriesToken(selector, index)));
+      const color = parseColor(tokenOfSkin(skin, base, seriesToken(base, index)));
       return ['--lm-bg-surface', '--lm-bg-canvas'].flatMap((bg) => {
-        const ratio = contrastRatio(color, parseColor(tokenOf(selector, bg)));
+        const raw = parseColor(tokenOfSkin(skin, base, bg));
+        // 半透明表面要叠在实际所在的层上再比（玻璃皮的卡片底）
+        const resolved =
+          raw[3] < 1 ? composite(raw, parseColor(tokenOfSkin(skin, base, '--lm-bg-canvas'))) : raw;
+        const ratio = contrastRatio(color, resolved);
         return ratio >= 3 ? [] : [`chart-${index} / ${bg}：${ratio.toFixed(2)}:1`];
       });
     });
 
     expect(failures).toEqual([]);
+  });
+});
+
+describe('设计令牌 · 双皮肤', () => {
+  /** 两套皮各自必须给出的「表面观感」令牌：缺一个，那一层就会露出基线的玻璃值 */
+  const SURFACE_TOKENS = [
+    '--lm-bg-canvas',
+    '--lm-bg-surface',
+    '--lm-bg-elevated',
+    '--lm-bg-inset',
+    '--lm-line-subtle',
+    '--lm-line',
+    '--lm-line-strong',
+    '--lm-shadow-xs',
+    '--lm-shadow-sm',
+    '--lm-shadow-md',
+    '--lm-shadow-lg',
+    '--lm-shadow-overlay',
+    '--lm-canvas-glow',
+  ];
+
+  it('纸面覆盖块（明暗）给齐全部表面令牌', () => {
+    for (const selector of ["[data-appearance='paper']", "[data-appearance='paper'].dark"]) {
+      for (const name of SURFACE_TOKENS) {
+        expect(tokenOf(selector, name)).toBeTruthy();
+      }
+    }
+  });
+
+  it('两套皮的表面真的不一样（防手滑把覆盖块写成基线复制品）', () => {
+    // 画布色两套皮允许相同（暗色下玻璃靠光晕而不是底色区分），表面层必须不同
+    for (const name of ['--lm-bg-surface', '--lm-bg-elevated', '--lm-bg-inset', '--lm-shadow-md']) {
+      expect(tokenOf(':root', name)).not.toBe(tokenOf("[data-appearance='paper']", name));
+      expect(tokenOf('.dark', name)).not.toBe(tokenOf("[data-appearance='paper'].dark", name));
+    }
+  });
+
+  it('玻璃皮有环境光晕与磨砂半径，纸面皮两者皆无', () => {
+    expect(tokenOf(':root', '--lm-canvas-glow')).toMatch(/radial-gradient/);
+    expect(tokenOf('.dark', '--lm-canvas-glow')).toMatch(/radial-gradient/);
+    expect(tokenOf("[data-appearance='paper']", '--lm-canvas-glow')).toBe('none');
+    expect(tokenOf("[data-appearance='paper'].dark", '--lm-canvas-glow')).toBe('none');
+    expect(px(tokenOf(':root', '--lm-blur'))).toBeGreaterThan(0);
+  });
+
+  it('纸面覆盖块写在 .dark 之前、.dark 组合块写在 .dark 之后（层叠顺序锁死）', () => {
+    const paperLight = css.indexOf("[data-appearance='paper'] {");
+    const darkBlock = css.indexOf('.dark {');
+    const paperDark = css.indexOf("[data-appearance='paper'].dark {");
+    expect(paperLight).toBeGreaterThan(-1);
+    expect(paperLight).toBeLessThan(darkBlock);
+    expect(paperDark).toBeGreaterThan(darkBlock);
   });
 });
 

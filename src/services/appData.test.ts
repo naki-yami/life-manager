@@ -27,6 +27,8 @@ describe('readAllData', () => {
     useTaskStore.getState().addTask('写周报', '', 'medium', '2026-09-29');
     useHabitStore.getState().addHabit({ name: '晨跑' });
     useThemeStore.getState().setThemeMode('dark');
+    useThemeStore.getState().setAppearance('paper');
+    useThemeStore.getState().setAccent('teal');
     useUiStore.getState().setDensity('compact');
 
     const data = readAllData();
@@ -36,6 +38,8 @@ describe('readAllData', () => {
     expect(data.books).toEqual([]);
     expect(data.settings).toEqual({
       themeMode: 'dark',
+      appearance: 'paper',
+      accent: 'teal',
       density: 'compact',
       sidebarCollapsed: false,
     });

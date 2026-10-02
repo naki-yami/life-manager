@@ -24,7 +24,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenNav }) => {
   const title = findLocationLabel(pathname) ?? 'Life Manager';
 
   return (
-    <header className="flex h-14 shrink-0 items-center gap-3 border-b border-line-subtle bg-surface px-3 sm:px-4">
+    <header className="frosted flex h-14 shrink-0 items-center gap-3 border-b border-line-subtle bg-surface px-3 sm:px-4">
       <IconButton label="打开导航" icon={<Menu size={18} />} onClick={onOpenNav} />
 
       <div className="flex min-w-0 items-center gap-2.5">

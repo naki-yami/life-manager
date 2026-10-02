@@ -42,7 +42,7 @@ export const BottomTabBar: React.FC<BottomTabBarProps> = ({ onOpenMore, drawerOp
       aria-label="快捷导航"
       data-testid="bottom-tab-bar"
       style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
-      className="fixed inset-x-0 bottom-0 z-40 flex border-t border-line-subtle bg-surface lg:hidden"
+      className="frosted fixed inset-x-0 bottom-0 z-40 flex border-t border-line-subtle bg-surface lg:hidden"
     >
       {tabs.map((item) => {
         const Icon = item.icon;

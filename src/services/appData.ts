@@ -49,6 +49,8 @@ export function readAllData(): BackupData {
     customExercises: useLibraryStore.getState().customExercises,
     settings: {
       themeMode: useThemeStore.getState().themeMode,
+      appearance: useThemeStore.getState().appearance,
+      accent: useThemeStore.getState().accent,
       density: useUiStore.getState().density,
       sidebarCollapsed: useUiStore.getState().sidebarCollapsed,
     },

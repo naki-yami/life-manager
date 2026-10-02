@@ -64,7 +64,7 @@ const ModalInner: React.FC<ModalInnerProps> = ({
         tabIndex={-1}
         onKeyDown={handleKeyDown}
         data-size={size}
-        className={`relative z-10 flex w-full flex-col bg-elevated shadow-overlay outline-none animate-scale-in motion-reduce:animate-none ${
+        className={`frosted relative z-10 flex w-full flex-col bg-elevated shadow-overlay outline-none animate-scale-in motion-reduce:animate-none ${
           fullscreen
             ? 'h-full max-h-none rounded-none'
             : 'max-h-[90vh] rounded-xl border border-line-subtle'

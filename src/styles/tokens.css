@@ -5,6 +5,11 @@
  * 组件只使用语义类名（bg-surface / text-content-secondary / border-line），
  * 不再直接写 gray-100、bg-white 这类具体色值 —— 这样换主题只需要改这里。
  *
+ * 皮肤（appearance）：基线 :root / .dark 是「流光玻璃」（默认，不挂属性，
+ * 与 accent 的默认值习惯一致）；「纸面扁平」通过 [data-appearance='paper']
+ * 覆盖块换回素底 —— 排布沿用 accent 的层叠惯例：亮色覆盖块在 .dark 之前，
+ * .dark 组合块放文件底部，保证 paper+暗色 组合取到纸面的暗色值。
+ *
  * 命名约定：
  *   bg-*       背景        canvas 页面底 / surface 卡片 / elevated 浮层 / inset 内嵌
  *   text-*     文字        content / content-secondary / content-tertiary
@@ -14,27 +19,53 @@
  *
  * 强调色：靛蓝，亮色用 #3B5BDB、暗色用 #8B9DFF（同一色阶的深浅两端）。
  * 对比度：所有承载文字的颜色都在 tokens.test.ts 里按 WCAG 2.1 逐对核验，
- * 正文、辅助文字、主色文字与各语义色文字在各自背景上均 >= 4.5:1。
+ * 正文、辅助文字、主色文字与各语义色文字在两套皮肤 × 明暗下均 >= 4.5:1。
  * 亮色下之所以比 #4C6EF5 更深，是因为原色配白字只有 4.32:1，达不到 AA。
+ *
+ * 玻璃皮的两个专属令牌：
+ *   --lm-canvas-glow  页面画布上的环境光晕（body::before 渲染，index.css）。
+ *                     用 color-mix 跟着主题色走；透明度压在 5% 以内，
+ *                     保证光晕最浓处正文对比度仍然过 AA。
+ *   --lm-blur         粘性浮层（页头 / 弹窗 / 抽屉）的背景磨砂半径，
+ *                     由 .frosted 工具类消费；卡片不加磨砂，避免全站模糊的性能税。
  */
 
 :root {
   color-scheme: light;
 
-  /* 背景层级 */
-  --lm-bg-canvas: #f6f7f9;
-  --lm-bg-surface: #ffffff;
-  --lm-bg-elevated: #ffffff;
-  --lm-bg-inset: #f1f3f5;
+  /* 背景层级：玻璃皮的表面是半透明的，画布光晕会隐隐透上来 */
+  --lm-bg-canvas: #f0f2f8;
+  --lm-bg-surface: rgba(255, 255, 255, 0.78);
+  --lm-bg-elevated: rgba(255, 255, 255, 0.92);
+  --lm-bg-inset: rgba(255, 255, 255, 0.55);
   --lm-bg-hover: rgba(17, 24, 39, 0.04);
   --lm-bg-active: rgba(17, 24, 39, 0.08);
   --lm-bg-selected: rgba(59, 91, 219, 0.1);
 
   /* 描边 */
-  --lm-line-subtle: rgba(17, 24, 39, 0.08);
-  --lm-line: rgba(17, 24, 39, 0.12);
+  --lm-line-subtle: rgba(17, 24, 39, 0.07);
+  --lm-line: rgba(17, 24, 39, 0.11);
   --lm-line-strong: rgba(17, 24, 39, 0.22);
   --lm-line-focus: #4c6ef5;
+
+  /* 玻璃专属 */
+  --lm-blur: 16px;
+  --lm-canvas-glow:
+    radial-gradient(
+      44rem 30rem at 10% -12%,
+      color-mix(in srgb, var(--lm-accent) 5%, transparent),
+      transparent 58%
+    ),
+    radial-gradient(
+      38rem 26rem at 102% -4%,
+      color-mix(in srgb, var(--lm-info) 4%, transparent),
+      transparent 55%
+    ),
+    radial-gradient(
+      52rem 34rem at 50% 122%,
+      color-mix(in srgb, var(--lm-accent) 4%, transparent),
+      transparent 62%
+    );
 
   /* 文字 */
   --lm-content: #111827;
@@ -82,12 +113,12 @@
   --lm-chart-7: #0369a1;
   --lm-chart-8: #6d28d9;
 
-  /* 阴影：亮色用真实投影 */
-  --lm-shadow-xs: 0 1px 2px rgba(17, 24, 39, 0.06);
-  --lm-shadow-sm: 0 1px 3px rgba(17, 24, 39, 0.08), 0 1px 2px rgba(17, 24, 39, 0.04);
-  --lm-shadow-md: 0 4px 12px rgba(17, 24, 39, 0.1), 0 2px 4px rgba(17, 24, 39, 0.06);
-  --lm-shadow-lg: 0 12px 32px rgba(17, 24, 39, 0.14), 0 4px 8px rgba(17, 24, 39, 0.06);
-  --lm-shadow-overlay: 0 24px 64px rgba(17, 24, 39, 0.24);
+  /* 阴影：亮色玻璃用带一点主色倾向的投影，比纯灰更「润」 */
+  --lm-shadow-xs: 0 1px 2px rgba(42, 57, 118, 0.05);
+  --lm-shadow-sm: 0 1px 3px rgba(42, 57, 118, 0.07), 0 1px 2px rgba(42, 57, 118, 0.04);
+  --lm-shadow-md: 0 4px 14px rgba(42, 57, 118, 0.09), 0 2px 4px rgba(42, 57, 118, 0.05);
+  --lm-shadow-lg: 0 12px 36px rgba(42, 57, 118, 0.13), 0 4px 8px rgba(42, 57, 118, 0.05);
+  --lm-shadow-overlay: 0 24px 64px rgba(42, 57, 118, 0.22);
 }
 
 /* 主题色 · teal（亮色）：白字按钮与白底文字都过 AA */
@@ -135,21 +166,61 @@
   --lm-accent-ring: rgba(95, 61, 196, 0.28);
 }
 
+/*
+ * 皮肤 · 纸面扁平（亮色）：换肤前的素底皮。
+ * 不透明的表面、真实的灰投影、无光晕 —— 挂在 <html data-appearance="paper"> 时生效。
+ * 放在 .dark 之前，paper+暗色 组合由下面的 .dark 组合块接管。
+ */
+[data-appearance='paper'] {
+  --lm-bg-canvas: #f6f7f9;
+  --lm-bg-surface: #ffffff;
+  --lm-bg-elevated: #ffffff;
+  --lm-bg-inset: #f1f3f5;
+  --lm-line-subtle: rgba(17, 24, 39, 0.08);
+  --lm-line: rgba(17, 24, 39, 0.12);
+  --lm-line-strong: rgba(17, 24, 39, 0.22);
+  --lm-shadow-xs: 0 1px 2px rgba(17, 24, 39, 0.06);
+  --lm-shadow-sm: 0 1px 3px rgba(17, 24, 39, 0.08), 0 1px 2px rgba(17, 24, 39, 0.04);
+  --lm-shadow-md: 0 4px 12px rgba(17, 24, 39, 0.1), 0 2px 4px rgba(17, 24, 39, 0.06);
+  --lm-shadow-lg: 0 12px 32px rgba(17, 24, 39, 0.14), 0 4px 8px rgba(17, 24, 39, 0.06);
+  --lm-shadow-overlay: 0 24px 64px rgba(17, 24, 39, 0.24);
+  --lm-canvas-glow: none;
+}
+
 .dark {
   color-scheme: dark;
 
+  /* 暗色玻璃：表面半透明，光晕在近黑底上透出一点颜色 */
   --lm-bg-canvas: #0b0d12;
-  --lm-bg-surface: #14161c;
-  --lm-bg-elevated: #1a1d24;
-  --lm-bg-inset: #0f1116;
+  --lm-bg-surface: rgba(22, 25, 33, 0.72);
+  --lm-bg-elevated: rgba(28, 31, 40, 0.9);
+  --lm-bg-inset: rgba(255, 255, 255, 0.045);
   --lm-bg-hover: rgba(255, 255, 255, 0.06);
   --lm-bg-active: rgba(255, 255, 255, 0.1);
   --lm-bg-selected: rgba(139, 157, 255, 0.16);
 
-  --lm-line-subtle: rgba(255, 255, 255, 0.08);
+  --lm-line-subtle: rgba(255, 255, 255, 0.07);
   --lm-line: rgba(255, 255, 255, 0.12);
   --lm-line-strong: rgba(255, 255, 255, 0.24);
   --lm-line-focus: #8b9dff;
+
+  --lm-blur: 18px;
+  --lm-canvas-glow:
+    radial-gradient(
+      44rem 30rem at 12% -12%,
+      color-mix(in srgb, var(--lm-accent) 9%, transparent),
+      transparent 58%
+    ),
+    radial-gradient(
+      38rem 26rem at 102% -4%,
+      color-mix(in srgb, var(--lm-chart-2) 5%, transparent),
+      transparent 55%
+    ),
+    radial-gradient(
+      52rem 34rem at 50% 122%,
+      color-mix(in srgb, var(--lm-accent) 6%, transparent),
+      transparent 62%
+    );
 
   --lm-content: #f3f4f6;
   --lm-content-secondary: #c3c8d2;
@@ -189,12 +260,12 @@
   --lm-chart-7: #38bdf8;
   --lm-chart-8: #f472b6;
 
-  /* 暗色下投影几乎不可见，改用极淡的描边制造层级 */
-  --lm-shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.4);
-  --lm-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.5);
-  --lm-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.5);
-  --lm-shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.55);
-  --lm-shadow-overlay: 0 24px 64px rgba(0, 0, 0, 0.6);
+  /* 暗色玻璃投影比纸面更深一档：半透明表面缺实边，靠投影撑层级 */
+  --lm-shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.45);
+  --lm-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.55);
+  --lm-shadow-md: 0 6px 16px rgba(0, 0, 0, 0.55);
+  --lm-shadow-lg: 0 14px 36px rgba(0, 0, 0, 0.6);
+  --lm-shadow-overlay: 0 26px 68px rgba(0, 0, 0, 0.65);
 }
 
 ::selection {
@@ -279,4 +350,21 @@
   --lm-accent-soft: rgba(177, 151, 252, 0.16);
   --lm-accent-contrast: #10121a;
   --lm-accent-ring: rgba(177, 151, 252, 0.32);
+}
+
+/* 皮肤 · 纸面扁平（暗色）：换肤前的不透明暗色皮。组合器带 .dark，优先级压过 .dark 本身 */
+[data-appearance='paper'].dark {
+  --lm-bg-canvas: #0b0d12;
+  --lm-bg-surface: #14161c;
+  --lm-bg-elevated: #1a1d24;
+  --lm-bg-inset: #0f1116;
+  --lm-line-subtle: rgba(255, 255, 255, 0.08);
+  --lm-line: rgba(255, 255, 255, 0.12);
+  --lm-line-strong: rgba(255, 255, 255, 0.24);
+  --lm-shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --lm-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.5);
+  --lm-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.5);
+  --lm-shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.55);
+  --lm-shadow-overlay: 0 24px 64px rgba(0, 0, 0, 0.6);
+  --lm-canvas-glow: none;
 }

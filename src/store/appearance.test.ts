@@ -30,7 +30,7 @@ function persistedState(key: string): Record<string, unknown> | null {
 }
 
 beforeEach(() => {
-  useThemeStore.setState({ themeMode: 'system' });
+  useThemeStore.setState({ themeMode: 'system', appearance: 'glass' });
   useUiStore.setState({
     sidebarCollapsed: false,
     density: 'comfortable',
@@ -41,6 +41,7 @@ beforeEach(() => {
 afterEach(() => {
   document.documentElement.classList.remove('dark');
   document.documentElement.removeAttribute('data-density');
+  document.documentElement.removeAttribute('data-appearance');
   vi.restoreAllMocks();
 });
 
@@ -101,6 +102,37 @@ describe('themeStore', () => {
     useThemeStore.setState({ themeMode: 'system' });
     useThemeStore.getState().toggleTheme();
     expect(useThemeStore.getState().themeMode).toBe('light');
+  });
+
+  it('皮肤（双皮肤）：默认流光玻璃，切到纸面后持久化', async () => {
+    expect(useThemeStore.getState().appearance).toBe('glass');
+
+    useThemeStore.getState().setAppearance('paper');
+    expect(useThemeStore.getState().appearance).toBe('paper');
+    await vi.waitFor(() => {
+      expect(persistedState(STORAGE_KEYS.theme)?.appearance).toBe('paper');
+    });
+  });
+
+  it('老存档没有 appearance 字段时升级为玻璃皮，脏值挡回玻璃', async () => {
+    localStorage.setItem(
+      STORAGE_KEYS.theme,
+      JSON.stringify({ state: { themeMode: 'dark', appearance: 'neon' }, version: 11 }),
+    );
+    void useThemeStore.persist.rehydrate();
+    await vi.waitFor(() => {
+      expect(useThemeStore.getState().appearance).toBe('glass');
+      expect(useThemeStore.getState().themeMode).toBe('dark');
+    });
+
+    localStorage.setItem(
+      STORAGE_KEYS.theme,
+      JSON.stringify({ state: { themeMode: 'light', appearance: 'paper' }, version: 11 }),
+    );
+    void useThemeStore.persist.rehydrate();
+    await vi.waitFor(() => {
+      expect(useThemeStore.getState().appearance).toBe('paper');
+    });
   });
 
   it('prefersDark 在 matchMedia 缺失时安全降级', () => {
@@ -166,6 +198,17 @@ describe('useTheme', () => {
 
     expect(document.documentElement.classList.contains('dark')).toBe(false);
     expect(document.documentElement.style.colorScheme).toBe('light');
+  });
+
+  it('玻璃皮不挂 data-appearance，纸面皮挂上（tokens.css 覆盖块的开关）', () => {
+    const { result } = renderHook(() => useTheme());
+    expect(document.documentElement.hasAttribute('data-appearance')).toBe(false);
+
+    act(() => result.current.setAppearance('paper'));
+    expect(document.documentElement.getAttribute('data-appearance')).toBe('paper');
+
+    act(() => result.current.setAppearance('glass'));
+    expect(document.documentElement.hasAttribute('data-appearance')).toBe(false);
   });
 });
 

@@ -8,9 +8,11 @@ import {
   Download,
   FolderOpen,
   History,
+  Layers,
   LayoutGrid,
   Monitor,
   Moon,
+  NotebookText,
   RefreshCw,
   RotateCcw,
   Settings as SettingsIcon,
@@ -163,6 +165,8 @@ function applyPlan(data: Partial<BackupData>): void {
     // 旧备份只有二态 theme，按 themeMode 处理
     const mode = settings.themeMode ?? settings.theme;
     if (mode) useThemeStore.getState().setThemeMode(mode);
+    if (settings.appearance) useThemeStore.getState().setAppearance(settings.appearance);
+    if (settings.accent) useThemeStore.getState().setAccent(settings.accent);
     if (settings.density) useUiStore.getState().setDensity(settings.density);
     if (typeof settings.sidebarCollapsed === 'boolean') {
       useUiStore.getState().setSidebarCollapsed(settings.sidebarCollapsed);
@@ -194,6 +198,7 @@ function resetStores(): void {
   useFocusStore.getState().cancelFocus();
   // 外观也回到默认，避免「清除数据」后还停留在上一次的皮肤
   useThemeStore.getState().setThemeMode('system');
+  useThemeStore.getState().setAppearance('glass');
   useUiStore.getState().setDensity('comfortable');
   useUiStore.getState().setSidebarCollapsed(false);
 }
@@ -242,7 +247,7 @@ const FORMAT_HINTS: Record<ExportFormat, string> = {
 };
 
 export const SettingsPage: React.FC = () => {
-  const { themeMode, setThemeMode } = useTheme();
+  const { themeMode, setThemeMode, appearance, setAppearance } = useTheme();
   const accent = useThemeStore((state) => state.accent);
   const setAccent = useThemeStore((state) => state.setAccent);
   const density = useUiStore((state) => state.density);
@@ -611,6 +616,26 @@ export const SettingsPage: React.FC = () => {
                   { value: 'system', label: '跟随系统', icon: <Monitor size={14} aria-hidden /> },
                 ]}
               />
+            </div>
+
+            <div>
+              <p className="mb-2 text-sm font-medium text-content-secondary">界面皮肤</p>
+              <SegmentedControl
+                label="界面皮肤"
+                value={appearance}
+                onChange={setAppearance}
+                options={[
+                  { value: 'glass', label: '流光玻璃', icon: <Layers size={14} aria-hidden /> },
+                  {
+                    value: 'paper',
+                    label: '纸面扁平',
+                    icon: <NotebookText size={14} aria-hidden />,
+                  },
+                ]}
+              />
+              <p className="mt-1.5 text-xs text-content-tertiary">
+                流光玻璃是半透明表面加环境光晕；纸面扁平是素底平卡片，两者都跟随明暗与主题色。
+              </p>
             </div>
 
             <div>

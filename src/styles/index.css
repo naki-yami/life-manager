@@ -30,6 +30,20 @@
     -moz-osx-font-smoothing: grayscale;
   }
 
+  /*
+   * 玻璃皮的画布光晕：一层固定在视口上的环境色，滚动时不跟着动。
+   * 写在伪元素上而不是 body 背景，是为了用 z-index 压到全部内容之下，
+   * 也不会跟着 body 一起滚动产生「光晕在动」的错觉。纸面皮里变量是 none，天然关闭。
+   */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background-image: var(--lm-canvas-glow, none);
+  }
+
   * {
     box-sizing: border-box;
   }
@@ -58,4 +72,78 @@
 
 ::-webkit-scrollbar-thumb:hover {
   background-color: var(--lm-content-disabled);
+}
+
+/* ---------------------------------------------------------------------------
+ * 玻璃皮专属：.frosted 给粘性浮层（页头、弹窗、抽屉、项目栏）加背景磨砂。
+ * 卡片不挂这个类 —— 全站 backdrop-filter 是性能税，磨砂只给真正浮在
+ * 内容之上的层。纸面皮里表面不透明，磨砂自动失效（选择器排除 paper）。
+ * ------------------------------------------------------------------------- */
+:root:not([data-appearance='paper']) .frosted {
+  backdrop-filter: blur(var(--lm-blur)) saturate(1.5);
+  -webkit-backdrop-filter: blur(var(--lm-blur)) saturate(1.5);
+}
+
+/* ---------------------------------------------------------------------------
+ * 级联进场：给容器的直接子元素做逐项「淡入 + 上浮」，延迟每项 +45ms。
+ * 用于仪表盘卡片、项目栏、详情分区这类「一屏内的少量块」，封顶 10 项，
+ * 更长的列表只让前 10 项级联、其余立即出现，避免滚不到的地方还在等入场。
+ * ------------------------------------------------------------------------- */
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.stagger-enter > * {
+  animation: rise-in 260ms cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+
+.stagger-enter > *:nth-child(2) {
+  animation-delay: 45ms;
+}
+.stagger-enter > *:nth-child(3) {
+  animation-delay: 90ms;
+}
+.stagger-enter > *:nth-child(4) {
+  animation-delay: 135ms;
+}
+.stagger-enter > *:nth-child(5) {
+  animation-delay: 180ms;
+}
+.stagger-enter > *:nth-child(6) {
+  animation-delay: 225ms;
+}
+.stagger-enter > *:nth-child(7) {
+  animation-delay: 270ms;
+}
+.stagger-enter > *:nth-child(8) {
+  animation-delay: 315ms;
+}
+.stagger-enter > *:nth-child(9) {
+  animation-delay: 360ms;
+}
+.stagger-enter > *:nth-child(n + 10) {
+  animation-delay: 405ms;
+}
+
+/* ---------------------------------------------------------------------------
+ * 全局兜底：系统开了「减弱动态效果」时，把所有动画与过渡压到接近零。
+ * 组件里已有的 motion-reduce: 类是第一道闸，这里是第二道 ——
+ * 新代码忘了写 motion-reduce 也不会漏放动画。
+ * ------------------------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

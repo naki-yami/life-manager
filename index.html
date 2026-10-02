@@ -58,6 +58,9 @@
             root.setAttribute('data-accent', theme.accent);
           }
 
+          // 皮肤：glass 是基线令牌不挂属性（老存档没有这个字段，也走玻璃默认）
+          if (theme.appearance === 'paper') root.setAttribute('data-appearance', 'paper');
+
           var ui = readState(UI_KEY);
           if (ui && ui.density === 'compact') root.setAttribute('data-density', 'compact');
         } catch (error) {

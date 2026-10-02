@@ -542,6 +542,9 @@ export const settingsSchema = z.object({
   themeMode: z.enum(['light', 'dark', 'system']).optional(),
   density: z.enum(['comfortable', 'compact']).optional(),
   sidebarCollapsed: z.boolean().optional(),
+  /** 皮肤与主题色：老备份没有这两个字段，导入时保持当前值不动 */
+  appearance: z.enum(['glass', 'paper']).optional(),
+  accent: z.enum(['indigo', 'teal', 'green', 'orange', 'pink', 'violet']).optional(),
   /** 旧备份里只有二态 theme，导入时按 themeMode 处理 */
   theme: z.enum(['light', 'dark']).optional(),
 });
