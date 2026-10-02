@@ -18,8 +18,8 @@
 
 定版之后主线继续在 v1.0.0 之上打磨：外壳换肤、首页对齐样稿、今日计划瘦身，以及
 最近一轮「开发工作页重构（左项目栏 + 右详情）+ 双皮肤 + 全站克制动效」。
-累计读数：`npm test` **1523 条 / 92 个文件**、`npm run e2e` **35 条**、
-首屏 gzip **166.9 KB**。
+累计读数：`npm test` **1536 条 / 92 个文件**、`npm run e2e` **35 条**、
+首屏 gzip **167.1 KB**。
 
 **这一版明确没做**（都记在优化建议里，附了理由）：各页排序公用件、开发页「归档」维度、
 库条目的收藏、列表 layout 动画、EmptyState 示例数据、图表跨点位的一句话摘要。
@@ -127,7 +127,7 @@ scripts/       构建产物体积预算、PWA 图标生成等小工具
 | `npm run typecheck`    | TypeScript 全量类型检查（`tsc -b`）          |
 | `npm run lint`         | ESLint（含 `jsx-a11y` 全量规则）             |
 | `npm run format:check` | Prettier 全仓格式检查                        |
-| `npm run test`         | vitest 单元与组件测试（1523 条 / 92 个文件） |
+| `npm run test`         | vitest 单元与组件测试（1536 条 / 92 个文件） |
 | `npm run build`        | 生产构建                                     |
 | `npm run size`         | 首屏 gzip 体积预算（≤ 300KB，构建后跑）      |
 | `npm run e2e`          | 真浏览器冒烟（35 条，需本机 Edge，不进 CI）  |
