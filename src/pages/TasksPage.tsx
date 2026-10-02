@@ -1,8 +1,10 @@
 import React, { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
   CalendarDays,
   ChevronDown,
   ChevronRight,
+  Code2,
   Edit3,
   ListChecks,
   ListTodo,
@@ -755,6 +757,16 @@ export const TasksPage: React.FC = () => {
                             {priority.label}
                           </Badge>
                           <DueBadge task={task} />
+                          {task.ref && (
+                            <Link
+                              to={`/dev?project=${encodeURIComponent(task.ref.projectId)}`}
+                              aria-label={`来自开发工作的「${task.ref.projectTitle}」，点按打开项目`}
+                              className="inline-flex items-center gap-1 rounded-sm text-xs text-accent hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-line-focus"
+                            >
+                              <Code2 size={11} aria-hidden />
+                              开发 · {task.ref.projectTitle}
+                            </Link>
+                          )}
                           {task.repeat && (
                             <span className="inline-flex items-center gap-1 text-xs text-content-tertiary">
                               <Repeat size={11} aria-hidden />

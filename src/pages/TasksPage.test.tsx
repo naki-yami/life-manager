@@ -2,6 +2,7 @@ import React from 'react';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { MemoryRouter } from 'react-router-dom';
 import { TasksPage } from './TasksPage';
 import { ToastProvider } from '../components/ui';
 import { useTaskStore } from '../store/taskStore';
@@ -336,6 +337,35 @@ describe('TasksPage', () => {
       kind: 'weekly',
       weekdays: [0, 2, 4],
     });
+  });
+});
+
+describe('TasksPage 来源回链', () => {
+  it('开发工作推来的任务显示回链徽章，点击跳回 /dev?project=', () => {
+    const store = useTaskStore.getState();
+    store.addTask('推送的任务', '', 'high', '', null, [], {
+      module: 'dev',
+      projectId: 'proj-1',
+      projectTitle: '写作助手',
+      devTaskId: 'dt-1',
+    });
+    store.addTask('手工任务', '', 'low', '');
+
+    render(
+      <MemoryRouter>
+        <ToastProvider>
+          <TasksPage />
+        </ToastProvider>
+      </MemoryRouter>,
+    );
+
+    const link = screen.getByRole('link', {
+      name: '来自开发工作的「写作助手」，点按打开项目',
+    });
+    expect(link).toHaveTextContent('开发 · 写作助手');
+    expect(link).toHaveAttribute('href', '/dev?project=proj-1');
+    // 手工创建的任务没有徽章
+    expect(screen.queryByRole('link', { name: /手工任务/ })).not.toBeInTheDocument();
   });
 });
 
