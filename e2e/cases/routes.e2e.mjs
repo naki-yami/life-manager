@@ -36,6 +36,23 @@ export const ROUTES = [
 ];
 
 /**
+ * 等页面把 h1 画出来，超时就返回拿到的值（交给调用方判失败）。
+ *
+ * 页面是懒加载的：`goto` 之后固定等一小段就断言 h1 存在，机器一忙
+ * （比如刚跑完 build）chunk 还没执行，`/tasks` 会偶发地报「没有可见的 h1」。
+ * 轮询到出现为止，既快又不会误报。
+ */
+const waitForH1 = async (session, timeoutMs = 4000) => {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const h1 = await session.text('h1');
+    if (h1 !== null && h1.trim() !== '') return h1;
+    if (Date.now() >= deadline) return h1;
+    await delay(120);
+  }
+};
+
+/**
  * 旧路径的保底重定向。
  *
  * 单列出来的理由：ROUTES 那条只核对「页面渲染出来了」，而重定向最容易错的地方是
@@ -94,7 +111,11 @@ export function registerRouteCases() {
     const broken = [];
     for (const route of all) {
       session.clearErrors();
-      await session.goto(`${baseUrl}${route.path}`, { waitMs: 500 });
+      await session.goto(`${baseUrl}${route.path}`, { waitMs: 400 });
+
+      // 等 h1 画出来再断言：页面是懒加载的，机器一忙（比如刚跑完 build）
+      // chunk 执行会晚一两百毫秒，固定 waitMs 会偶发地误报「没有可见的 h1」。
+      const h1 = await waitForH1(session);
 
       // 页面报错就记下来，但继续跑下一条 —— 一次跑完拿到全貌比第一处就中断有用
       const errors = [...session.pageErrors, ...session.consoleErrors];
@@ -103,7 +124,6 @@ export function registerRouteCases() {
         continue;
       }
 
-      const h1 = await session.text('h1');
       if (h1 === null || h1.trim() === '') {
         broken.push(`${route.path} 没有可见的 h1`);
         continue;
@@ -143,7 +163,7 @@ export function registerRouteCases() {
     await delay(900);
     const errors = [...session.pageErrors, ...session.consoleErrors];
     assert.empty(errors, '客户端路由切换后出现了异常');
-    const h1 = await session.text('h1');
+    const h1 = await waitForH1(session);
     assert.nonEmpty(h1, '回首页后标题');
   });
 
@@ -157,7 +177,7 @@ export function registerRouteCases() {
       item.to,
       `${item.from} 重定向后的地址栏`,
     );
-    assert.equal(await session.text('h1'), item.title, `${item.from} 重定向后的标题`);
+    assert.equal(await waitForH1(session), item.title, `${item.from} 重定向后的标题`);
     assert.empty([...session.pageErrors, ...session.consoleErrors], `${item.from} 重定向时抛错`);
   };
 
@@ -228,7 +248,7 @@ export function registerRouteCases() {
         await delay(900);
 
         assert.equal(await session.evaluate('location.pathname'), item.toPath, '切子页后的落点');
-        assert.equal(await session.text('h1'), item.to, '切子页后的页面标题');
+        assert.equal(await waitForH1(session), item.to, '切子页后的页面标题');
         assert.equal(await pressedTab(session, strip), item.to, '切子页后按下的子页');
         await shot(item.slug);
 
