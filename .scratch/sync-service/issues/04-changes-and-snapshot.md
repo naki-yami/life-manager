@@ -1,6 +1,6 @@
 # 04 拉取：增量 `/v1/changes` 与 `/v1/snapshot`
 
-Status: needs-triage
+Status: ready-for-agent
 Type: task
 Part of: `.scratch/sync-service/spec.md`
 Blocked by: 03

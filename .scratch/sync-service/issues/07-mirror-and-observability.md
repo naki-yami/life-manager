@@ -1,6 +1,6 @@
 # 07 mirrorDir、可观测与运维
 
-Status: needs-triage
+Status: ready-for-agent
 Type: task
 Part of: `.scratch/sync-service/spec.md`
 Blocked by: 06

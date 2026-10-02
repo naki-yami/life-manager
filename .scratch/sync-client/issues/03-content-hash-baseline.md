@@ -1,6 +1,6 @@
 # 03 内容哈希基线与 diff
 
-Status: needs-triage
+Status: ready-for-agent
 Type: task
 Part of: `.scratch/sync-client/spec.md`
 Blocked by: 02

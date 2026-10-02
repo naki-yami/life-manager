@@ -1,6 +1,6 @@
 # 02 同步单元表与落库
 
-Status: needs-triage
+Status: ready-for-agent
 Type: task
 Part of: `.scratch/sync-client/spec.md`
 Blocked by: 无
@@ -11,12 +11,13 @@ Blocked by: 无
 
 ## 改动点
 
-- `src/services/sync/units.ts`：每个单元记三件事 —— 怎么读（从哪个 store 取）、怎么按 id 写
+- `src/services/sync/units.ts`：每个单元记三件事 —— 怎么读（从哪个 store 取）、怎么按 key 写
   （upsert / delete）、模块名（用备份的模块名）。表来自 `.scratch/sync-service/spec.md` 的
-  「同步单位」一张表，**两份要一致**。
+  「同步单位」一张表，**两份要一致**；key 的取法也与那份一致：记录集合用记录 `id`，
+  `dietWater` 用日期串，`dietGoals` 用模块名（整块替换、不产生 `delete`）。
 - 表里的「不同步项」（`lm:theme` / `lm:ui`、`focus.active`、`recent*Names`）在本文件以注释列出来，
   写明为什么不同步 —— 免得后来者以为漏了。
-- `src/services/sync/apply.ts`：`setState` + 按 id 的 upsert / delete 纯函数。**不碰 21 个 store
+- `src/services/sync/apply.ts`：`setState` + 按 key 的 upsert / delete 纯函数。**不碰 16 个 store
   的内部**，不调用各模块的 `updateRecord`（那会把派生字段按本机逻辑重算，两端可能算出不同结果）。
 - 落库走 `useXStore.setState`，zustand 的 persist 中间件照常写进 IndexedDB。
 

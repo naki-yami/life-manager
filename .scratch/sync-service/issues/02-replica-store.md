@@ -1,6 +1,6 @@
 # 02 副本存储：形状、结构守卫与原子写
 
-Status: needs-triage
+Status: ready-for-agent
 Type: task
 Part of: `.scratch/sync-service/spec.md`
 Blocked by: 01

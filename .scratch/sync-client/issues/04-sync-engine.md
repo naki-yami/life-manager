@@ -1,6 +1,6 @@
 # 04 同步引擎：先推后拉
 
-Status: needs-triage
+Status: ready-for-agent
 Type: task
 Part of: `.scratch/sync-client/spec.md`
 Blocked by: 01, 03

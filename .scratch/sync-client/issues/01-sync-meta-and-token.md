@@ -1,6 +1,6 @@
 # 01 `lm:sync` 元数据、令牌与设备标识
 
-Status: needs-triage
+Status: ready-for-agent
 Type: task
 Part of: `.scratch/sync-client/spec.md`
 Blocked by: 无

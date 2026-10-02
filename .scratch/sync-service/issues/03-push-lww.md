@@ -1,6 +1,6 @@
 # 03 push：rev、幂等与 LWW 冲突
 
-Status: needs-triage
+Status: ready-for-agent
 Type: task
 Part of: `.scratch/sync-service/spec.md`
 Blocked by: 02

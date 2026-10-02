@@ -1,6 +1,6 @@
 # 05 首次开启对账与作废后的重对账
 
-Status: needs-triage
+Status: ready-for-agent
 Type: task
 Part of: `.scratch/sync-client/spec.md`
 Blocked by: 04

@@ -1,6 +1,6 @@
 # 06 自带备份、历史与 `/v1/restore`
 
-Status: needs-triage
+Status: ready-for-agent
 Type: task
 Part of: `.scratch/sync-service/spec.md`
 Blocked by: 05

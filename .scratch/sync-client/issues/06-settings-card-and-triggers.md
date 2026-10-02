@@ -1,6 +1,6 @@
 # 06 设置页卡片与触发时机
 
-Status: needs-triage
+Status: ready-for-agent
 Type: task
 Part of: `.scratch/sync-client/spec.md`
 Blocked by: 05
