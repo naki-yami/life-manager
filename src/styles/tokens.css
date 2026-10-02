@@ -33,11 +33,12 @@
 :root {
   color-scheme: light;
 
-  /* 背景层级：玻璃皮的表面是半透明的，画布光晕会隐隐透上来 */
-  --lm-bg-canvas: #f0f2f8;
-  --lm-bg-surface: rgba(255, 255, 255, 0.78);
-  --lm-bg-elevated: rgba(255, 255, 255, 0.92);
-  --lm-bg-inset: rgba(255, 255, 255, 0.55);
+  /* 背景层级：玻璃皮的表面是半透明的，画布光晕会透上来。
+     透明度刻意压得比较低（0.62）：光晕要「隔着一层毛玻璃」看才成立 */
+  --lm-bg-canvas: #edf0f8;
+  --lm-bg-surface: rgba(255, 255, 255, 0.62);
+  --lm-bg-elevated: rgba(255, 255, 255, 0.88);
+  --lm-bg-inset: rgba(255, 255, 255, 0.45);
   --lm-bg-hover: rgba(17, 24, 39, 0.04);
   --lm-bg-active: rgba(17, 24, 39, 0.08);
   --lm-bg-selected: rgba(59, 91, 219, 0.1);
@@ -48,23 +49,30 @@
   --lm-line-strong: rgba(17, 24, 39, 0.22);
   --lm-line-focus: #4c6ef5;
 
-  /* 玻璃专属 */
+  /* 玻璃专属。光晕的主块摆在内容区背后（卡片会盖在上面、透出颜色），
+     页头文字裸露在画布上的那一带只留弱 fringe —— 那里没有卡片挡着，
+     浓度一高辅助文字的对比度就掉下 AA */
   --lm-blur: 16px;
   --lm-canvas-glow:
     radial-gradient(
-      44rem 30rem at 10% -12%,
-      color-mix(in srgb, var(--lm-accent) 5%, transparent),
+      60rem 26rem at 50% -4%,
+      color-mix(in srgb, var(--lm-accent) 7%, transparent),
+      transparent 62%
+    ),
+    radial-gradient(
+      40rem 24rem at 106% 10%,
+      color-mix(in srgb, var(--lm-info) 7%, transparent),
       transparent 58%
     ),
     radial-gradient(
-      38rem 26rem at 102% -4%,
-      color-mix(in srgb, var(--lm-info) 4%, transparent),
-      transparent 55%
+      44rem 28rem at -6% 42%,
+      color-mix(in srgb, var(--lm-accent) 6%, transparent),
+      transparent 58%
     ),
     radial-gradient(
-      52rem 34rem at 50% 122%,
-      color-mix(in srgb, var(--lm-accent) 4%, transparent),
-      transparent 62%
+      56rem 36rem at 50% 122%,
+      color-mix(in srgb, var(--lm-accent) 8%, transparent),
+      transparent 64%
     );
 
   /* 文字 */
@@ -113,12 +121,12 @@
   --lm-chart-7: #0369a1;
   --lm-chart-8: #6d28d9;
 
-  /* 阴影：亮色玻璃用带一点主色倾向的投影，比纯灰更「润」 */
-  --lm-shadow-xs: 0 1px 2px rgba(42, 57, 118, 0.05);
-  --lm-shadow-sm: 0 1px 3px rgba(42, 57, 118, 0.07), 0 1px 2px rgba(42, 57, 118, 0.04);
-  --lm-shadow-md: 0 4px 14px rgba(42, 57, 118, 0.09), 0 2px 4px rgba(42, 57, 118, 0.05);
-  --lm-shadow-lg: 0 12px 36px rgba(42, 57, 118, 0.13), 0 4px 8px rgba(42, 57, 118, 0.05);
-  --lm-shadow-overlay: 0 24px 64px rgba(42, 57, 118, 0.22);
+  /* 阴影：亮色玻璃用带一点主色倾向的投影，比纯灰更「润」；比纸面深半档撑住半透明表面 */
+  --lm-shadow-xs: 0 1px 2px rgba(42, 57, 118, 0.06);
+  --lm-shadow-sm: 0 2px 5px rgba(42, 57, 118, 0.09), 0 1px 2px rgba(42, 57, 118, 0.05);
+  --lm-shadow-md: 0 6px 18px rgba(42, 57, 118, 0.11), 0 2px 5px rgba(42, 57, 118, 0.06);
+  --lm-shadow-lg: 0 14px 40px rgba(42, 57, 118, 0.16), 0 4px 10px rgba(42, 57, 118, 0.06);
+  --lm-shadow-overlay: 0 24px 64px rgba(42, 57, 118, 0.26);
 }
 
 /* 主题色 · teal（亮色）：白字按钮与白底文字都过 AA */
@@ -192,9 +200,9 @@
 
   /* 暗色玻璃：表面半透明，光晕在近黑底上透出一点颜色 */
   --lm-bg-canvas: #0b0d12;
-  --lm-bg-surface: rgba(22, 25, 33, 0.72);
-  --lm-bg-elevated: rgba(28, 31, 40, 0.9);
-  --lm-bg-inset: rgba(255, 255, 255, 0.045);
+  --lm-bg-surface: rgba(22, 25, 33, 0.62);
+  --lm-bg-elevated: rgba(28, 31, 40, 0.86);
+  --lm-bg-inset: rgba(255, 255, 255, 0.04);
   --lm-bg-hover: rgba(255, 255, 255, 0.06);
   --lm-bg-active: rgba(255, 255, 255, 0.1);
   --lm-bg-selected: rgba(139, 157, 255, 0.16);
