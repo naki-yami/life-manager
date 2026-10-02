@@ -10,8 +10,8 @@ const HomePage = lazy(() => import('./pages/HomePage').then((m) => ({ default: m
 const TasksPage = lazy(() => import('./pages/TasksPage').then((m) => ({ default: m.TasksPage })));
 const BooksPage = lazy(() => import('./pages/BooksPage').then((m) => ({ default: m.BooksPage })));
 const DevPage = lazy(() => import('./pages/DevPage').then((m) => ({ default: m.DevPage })));
-const DevProjectPage = lazy(() =>
-  import('./pages/DevProjectPage').then((m) => ({ default: m.DevProjectPage })),
+const DevProjectRedirectPage = lazy(() =>
+  import('./pages/DevPage').then((m) => ({ default: m.DevProjectRedirectPage })),
 );
 const WritingPage = lazy(() =>
   import('./pages/WritingPage').then((m) => ({ default: m.WritingPage })),
@@ -79,7 +79,8 @@ const App: React.FC = () => {
             {/* 旧路径永久保留，书签 / 外部链接 / 历史记录都不碎（决策 #3） */}
             <Route path="/books" element={<Navigate to="/study/books" replace />} />
             <Route path="/dev" element={<DevPage />} />
-            <Route path="/dev/:id" element={<DevProjectPage />} />
+            {/* 旧详情路由永久兼容：详情已并进 /dev 右栏，302 到带 project 参数的新地址 */}
+            <Route path="/dev/:id" element={<DevProjectRedirectPage />} />
             <Route path="/writing" element={<Navigate to="/study/writing" replace />} />
             <Route path="/fitness" element={<Navigate to="/health/fitness" replace />} />
             <Route path="/diet" element={<Navigate to="/health/diet" replace />} />
