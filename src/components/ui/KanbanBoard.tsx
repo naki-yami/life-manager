@@ -108,7 +108,7 @@ const KanbanColumnView: React.FC<{ column: KanbanColumnData; draggingId: string 
   return (
     <div
       ref={setNodeRef}
-      className={`rounded border bg-inset p-3 ${
+      className={`rounded border bg-inset p-3 transition-[border-color,background-color] duration-base ease-standard ${
         isOver && draggingId ? 'border-line-focus' : 'border-line-subtle'
       }`}
     >
@@ -151,7 +151,11 @@ const SortableCard: React.FC<{ item: KanbanItemData; columnId: string }> = ({ it
       style={{ transform: CSS.Transform.toString(transform), transition }}
       className={isDragging ? 'opacity-50' : undefined}
     >
-      <div className="flex items-start gap-1 rounded bg-surface p-2.5 shadow-xs">
+      <div
+        className={`flex items-start gap-1 rounded bg-surface p-2.5 transition-shadow duration-base ease-standard ${
+          isDragging ? 'shadow-lg' : 'shadow-xs'
+        }`}
+      >
         <button
           type="button"
           ref={setActivatorNodeRef}

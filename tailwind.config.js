@@ -179,6 +179,19 @@ export default {
         shimmer: {
           '100%': { transform: 'translateX(100%)' },
         },
+        /*
+         * 路由入场：整页淡入 + 轻微上浮，挂 Layout 的内容壳（按 pathname 重挂）。
+         * 位移刻意比 slide-up 小（6px），大面积移动会显得晃。
+         */
+        'page-in': {
+          from: { opacity: '0', transform: 'translateY(6px)' },
+          to: { opacity: '1', transform: 'translateY(0)' },
+        },
+        /* 状态点呼吸：透明度在 1 与 0.45 之间往复，表示「正在进行」 */
+        breathe: {
+          '0%, 100%': { opacity: '1' },
+          '50%': { opacity: '0.45' },
+        },
       },
 
       animation: {
@@ -188,6 +201,8 @@ export default {
         'slide-in-right': 'slide-in-right 200ms cubic-bezier(0.32, 0.72, 0, 1)',
         'scale-in': 'scale-in 180ms cubic-bezier(0.32, 0.72, 0, 1)',
         shimmer: 'shimmer 1.6s infinite',
+        'page-in': 'page-in 230ms cubic-bezier(0.32, 0.72, 0, 1)',
+        breathe: 'breathe 2.6s ease-in-out infinite',
       },
     },
   },

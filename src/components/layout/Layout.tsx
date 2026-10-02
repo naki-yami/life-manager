@@ -69,9 +69,17 @@ const ShortcutBinder: React.FC = () => {
 export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const [navOpen, setNavOpen] = useState(false);
   const isDesktop = useMediaQuery(DESKTOP_QUERY);
+  const mainRef = useRef<HTMLElement>(null);
+  const { pathname } = useLocation();
 
   useTheme();
   useDensity();
+
+  // 换路由时把内容区滚回顶部：页面整体重挂 + 入场动画，停在半空会很怪
+  // （scrollTo 用可选调用 —— jsdom 的元素上没有这个方法，测试环境直接跳过）
+  useEffect(() => {
+    mainRef.current?.scrollTo?.({ top: 0 });
+  }, [pathname]);
 
   return (
     <CommandPaletteProvider>
@@ -90,15 +98,19 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
         <div className="flex min-h-0 flex-1">
           <Sidebar />
           <main
+            ref={mainRef}
             id="main-content"
             tabIndex={-1}
             className="min-w-0 flex-1 overflow-y-auto p-page focus:outline-none"
           >
             {/* 窄屏底部有固定的 Tab 条，内容多留出它的高度免得被压住 */}
             <div className="mx-auto w-full max-w-5xl pb-16 lg:pb-0 xl:max-w-6xl 2xl:max-w-7xl">
-              {/* 只在写入失败时渲染，正常情况下不占位 */}
-              <StorageAlert />
-              {children}
+              {/* 按 pathname 重挂：路由切换时内容壳做一次 page-in 入场（纯 CSS，尊重减弱动态） */}
+              <div key={pathname} className="animate-page-in motion-reduce:animate-none">
+                {/* 只在写入失败时渲染，正常情况下不占位 */}
+                <StorageAlert />
+                {children}
+              </div>
             </div>
           </main>
         </div>

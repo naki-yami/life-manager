@@ -34,7 +34,7 @@ export const Card = React.forwardRef<HTMLDivElement, CardProps>(
               onClick();
             }
           }}
-          className={`rounded-lg border border-line-subtle bg-surface transition-colors duration-fast ease-standard hover:border-line focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-line-focus focus-visible:ring-offset-2 focus-visible:ring-offset-canvas cursor-pointer ${className}`}
+          className={`rounded-lg border border-line-subtle bg-surface transition-[border-color,transform] duration-fast ease-standard hover:-translate-y-px hover:border-line focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-line-focus focus-visible:ring-offset-2 focus-visible:ring-offset-canvas cursor-pointer ${className}`}
         >
           {children}
         </div>
