@@ -102,7 +102,8 @@ export const ProjectHero: React.FC<ProjectHeroProps> = ({
             )}
           </div>
 
-          <div className="flex shrink-0 flex-wrap items-center gap-2">
+          {/* 不挂 shrink-0：窄屏下按钮行要能收缩并逐个换行，钉住自然宽会被卡片 overflow 裁掉 */}
+          <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
             <Select
               aria-label={`调整「${project.name}」的状态`}
               className="w-32"

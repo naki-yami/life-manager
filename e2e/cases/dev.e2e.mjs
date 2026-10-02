@@ -129,6 +129,25 @@ export function registerDevCases() {
     const overflow = await pageOverflow(session);
     assert.ok(overflow <= 1, `页面级横向溢出应 ≤ 1px，实际 ${overflow}px`);
 
+    // 详情头的操作按钮必须全部落在视口内 —— 窄屏下它们要换行，不许被卡片裁切
+    const heroButtons = await session.evaluate(
+      `(() => {
+        return [...document.querySelectorAll('button')].filter((n) =>
+          ['编辑', '删除', '归档', '取消归档'].includes(n.textContent.trim()),
+        ).map((n) => {
+          const r = n.getBoundingClientRect();
+          return { label: n.textContent.trim(), right: r.right, vw: document.documentElement.clientWidth };
+        });
+      })()`,
+    );
+    assert.ok(heroButtons.length > 0, '详情头操作按钮存在');
+    for (const button of heroButtons) {
+      assert.ok(
+        button.right <= button.vw + 1,
+        `「${button.label}」按钮右缘 ${button.right} 超出视口 ${button.vw}`,
+      );
+    }
+
     // 胶囊条真的存在且能在内层滚（内容比容器宽也不撑破页面）
     const rail = await session.evaluate(
       `(() => {
