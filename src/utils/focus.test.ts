@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import type { FocusSession, Task } from '../types';
+import type { FocusSession } from '../types';
 import {
   MAX_FOCUS_MINUTES,
-  TIMELINE_MINUTES,
   elapsedMinutes,
   elapsedSeconds,
   focusMinutes,
@@ -10,32 +9,8 @@ import {
   focusSummary,
   formatFocusDuration,
   isTimeOfDay,
-  layoutTimeboxes,
-  minutesToTime,
   normalizeTimebox,
-  snapMinutes,
-  snapToSlot,
-  timeToMinutes,
-  timeboxEnd,
-  timeboxRangeLabel,
-  timeboxedTasks,
-  timelinePosition,
-  timelineSlots,
 } from './focus';
-
-const task = (id: string, start: string, minutes: number, date = '2026-09-29'): Task => ({
-  id,
-  title: `任务 ${id}`,
-  description: '',
-  priority: 'medium',
-  status: 'pending',
-  dueDate: '',
-  subtasks: [],
-  repeat: null,
-  timebox: { date, start, minutes },
-  tags: [],
-  createdAt: '2026-09-29T00:00:00.000Z',
-});
 
 const session = (overrides: Partial<FocusSession> = {}): FocusSession => ({
   id: 's1',
@@ -53,7 +28,13 @@ const session = (overrides: Partial<FocusSession> = {}): FocusSession => ({
   ...overrides,
 });
 
-describe('时间解析', () => {
+/*
+ * 「今日时间轴」那张卡下线之后，刻度 / 吸附 / 重叠分列 / 位置百分比这一整套
+ * 排版计算的用例一并撤了 —— 连同实现。这里只留数据层还在用的部分：
+ * 时间格式校验、时间盒归一化、专注时长。
+ */
+
+describe('时间格式', () => {
   it('isTimeOfDay 只认 24 小时制的 HH:mm', () => {
     expect(isTimeOfDay('06:00')).toBe(true);
     expect(isTimeOfDay('23:59')).toBe(true);
@@ -62,63 +43,9 @@ describe('时间解析', () => {
     expect(isTimeOfDay('09:60')).toBe(false);
     expect(isTimeOfDay(900)).toBe(false);
   });
-
-  it('timeToMinutes 与 minutesToTime 互逆', () => {
-    expect(timeToMinutes('00:00')).toBe(0);
-    expect(timeToMinutes('09:30')).toBe(570);
-    expect(timeToMinutes('23:59')).toBe(1439);
-    expect(timeToMinutes('9:30')).toBeNull();
-    expect(timeToMinutes(undefined)).toBeNull();
-
-    expect(minutesToTime(0)).toBe('00:00');
-    expect(minutesToTime(570)).toBe('09:30');
-    expect(minutesToTime(1439)).toBe('23:59');
-    // 跨天按取模回绕，负数也不会画出 '-1:00' 这种时间
-    expect(minutesToTime(1440)).toBe('00:00');
-    expect(minutesToTime(-30)).toBe('23:30');
-  });
-
-  it('时间轴刻度是 06:00–23:30 的 30 分钟格', () => {
-    const slots = timelineSlots();
-    expect(slots).toHaveLength(36);
-    expect(slots[0]).toBe('06:00');
-    expect(slots[slots.length - 1]).toBe('23:30');
-  });
-});
-
-describe('吸附', () => {
-  it('开始时间吸附到 30 分钟刻度并夹在时间轴内', () => {
-    expect(snapToSlot(9 * 60 + 10)).toBe(9 * 60);
-    expect(snapToSlot(9 * 60 + 20)).toBe(9 * 60 + 30);
-    // 早于 06:00 与晚于 23:30 的落点都会被夹回来
-    expect(snapToSlot(3 * 60)).toBe(6 * 60);
-    expect(snapToSlot(23 * 60 + 50)).toBe(23 * 60 + 30);
-  });
-
-  it('时长吸附按 15 分钟取整并夹在 15 分钟 – 10 小时之间', () => {
-    expect(snapMinutes(52)).toBe(45);
-    expect(snapMinutes(53)).toBe(60);
-    expect(snapMinutes(0)).toBe(15);
-    expect(snapMinutes(-20)).toBe(15);
-    expect(snapMinutes(99999)).toBe(600);
-    expect(snapMinutes(Number.NaN)).toBe(15);
-    expect(snapMinutes('30')).toBe(15);
-  });
 });
 
 describe('时间盒', () => {
-  it('结束时刻与区间文案', () => {
-    const box = { date: '2026-09-29', start: '09:00', minutes: 90 };
-    expect(timeboxEnd(box)).toBe(630);
-    expect(timeboxRangeLabel(box)).toBe('09:00–10:30');
-  });
-
-  it('跨到第二天的盒子收口成 24:00，不写成 00:00', () => {
-    expect(timeboxRangeLabel({ date: '2026-09-29', start: '23:00', minutes: 120 })).toBe(
-      '23:00–24:00',
-    );
-  });
-
   it('normalizeTimebox 收下合法时间盒', () => {
     expect(normalizeTimebox({ date: '2026-09-29', start: '09:00', minutes: 90 })).toEqual({
       date: '2026-09-29',
@@ -149,95 +76,6 @@ describe('时间盒', () => {
       start: '09:00',
       minutes: 600,
     });
-  });
-
-  it('timeboxedTasks 只取那一天的盒子并按开始时间排序', () => {
-    const tasks = [
-      task('a', '14:00', 60),
-      task('b', '09:00', 60),
-      task('c', '09:00', 30),
-      task('d', '10:00', 60, '2026-09-30'),
-      { ...task('e', '08:00', 60), timebox: null },
-    ];
-
-    expect(timeboxedTasks(tasks, '2026-09-29').map((item) => item.task.id)).toEqual([
-      'c',
-      'b',
-      'a',
-    ]);
-  });
-
-  it('没排时间盒的任务不会出现在时间轴上', () => {
-    const noBox: Task = { ...task('a', '09:00', 60), timebox: null };
-    expect(timeboxedTasks([noBox], '2026-09-29')).toEqual([]);
-  });
-});
-
-describe('layoutTimeboxes', () => {
-  it('互不重叠的盒子各占整宽', () => {
-    const laid = layoutTimeboxes([
-      { id: 'a', title: 'A', start: 540, minutes: 60 },
-      { id: 'b', title: 'B', start: 660, minutes: 60 },
-    ]);
-    expect(laid.map((box) => [box.id, box.lane, box.lanes])).toEqual([
-      ['a', 0, 1],
-      ['b', 0, 1],
-    ]);
-  });
-
-  it('重叠的盒子并排分列，同一组共用列数', () => {
-    const laid = layoutTimeboxes([
-      { id: 'a', title: 'A', start: 540, minutes: 60 },
-      { id: 'b', title: 'B', start: 570, minutes: 60 },
-    ]);
-    expect(laid.map((box) => [box.id, box.lane, box.lanes])).toEqual([
-      ['a', 0, 2],
-      ['b', 1, 2],
-    ]);
-  });
-
-  it('链条式重叠只需两列：前一个结束后，第三个盒子回到第一列', () => {
-    const laid = layoutTimeboxes([
-      { id: 'a', title: 'A', start: 540, minutes: 60 },
-      { id: 'b', title: 'B', start: 570, minutes: 60 },
-      { id: 'c', title: 'C', start: 600, minutes: 60 },
-    ]);
-    // a、b、c 首尾相接而不是两两同时进行，所以并排两列就够（c 回收 a 空出的第一列）
-    expect(laid.map((box) => [box.id, box.lane, box.lanes])).toEqual([
-      ['a', 0, 2],
-      ['b', 1, 2],
-      ['c', 0, 2],
-    ]);
-  });
-
-  it('不相干的一组不会被另一组的重叠压窄', () => {
-    const laid = layoutTimeboxes([
-      { id: 'a', title: 'A', start: 540, minutes: 60 },
-      { id: 'b', title: 'B', start: 570, minutes: 60 },
-      { id: 'c', title: 'C', start: 780, minutes: 60 },
-    ]);
-    expect(laid.map((box) => [box.id, box.lane, box.lanes])).toEqual([
-      ['a', 0, 2],
-      ['b', 1, 2],
-      ['c', 0, 1],
-    ]);
-  });
-});
-
-describe('timelinePosition', () => {
-  it('按时间轴总长换算成百分比', () => {
-    const at = timelinePosition(6 * 60, 30);
-    expect(at.top).toBe(0);
-    expect(at.height).toBeCloseTo((30 / TIMELINE_MINUTES) * 100, 6);
-
-    const noon = timelinePosition(12 * 60, 60);
-    expect(noon.top).toBeCloseTo((360 / TIMELINE_MINUTES) * 100, 6);
-  });
-
-  it('轴外的部分被夹掉，不会溢出时间轴', () => {
-    expect(timelinePosition(3 * 60, 60).top).toBe(0);
-    const late = timelinePosition(23 * 60 + 30, 120);
-    expect(late.top + late.height).toBeCloseTo(100, 6);
   });
 });
 
