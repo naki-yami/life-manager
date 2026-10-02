@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   BookHeart,
   CheckCircle2,
@@ -115,8 +116,16 @@ export const JournalPage: React.FC = () => {
   const undoableRemove = useUndoableRemove();
 
   const today = todayKey();
-  /** null = 还没挑日期：宽屏显示占位，窄屏不弹出抽屉 */
-  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  /** null = 还没挑日期：宽屏显示占位，窄屏不弹出抽屉。选中日期进 URL（?date=），刷新不丢 */
+  const [searchParams, setSearchParams] = useSearchParams();
+  const selectedDate = searchParams.get('date');
+  const setSelectedDate = (date: string | null): void =>
+    setSearchParams((previous) => {
+      const params = new URLSearchParams(previous);
+      if (date) params.set('date', date);
+      else params.delete('date');
+      return params;
+    });
   const [trendMode, setTrendMode] = useState<TrendMode>('week');
 
   const sorted = useMemo(

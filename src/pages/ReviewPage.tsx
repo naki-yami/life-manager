@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, NotebookPen, Save, TrendingDown, Trash2 } from 'lucide-react';
 import {
   Badge,
@@ -92,8 +93,33 @@ export const ReviewPage: React.FC = () => {
   const undoableRemove = useUndoableRemove();
 
   const today = todayKey();
-  const [period, setPeriod] = useState<ReviewPeriod>('week');
-  const [start, setStart] = useState(() => periodStartOf('week', today));
+
+  /*
+   * 周期与起点进 URL（?period=&start=）：分享 / 刷新 / 回退都不丢当前看到的那期。
+   * setPeriod / setStart 保持原签名（含函数式更新），调用点零改动。
+   */
+  const [searchParams, setSearchParams] = useSearchParams();
+  const periodParam = searchParams.get('period');
+  const period: ReviewPeriod =
+    periodParam === 'day' || periodParam === 'week' ? periodParam : 'week';
+  const startParam = searchParams.get('start');
+  const start =
+    startParam && /^\d{4}-\d{2}-\d{2}$/.test(startParam)
+      ? startParam
+      : periodStartOf(period, today);
+  /*
+   * 单次更新入口。同一个事件里要改多个键（比如切周期 = period + start 一起变）
+   * 必须合成一次 setSearchParams —— 函数式更新拿到的是渲染时的旧参数，
+   * 连调两次 setter，第二次会把第一次刚写的键整个冲掉。
+   */
+  const updateParams = (patch: Record<string, string>): void =>
+    setSearchParams((previous) => {
+      const params = new URLSearchParams(previous);
+      for (const [key, value] of Object.entries(patch)) params.set(key, value);
+      return params;
+    });
+  const setStart = (next: string | ((value: string) => string)): void =>
+    updateParams({ start: typeof next === 'function' ? next(start) : next });
 
   const activeKey = reviewKey(period, start);
   const stored = findReview(reviews, period, start);
@@ -158,15 +184,13 @@ export const ReviewPage: React.FC = () => {
   );
 
   const switchPeriod = (next: ReviewPeriod): void => {
-    setPeriod(next);
-    setStart(periodStartOf(next, start));
+    updateParams({ period: next, start: periodStartOf(next, start) });
   };
 
   const goToCurrent = (): void => setStart(periodStartOf(period, today));
 
   const openHistory = (entry: ReviewEntry): void => {
-    setPeriod(entry.period);
-    setStart(entry.date);
+    updateParams({ period: entry.period, start: entry.date });
   };
 
   const handleSave = (): void => {

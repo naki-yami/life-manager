@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Activity, BarChart3, CalendarCheck, Flame, TrendingUp } from 'lucide-react';
 import {
   Badge,
@@ -122,7 +122,23 @@ export const StatsPage: React.FC = () => {
   const goals = useGoalStore((state) => state.goals);
 
   const today = todayKey();
-  const [range, setRange] = useState<StatsRange>('30');
+  /* 时间窗进 URL（?range=）：刷新 / 回退不丢；custom 的两个日期框仍留本地 */
+  const [searchParams, setSearchParams] = useSearchParams();
+  const rangeParam = searchParams.get('range');
+  const range: StatsRange =
+    rangeParam === '7' ||
+    rangeParam === '30' ||
+    rangeParam === '90' ||
+    rangeParam === 'custom' ||
+    rangeParam === 'all'
+      ? rangeParam
+      : '30';
+  const setRange = (next: StatsRange): void =>
+    setSearchParams((previous) => {
+      const params = new URLSearchParams(previous);
+      params.set('range', next);
+      return params;
+    });
   /** 自定义区间的两端，默认最近 30 天 */
   const [customFrom, setCustomFrom] = useState(() =>
     addDays(todayKey(), -(CUSTOM_DEFAULT_DAYS - 1)),

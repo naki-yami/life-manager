@@ -1,7 +1,7 @@
 import React from 'react';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { StatsPage } from './StatsPage';
 import { useTaskStore } from '../store/taskStore';
@@ -508,5 +508,62 @@ describe('StatsPage', () => {
     expect(
       screen.getByRole('button', { name: '导出「读书 · 阅读时长」为 PNG' }),
     ).toBeInTheDocument();
+  });
+});
+
+/** 把当前 URL 打到 DOM 上，便于断言「状态真的进 URL 了」 */
+const LocationProbe: React.FC = () => {
+  const location = useLocation();
+  return <output data-testid="location">{location.search}</output>;
+};
+
+const renderStatsAt = (entry: string) =>
+  render(
+    <MemoryRouter initialEntries={[entry]}>
+      <Routes>
+        <Route
+          path="/insight/stats"
+          element={
+            <>
+              <StatsPage />
+              <LocationProbe />
+            </>
+          }
+        />
+        <Route path="/tasks" element={<div>今日计划页面</div>} />
+      </Routes>
+    </MemoryRouter>,
+  );
+
+/*
+ * 时间窗进 URL（`?range=`）。
+ *
+ * 以前是 `useState`：看「近 90 天」，点进某个模块再退回来就回到默认的 30 天。
+ * 自定义区间的两个日期框仍留本地状态 —— 它们是「调到一半」的中间态，
+ * 每敲一下都往地址栏塞一条历史记录反而难用。
+ */
+describe('StatsPage 时间窗进 URL', () => {
+  it('URL 带 ?range=7 时直接按 7 天渲染', () => {
+    renderStatsAt('/insight/stats?range=7');
+
+    expect(screen.getByRole('button', { name: '7 天' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: '30 天' })).not.toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+  });
+
+  it('URL 里的 range 认不出时退回默认的 30 天', () => {
+    renderStatsAt('/insight/stats?range=999');
+
+    expect(screen.getByRole('button', { name: '30 天' })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('点「90 天」把 range 写进 URL', async () => {
+    renderStatsAt('/insight/stats');
+
+    await userEvent.click(screen.getByRole('button', { name: '90 天' }));
+
+    expect(screen.getByTestId('location')).toHaveTextContent('range=90');
   });
 });

@@ -1,7 +1,7 @@
 import React from 'react';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, useLocation } from 'react-router-dom';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { JournalPage } from './JournalPage';
 import { ToastProvider } from '../components/ui';
@@ -9,7 +9,7 @@ import { MASTER_DETAIL_QUERY } from '../components/layout';
 import { useJournalStore } from '../store/journalStore';
 import { useHabitStore } from '../store/habitStore';
 import { mockMediaQueries } from '../test/matchMedia';
-import { addDays, todayKey } from '../utils/date';
+import { addDays, formatDayLabel, todayKey } from '../utils/date';
 import type { JournalEntry } from '../types';
 
 const TODAY = todayKey();
@@ -265,5 +265,55 @@ describe('JournalPage 趋势', () => {
   it('没有数据时趋势图给空态占位，不抛错', () => {
     renderPage();
     expect(screen.getByRole('img', { name: '心情趋势（暂无数据）' })).toBeInTheDocument();
+  });
+});
+
+/** 把当前 URL 打到 DOM 上，便于断言「状态真的进 URL 了」 */
+const LocationProbe: React.FC = () => {
+  const location = useLocation();
+  return <output data-testid="location">{location.search}</output>;
+};
+
+const renderJournalAt = (entry: string): ReturnType<typeof render> =>
+  render(
+    <MemoryRouter initialEntries={[entry]}>
+      <ToastProvider>
+        <JournalPage />
+        <LocationProbe />
+      </ToastProvider>
+    </MemoryRouter>,
+  );
+
+/*
+ * 选中日期进 URL（`?date=`）。
+ *
+ * 以前是 `useState`：刷新、从别处跳回来、按浏览器回退，选中的那天全丢，
+ * 用户得重新在日历上找一遍。开发页的 `?project=` 是现成模式，这里对齐它。
+ */
+describe('JournalPage 选中日期进 URL', () => {
+  it('URL 带 ?date= 时右栏直接打开那一天，不用再点一次', () => {
+    wide();
+    renderJournalAt(`/growth/journal?date=${YESTERDAY}`);
+
+    expect(screen.getByRole('button', { name: '前一天' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '回到今天' })).toBeInTheDocument();
+  });
+
+  it('没带 ?date= 时不自己挑一天，右栏保持占位', () => {
+    wide();
+    renderJournalAt('/growth/journal');
+
+    expect(screen.queryByRole('button', { name: '前一天' })).not.toBeInTheDocument();
+  });
+
+  it('点「回到今天」把日期写回 URL', async () => {
+    wide();
+    renderJournalAt(`/growth/journal?date=${YESTERDAY}`);
+
+    await userEvent.click(screen.getByRole('button', { name: '回到今天' }));
+
+    expect(screen.getByTestId('location')).toHaveTextContent(`date=${TODAY}`);
+    // 顺带确认 UI 真的跟着走了：今天这一期会亮「今天」徽章
+    expect(screen.getByText(formatDayLabel(TODAY))).toBeInTheDocument();
   });
 });

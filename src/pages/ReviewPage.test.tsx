@@ -1,7 +1,7 @@
 import React from 'react';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, useLocation } from 'react-router-dom';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { ReviewPage } from './ReviewPage';
 import { ToastProvider } from '../components/ui';
@@ -194,5 +194,63 @@ describe('ReviewPage 历史与删除', () => {
 
     expect(screen.getByLabelText('本周最有价值的一件事')).toHaveValue('上周写下的');
     expect(screen.getByRole('button', { name: '回到本周' })).toBeEnabled();
+  });
+});
+
+/** 把当前 URL 打到 DOM 上，便于断言「状态真的进 URL 了」 */
+const LocationProbe: React.FC = () => {
+  const location = useLocation();
+  return <output data-testid="location">{location.search}</output>;
+};
+
+const renderReviewAt = (entry: string): ReturnType<typeof render> =>
+  render(
+    <MemoryRouter initialEntries={[entry]}>
+      <ToastProvider>
+        <ReviewPage />
+        <LocationProbe />
+      </ToastProvider>
+    </MemoryRouter>,
+  );
+
+/*
+ * 周期与起点进 URL（`?period=&start=`）。
+ *
+ * 以前是 `useState`：翻到上上周去补记，刷新一下或者从复盘历史跳回来就回到本周。
+ * 现在整期进地址栏，回退 / 分享 / 刷新都不丢。
+ */
+describe('ReviewPage 周期与起点进 URL', () => {
+  it('URL 带 ?period=day&start= 时直接打开那一期', () => {
+    renderReviewAt(`/insight/review?period=day&start=${TODAY}`);
+
+    expect(screen.getByRole('button', { name: '每日复盘' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    // 未选中那档是 aria-pressed="false"，不是没有这个属性
+    expect(screen.getByRole('button', { name: '每周复盘' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
+  });
+
+  it('URL 里的周期认不出时退回默认的每周复盘', () => {
+    renderReviewAt('/insight/review?period=季度');
+
+    expect(screen.getByRole('button', { name: '每周复盘' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+  });
+
+  it('切周期把 period 与 start 一次性写进 URL', async () => {
+    renderReviewAt('/insight/review');
+
+    await userEvent.click(screen.getByRole('button', { name: '每日复盘' }));
+
+    const search = screen.getByTestId('location').textContent ?? '';
+    expect(search).toContain('period=day');
+    // start 必须跟着一起落，否则切完周期看到的是上一期的起点
+    expect(search).toContain('start=');
   });
 });
