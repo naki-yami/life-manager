@@ -7,6 +7,7 @@ import { ToastProvider } from '../components/ui';
 import { useFitnessStore } from '../store/fitnessStore';
 import { useLibraryStore } from '../store/libraryStore';
 import { useBodyStore } from '../store/bodyStore';
+import { useTaskStore } from '../store/taskStore';
 import { addDays, formatShortDate, todayKey } from '../utils/date';
 
 beforeEach(() => {
@@ -634,5 +635,102 @@ describe('FitnessPage 改一次训练', () => {
     expect(records).toHaveLength(1);
     expect(records[0]!.exercises[0]!.weight).toBe(100);
     expect(screen.queryByText(/新纪录/)).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * 卡片上的标签编辑器。
+ *
+ * 只断言两件可观察的事：屏幕上出现了哪些标签，以及 store 里那条记录的 `tags` 变成了什么。
+ * 不碰组件内部状态，也不碰 DOM 层级 —— 将来重构卡片布局时这些用例应当照旧通过。
+ */
+describe('FitnessPage 记录卡片上的标签', () => {
+  /** 切到训练记录视图，让记录卡片渲染出来 */
+  const openRecordsView = async (): Promise<void> => {
+    render(<FitnessPage />);
+    await userEvent.click(screen.getByRole('button', { name: /^训练记录/ }));
+  };
+
+  it('卡片上能看到这笔记录已有的标签', async () => {
+    addRecord('推日', todayKey());
+    const id = useFitnessStore.getState().records[0]!.id;
+    useFitnessStore.getState().updateRecord(id, { tags: ['胸', '推日'] });
+
+    await openRecordsView();
+
+    expect(screen.getByText('#胸')).toBeInTheDocument();
+    expect(screen.getByText('#推日')).toBeInTheDocument();
+  });
+
+  it('展开编辑器加标签，只改这一条记录', async () => {
+    // 两天各一条，页面上按日期倒序分组，今天那条在前
+    addRecord('推日', todayKey(), 60);
+    addRecord('拉日', addDays(todayKey(), -1), 50);
+
+    await openRecordsView();
+
+    await userEvent.click(screen.getAllByRole('button', { name: '添加标签' })[0]!);
+    await userEvent.type(screen.getByLabelText('编辑标签'), '腿{Enter}');
+    await userEvent.click(screen.getByRole('button', { name: '完成' }));
+
+    const byPlan = (planName: string) =>
+      useFitnessStore.getState().records.find((record) => record.planName === planName)!;
+    expect(byPlan('推日').tags).toEqual(['腿']);
+    // 另一条记录不能被顺手改到
+    expect(byPlan('拉日').tags).toEqual([]);
+  });
+
+  it('删掉一个已有标签', async () => {
+    addRecord('推日', todayKey());
+    const id = useFitnessStore.getState().records[0]!.id;
+    useFitnessStore.getState().updateRecord(id, { tags: ['胸', '打错了'] });
+
+    await openRecordsView();
+
+    // 展开后输入框里带着已有标签，删掉第二个再提交
+    await userEvent.click(screen.getByRole('button', { name: '编辑标签' }));
+    await userEvent.click(screen.getByRole('button', { name: '移除标签 打错了' }));
+
+    expect(useFitnessStore.getState().records[0]!.tags).toEqual(['胸']);
+  });
+
+  it('没有标签的记录只给入口，不渲染标签片', async () => {
+    addRecord('推日', todayKey());
+    await openRecordsView();
+
+    expect(screen.getByRole('button', { name: '添加标签' })).toBeInTheDocument();
+    expect(screen.queryByText(/^#/)).not.toBeInTheDocument();
+  });
+
+  it('输入标签时给出的建议来自全站，不只是本页（F2 的标签词表）', async () => {
+    addRecord('推日', todayKey());
+    // 别处用过的标签应当出现在健身页的建议里
+    useTaskStore.setState({
+      tasks: [
+        {
+          id: 't1',
+          title: '写周报',
+          description: '',
+          tags: ['工作'],
+          priority: 'medium',
+          status: 'pending',
+          dueDate: '',
+          subtasks: [],
+          repeat: null,
+          timebox: null,
+          createdAt: new Date().toISOString(),
+        },
+      ],
+      memos: [],
+    });
+
+    await openRecordsView();
+    await userEvent.click(screen.getByRole('button', { name: '添加标签' }));
+
+    // 建议区在「用过：」下，按钮的可访问名就是 #标签 本身
+    expect(screen.getByText('用过：')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: '#工作' }));
+
+    expect(useFitnessStore.getState().records[0]!.tags).toEqual(['工作']);
   });
 });

@@ -351,4 +351,24 @@ describe('标签索引与筛选', () => {
     expect(matchEntitiesByTag(entities, '')).toHaveLength(3);
     expect(matchEntitiesByTag(entities, '不存在')).toEqual([]);
   });
+
+  /**
+   * 健身与饮食这两类记录当时「只做了索引、没做页面上的标签编辑器」，
+   * 所以标签搜索是它们唯一的标签入口。补上卡片编辑器之后，这条能力不能被碰坏 ——
+   * 这组用例就是那道回归闸。
+   */
+  it('训练与饮食记录的标签同样能被 #标签 搜到', () => {
+    const entities = buildEntityIndex(
+      emptySource({
+        workoutRecords: [workout({ id: 'w1', tags: ['胸', '推日'] })],
+        mealRecords: [meal({ id: 'me1', tags: ['外食'] })],
+      }),
+    );
+
+    expect(matchEntitiesByTag(entities, '胸').map((entity) => entity.id)).toEqual(['workout:w1']);
+    expect(matchEntitiesByTag(entities, '推').map((entity) => entity.id)).toEqual(['workout:w1']);
+    expect(matchEntitiesByTag(entities, '外食').map((entity) => entity.id)).toEqual(['meal:me1']);
+    // 页面上的标签编辑器只管展示与编辑，不该让记录变得可聚焦（那是另一件事，见 spec 的范围外）
+    expect(matchEntitiesByTag(entities, '胸')[0]!.focusable).toBe(false);
+  });
 });

@@ -31,6 +31,7 @@ import {
   Select,
   StatStrip,
   SubmitForm,
+  TagEditor,
 } from '../components/ui';
 import { ListEmptyState, PageHeader, Toolbar } from '../components/layout';
 import { BarChart, Heatmap, LineChart } from '../components/charts';
@@ -64,6 +65,7 @@ import {
 import type { BodyMetric, Exercise, FitnessPlan, WorkoutRecord } from '../types';
 import { ToastContext } from '../components/ui/toastContext';
 import { useNewEntryShortcut } from '../hooks/useShortcuts';
+import { useTagSuggestions } from '../hooks/useTagSuggestions';
 import { allExercises, useLibraryStore, type LibraryExercise } from '../store/libraryStore';
 import { EQUIPMENTS, EXERCISE_SEEDS, MUSCLE_GROUPS } from '../data/exercises';
 import { MonthCalendar, type CalendarMark } from '../components/ui';
@@ -183,6 +185,8 @@ export const FitnessPage: React.FC = () => {
     replaceRecords,
   } = useFitnessStore();
   const undoableRemove = useUndoableRemove();
+  /** 全站标签建议：与读书 / 游戏 / 任务等页共用同一个来源，避免各页各造一套 */
+  const tagSuggestions = useTagSuggestions();
 
   const [view, setView] = useState<View>('plans');
 
@@ -1118,6 +1122,14 @@ export const FitnessPage: React.FC = () => {
                           {record.notes && (
                             <p className="mt-2 text-sm text-content-tertiary">{record.notes}</p>
                           )}
+
+                          <div className="mt-2">
+                            <TagEditor
+                              tags={record.tags}
+                              suggestions={tagSuggestions}
+                              onChange={(tags) => updateRecord(record.id, { tags })}
+                            />
+                          </div>
                         </div>
                         <div className="flex shrink-0 items-center">
                           {/*

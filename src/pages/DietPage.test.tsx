@@ -484,3 +484,59 @@ describe('DietPage 改一餐', () => {
     expect(useDietStore.getState().records[0]!.totalCalories).toBe(620);
   });
 });
+
+/**
+ * 卡片上的标签编辑器。
+ *
+ * 与健身页那组同形：只断言屏幕上出现了哪些标签、以及 store 里那条记录的 `tags` 变成了什么。
+ */
+describe('DietPage 记录卡片上的标签', () => {
+  const lunch = [{ name: '牛肉面', category: '主食', calories: 620 }];
+
+  it('卡片上能看到这笔记录已有的标签', () => {
+    addMeal(today, 'lunch', lunch);
+    const id = useDietStore.getState().records[0]!.id;
+    useDietStore.getState().updateRecord(id, { tags: ['外食'] });
+
+    render(<DietPage />);
+
+    expect(screen.getByText('#外食')).toBeInTheDocument();
+  });
+
+  it('展开编辑器加标签，只改这一条记录', async () => {
+    addMeal(today, 'lunch', lunch);
+    addMeal(today, 'dinner', [{ name: '沙拉', category: '蔬菜', calories: 180 }]);
+
+    render(<DietPage />);
+
+    // 同一格里两条记录，第一条是午餐（addRecord 前插，页面按餐次渲染）
+    await userEvent.click(screen.getAllByRole('button', { name: '添加标签' })[0]!);
+    await userEvent.type(screen.getByLabelText('编辑标签'), '加班餐{Enter}');
+    await userEvent.click(screen.getByRole('button', { name: '完成' }));
+
+    const tagged = useDietStore.getState().records.filter((record) => record.tags.length > 0);
+    expect(tagged).toHaveLength(1);
+    expect(tagged[0]!.tags).toEqual(['加班餐']);
+  });
+
+  it('删掉一个已有标签', async () => {
+    addMeal(today, 'lunch', lunch);
+    const id = useDietStore.getState().records[0]!.id;
+    useDietStore.getState().updateRecord(id, { tags: ['外食', '打错了'] });
+
+    render(<DietPage />);
+
+    await userEvent.click(screen.getByRole('button', { name: '编辑标签' }));
+    await userEvent.click(screen.getByRole('button', { name: '移除标签 打错了' }));
+
+    expect(useDietStore.getState().records[0]!.tags).toEqual(['外食']);
+  });
+
+  it('没有标签的记录只给入口，不渲染标签片', () => {
+    addMeal(today, 'lunch', lunch);
+    render(<DietPage />);
+
+    expect(screen.getByRole('button', { name: '添加标签' })).toBeInTheDocument();
+    expect(screen.queryByText(/^#/)).not.toBeInTheDocument();
+  });
+});

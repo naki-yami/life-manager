@@ -38,6 +38,7 @@ import {
   Select,
   StatStrip,
   SubmitForm,
+  TagEditor,
 } from '../components/ui';
 import { ListEmptyState, PageHeader, Toolbar } from '../components/layout';
 import { BarChart, Sparkline } from '../components/charts';
@@ -48,6 +49,7 @@ import { FOOD_SEEDS } from '../data/foods';
 import { useUndoableRemove } from '../hooks/useUndoableRemove';
 import { matchesKeyword } from '../utils/search';
 import { useEntityList } from '../hooks/useEntityList';
+import { useTagSuggestions } from '../hooks/useTagSuggestions';
 import {
   addDays,
   formatDayLabel,
@@ -133,6 +135,8 @@ export const DietPage: React.FC = () => {
     setWater,
   } = useDietStore();
   const undoableRemove = useUndoableRemove();
+  /** 全站标签建议：与读书 / 游戏 / 任务等页共用同一个来源，避免各页各造一套 */
+  const tagSuggestions = useTagSuggestions();
 
   const [view, setView] = useState<View>('day');
   const [trendRange, setTrendRange] = useState<TrendRange>('day');
@@ -424,6 +428,14 @@ export const DietPage: React.FC = () => {
             {record.totalFat > 0 && ` · 脂肪 ${Math.round(record.totalFat)}g`}
             {view === 'all' ? ` · ${MEAL_LABEL[mealType]} · ${recordDate}` : ''}
           </p>
+
+          <div className="mt-2">
+            <TagEditor
+              tags={record.tags}
+              suggestions={tagSuggestions}
+              onChange={(tags) => updateRecord(record.id, { tags })}
+            />
+          </div>
         </div>
         <div className="flex shrink-0 items-center">
           {/* 有食物条目才给「存成模板」：空记录存出来的模板没有意义 */}
