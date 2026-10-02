@@ -7,6 +7,7 @@ import { persistOptions } from './persist';
 import { asRecord, normalizeArray, pickNumber, pickNumberMap } from './normalize';
 import { mealRecordSchema, mealTemplateSchema } from '../services/schemas';
 import { normalizeTags } from '../utils/tags';
+import { clampWaterGlasses, DEFAULT_DIET_GOALS } from '../utils/diet';
 
 interface DietState {
   records: MealRecord[];
@@ -31,23 +32,23 @@ interface DietState {
   getRecordsByDate: (date: string) => MealRecord[];
   replaceRecords: (records: MealRecord[]) => void;
   replaceTemplates: (templates: MealTemplate[]) => void;
+  /** 整块换掉饮水打卡（导入备份用）；逐日改走 `setWater` */
+  replaceWater: (water: Record<string, number>) => void;
 }
-
-const DEFAULT_GOALS: DietGoals = { calories: 2000, protein: 80 };
 
 /** 每日目标是用户可改的设置项，脏数据回退默认值即可，不涉及用户记录 */
 const normalizeGoals = (raw: unknown): DietGoals => {
   const record = asRecord(raw);
   return {
-    calories: pickNumber(record.calories, DEFAULT_GOALS.calories),
-    protein: pickNumber(record.protein, DEFAULT_GOALS.protein),
+    calories: pickNumber(record.calories, DEFAULT_DIET_GOALS.calories),
+    protein: pickNumber(record.protein, DEFAULT_DIET_GOALS.protein),
   };
 };
 
 const defaultState = {
   records: [] as MealRecord[],
   templates: [] as MealTemplate[],
-  goals: { ...DEFAULT_GOALS },
+  goals: { ...DEFAULT_DIET_GOALS },
   water: {} as Record<string, number>,
 };
 
@@ -149,10 +150,11 @@ export const useDietStore = create<DietState>()(
         set((state) => ({ templates: state.templates.filter((t) => t.id !== id) })),
       setGoals: (goals) => set({ goals }),
       setWater: (date, glasses) =>
-        set((state) => ({ water: { ...state.water, [date]: Math.max(0, Math.min(99, glasses)) } })),
+        set((state) => ({ water: { ...state.water, [date]: clampWaterGlasses(glasses) } })),
       getRecordsByDate: (date) => get().records.filter((r) => r.date === date),
       replaceRecords: (records) => set({ records }),
       replaceTemplates: (templates) => set({ templates }),
+      replaceWater: (water) => set({ water }),
     }),
     persistOptions<DietState, Pick<DietState, 'records' | 'templates' | 'goals' | 'water'>>({
       name: STORAGE_KEYS.diet,

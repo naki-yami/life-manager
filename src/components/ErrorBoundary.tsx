@@ -17,6 +17,7 @@ import { useGameStore } from '../store/gameStore';
 import { useThemeStore } from '../store/themeStore';
 import { useLibraryStore } from '../store/libraryStore';
 import { useUiStore } from '../store/uiStore';
+import { DEFAULT_DIET_GOALS } from '../utils/diet';
 
 interface ErrorBoundaryProps {
   children: React.ReactNode;
@@ -74,6 +75,8 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
         bodyMetrics: safeRead(() => useBodyStore.getState().records, [], '身体指标'),
         dietRecords: safeRead(() => useDietStore.getState().records, [], '饮食'),
         mealTemplates: safeRead(() => useDietStore.getState().templates, [], '餐次模板'),
+        dietGoals: safeRead(() => useDietStore.getState().goals, DEFAULT_DIET_GOALS, '饮食目标'),
+        dietWater: safeRead(() => useDietStore.getState().water, {}, '饮水打卡'),
         games: safeRead(() => useGameStore.getState().games, [], '游戏'),
         gameSessions: safeRead(() => useGameStore.getState().sessions, [], '游玩记录'),
         readingSessions: safeRead(() => useBookStore.getState().sessions, [], '阅读记录'),

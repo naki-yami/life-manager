@@ -64,6 +64,7 @@ import { useJournalStore } from '../store/journalStore';
 import { useGoalStore } from '../store/goalStore';
 import { useThemeStore, type AccentId } from '../store/themeStore';
 import { useUiStore } from '../store/uiStore';
+import { DEFAULT_DIET_GOALS } from '../utils/diet';
 import { BACKUP_MODULES, MODULE_LABELS } from '../services/schemas';
 import type { BackupData, BackupModule } from '../services/schemas';
 import {
@@ -85,6 +86,7 @@ import {
   exportModuleMarkdown,
   jsonOnlyReason,
   moduleFileName,
+  moduleJsonValue,
   moduleRecords,
   supportsFormat,
 } from '../services/moduleExport';
@@ -152,6 +154,9 @@ function applyPlan(data: Partial<BackupData>): void {
   if (data.bodyMetrics) useBodyStore.getState().replaceRecords(data.bodyMetrics);
   if (data.dietRecords) useDietStore.getState().replaceRecords(data.dietRecords);
   if (data.mealTemplates) useDietStore.getState().replaceTemplates(data.mealTemplates);
+  // 目标有现成的 setGoals；饮水只有逐日的 setWater，整块替换补一个 replaceWater
+  if (data.dietGoals) useDietStore.getState().setGoals(data.dietGoals);
+  if (data.dietWater) useDietStore.getState().replaceWater(data.dietWater);
   if (data.games) useGameStore.getState().replaceGames(data.games);
   if (data.gameSessions) useGameStore.getState().replaceSessions(data.gameSessions);
   if (data.readingSessions) useBookStore.getState().replaceSessions(data.readingSessions);
@@ -187,6 +192,9 @@ function resetStores(): void {
   useBodyStore.getState().replaceRecords([]);
   useDietStore.getState().replaceRecords([]);
   useDietStore.getState().replaceTemplates([]);
+  // 目标与饮水也是用户数据：不清它们，下次任何一次写入都会把旧值又存回去
+  useDietStore.getState().setGoals({ ...DEFAULT_DIET_GOALS });
+  useDietStore.getState().replaceWater({});
   useGameStore.getState().replaceGames([]);
   useGameStore.getState().replaceSessions([]);
   useHabitStore.getState().replaceHabits([]);
@@ -231,6 +239,10 @@ const MODULE_OPTIONS: SelectOption[] = BACKUP_MODULES.map((module) => ({
   value: module,
   label: MODULE_LABELS[module],
 }));
+
+/** 统计口径：这两个模块不是「条」，导出与导入预览的文案都用它 */
+const MODULE_UNITS: Partial<Record<BackupModule, string>> = { dietGoals: '项', dietWater: '天' };
+const unitOf = (module: BackupModule): string => MODULE_UNITS[module] ?? '条';
 
 /** 分模块导出的三种格式；扩展名从登记表来，免得这里和导出器两边各写一遍 */
 const FORMAT_OPTIONS: { value: ExportFormat; label: string }[] = [
@@ -415,7 +427,11 @@ export const SettingsPage: React.FC = () => {
       setExportFormat(format);
 
       if (format === 'json') {
-        downloadTextFile(fileName, exportModuleJson(exportModule, records));
+        // JSON 要的是模块本来的形状（饮水是映射、目标是单值），不是摊平后的行
+        downloadTextFile(
+          fileName,
+          exportModuleJson(exportModule, moduleJsonValue(data, exportModule)),
+        );
       } else if (format === 'csv') {
         downloadTextFile(fileName, exportModuleCsv(exportModule, records));
       } else {
@@ -427,7 +443,7 @@ export const SettingsPage: React.FC = () => {
         description:
           records.length === 0
             ? `${fileName} · 这个模块目前还没有数据`
-            : `${fileName} · 共 ${records.length} 条`,
+            : `${fileName} · 共 ${records.length} ${unitOf(exportModule)}`,
         tone: 'success',
       });
     },
@@ -1195,15 +1211,23 @@ export const SettingsPage: React.FC = () => {
                   {BACKUP_MODULES.map((module: BackupModule) => {
                     const row = parsed.plan.stats[module];
                     if (row.incoming === 0) return null;
+                    // 饮水记「天」、目标记「项」，其余模块记「条」
+                    const unit = unitOf(module);
+                    const suffix = unit === '条' ? '' : ` ${unit}`;
                     return (
                       <tr key={module} className="border-t border-line-subtle">
                         <td className="py-1.5 text-content-secondary">{MODULE_LABELS[module]}</td>
                         <td className="py-1.5 text-right text-content-tertiary tabular">
                           {row.incoming}
+                          {suffix}
                         </td>
-                        <td className="py-1.5 text-right text-success tabular">{row.added}</td>
+                        <td className="py-1.5 text-right text-success tabular">
+                          {row.added}
+                          {suffix}
+                        </td>
                         <td className="py-1.5 text-right text-content-tertiary tabular">
                           {row.skipped}
+                          {suffix}
                         </td>
                       </tr>
                     );

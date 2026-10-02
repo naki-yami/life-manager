@@ -4,14 +4,22 @@ import { FOLDER_BACKUP_FILE, chooseFolderBackupFolder, resetFolderBackupStore } 
 import { installIndexedDbStub } from '../test/indexedDbStub';
 import { fakeFolder, stubDirectoryPicker } from '../test/fakeFolder';
 import { useTaskStore } from '../store/taskStore';
+import { useDietStore } from '../store/dietStore';
 import { useHabitStore } from '../store/habitStore';
 import { useThemeStore } from '../store/themeStore';
 import { useUiStore } from '../store/uiStore';
+import { DEFAULT_DIET_GOALS } from '../utils/diet';
 
 const NOW = new Date(2026, 8, 29, 9, 0, 0);
 
 beforeEach(() => {
   useTaskStore.setState({ tasks: [], memos: [] });
+  useDietStore.setState({
+    records: [],
+    templates: [],
+    goals: { ...DEFAULT_DIET_GOALS },
+    water: {},
+  });
   useHabitStore.setState({ habits: [] });
   useThemeStore.setState({ themeMode: 'system' });
   useUiStore.setState({ density: 'comfortable', sidebarCollapsed: false });
@@ -30,12 +38,17 @@ describe('readAllData', () => {
     useThemeStore.getState().setAppearance('paper');
     useThemeStore.getState().setAccent('teal');
     useUiStore.getState().setDensity('compact');
+    useDietStore.getState().setGoals({ calories: 2300, protein: 110 });
+    useDietStore.getState().setWater('2026-09-29', 7);
 
     const data = readAllData();
 
     expect(data.tasks.map((task) => task.title)).toEqual(['写周报']);
     expect(data.habits.map((habit) => habit.name)).toEqual(['晨跑']);
     expect(data.books).toEqual([]);
+    // 饮食的目标与饮水也是用户数据，必须一起进备份（以前这两样会静默丢失）
+    expect(data.dietGoals).toEqual({ calories: 2300, protein: 110 });
+    expect(data.dietWater).toEqual({ '2026-09-29': 7 });
     expect(data.settings).toEqual({
       themeMode: 'dark',
       appearance: 'paper',

@@ -25,6 +25,7 @@ import { useWritingStore } from '../store/writingStore';
  */
 export function readAllData(): BackupData {
   const taskState = useTaskStore.getState();
+  const dietState = useDietStore.getState();
   return {
     tasks: taskState.tasks,
     memos: taskState.memos,
@@ -35,8 +36,10 @@ export function readAllData(): BackupData {
     fitnessPlans: useFitnessStore.getState().plans,
     fitnessRecords: useFitnessStore.getState().records,
     bodyMetrics: useBodyStore.getState().records,
-    dietRecords: useDietStore.getState().records,
-    mealTemplates: useDietStore.getState().templates,
+    dietRecords: dietState.records,
+    mealTemplates: dietState.templates,
+    dietGoals: dietState.goals,
+    dietWater: dietState.water,
     games: useGameStore.getState().games,
     gameSessions: useGameStore.getState().sessions,
     readingSessions: useBookStore.getState().sessions,

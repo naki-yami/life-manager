@@ -23,6 +23,8 @@ import {
   bodyMetricSchema,
   bookSchema,
   devProjectSchema,
+  dietGoalsSchema,
+  dietWaterSchema,
   fitnessPlanSchema,
   focusSessionSchema,
   gameSchema,
@@ -44,6 +46,8 @@ import {
   writingProjectSchema,
 } from './schemas';
 import type { BackupData, BackupModule } from './schemas';
+import { DEFAULT_DIET_GOALS, isDefaultDietGoals } from '../utils/diet';
+import type { DietGoals } from '../types';
 
 export interface ParseIssue {
   path: string;
@@ -154,6 +158,32 @@ export function parseBackup(
     return parsed.items;
   };
 
+  /**
+   * 非记录数组的模块（单值 / 映射）：与 `pick` 相反，只有「明确的对象」才算数据。
+   * 数组写成对象、对象写成数组，都记一条警告并当作「这个模块不在文件里」。
+   */
+  const pickObject = <S extends z.ZodTypeAny>(schema: S, key: string): z.infer<S> | undefined => {
+    const raw = source[key];
+    if (raw === undefined) return undefined;
+    if (typeof raw !== 'object' || raw === null) {
+      warnings.push({
+        path: key,
+        message: `期望对象，实际为 ${raw === null ? 'null' : typeof raw}`,
+      });
+      return undefined;
+    }
+    if (Array.isArray(raw)) {
+      warnings.push({ path: key, message: '期望对象，实际为数组' });
+      return undefined;
+    }
+    const parsed = schema.safeParse(raw);
+    if (!parsed.success) {
+      warnings.push({ path: key, message: formatZodError(parsed.error) });
+      return undefined;
+    }
+    return parsed.data as z.infer<S>;
+  };
+
   modules.tasks = pick(taskSchema, 'tasks');
   modules.memos = pick(memoSchema, 'memos');
   modules.books = pick(bookSchema, 'books');
@@ -165,6 +195,8 @@ export function parseBackup(
   modules.bodyMetrics = pick(bodyMetricSchema, 'bodyMetrics');
   modules.dietRecords = pick(mealRecordSchema, 'dietRecords');
   modules.mealTemplates = pick(mealTemplateSchema, 'mealTemplates');
+  modules.dietGoals = pickObject(dietGoalsSchema, 'dietGoals');
+  modules.dietWater = pickObject(dietWaterSchema, 'dietWater');
   modules.games = pick(gameSchema, 'games');
   modules.gameSessions = pick(gameSessionSchema, 'gameSessions');
   modules.readingSessions = pick(readingSessionSchema, 'readingSessions');
@@ -267,6 +299,59 @@ export function planImport(
     return mergeById(existing, incoming, mode, makeId);
   };
 
+  /**
+   * 模块单值（每日饮食目标）：`merge` 只在「本机还是默认值」时才采用备份的；
+   * `overwrite` 用备份的；备份里没有这个模块时一律保持本机现状。
+   * `append` 与 `merge` 相同 —— 「冲突就重新分配 id」对没有 id 的东西没有意义。
+   */
+  const planGoals = (): { goals: DietGoals; plan: ModulePlan } => {
+    const incoming = backup.dietGoals;
+    const existing = current.dietGoals ?? DEFAULT_DIET_GOALS;
+    if (incoming === undefined) {
+      return { goals: existing, plan: { incoming: 0, added: 0, skipped: 0 } };
+    }
+    if (mode === 'overwrite') {
+      return { goals: incoming, plan: { incoming: 1, added: 1, skipped: 0 } };
+    }
+    // merge / append：只在「本机还是默认值」且备份的值确实不同时才采用它 ——
+    // 两边都是默认值时算不上「新增了一项」。
+    const same = incoming.calories === existing.calories && incoming.protein === existing.protein;
+    const adopt = isDefaultDietGoals(existing) && !same;
+    return adopt
+      ? { goals: incoming, plan: { incoming: 1, added: 1, skipped: 0 } }
+      : { goals: existing, plan: { incoming: 1, added: 0, skipped: 1 } };
+  };
+
+  /**
+   * 日期键映射（饮水打卡）：`merge` / `append` 逐键补缺（只补本机没有的日期，已有的保持本机），
+   * `overwrite` 整块换成备份的；备份里没有这个模块时保持本机现状。
+   */
+  const planWater = (): { water: Record<string, number>; plan: ModulePlan } => {
+    const existing = current.dietWater ?? {};
+    const incoming = backup.dietWater;
+    if (incoming === undefined) {
+      return { water: existing, plan: { incoming: 0, added: 0, skipped: 0 } };
+    }
+    const incomingCount = Object.keys(incoming).length;
+    if (mode === 'overwrite') {
+      return {
+        water: { ...incoming },
+        plan: { incoming: incomingCount, added: incomingCount, skipped: 0 },
+      };
+    }
+    const water: Record<string, number> = { ...existing };
+    let added = 0;
+    for (const [date, glasses] of Object.entries(incoming)) {
+      if (Object.prototype.hasOwnProperty.call(water, date)) continue;
+      water[date] = glasses;
+      added += 1;
+    }
+    return {
+      water,
+      plan: { incoming: incomingCount, added, skipped: incomingCount - added },
+    };
+  };
+
   const tasks = merge('tasks', current.tasks ?? []);
   const memos = merge('memos', current.memos ?? []);
   const books = merge('books', current.books ?? []);
@@ -289,6 +374,9 @@ export function planImport(
   const customFoods = merge('customFoods', current.customFoods ?? []);
   const customExercises = merge('customExercises', current.customExercises ?? []);
 
+  const dietGoals = planGoals();
+  const dietWater = planWater();
+
   const count = (incoming: unknown[] | undefined) => (incoming ?? []).length;
 
   return {
@@ -304,6 +392,8 @@ export function planImport(
       bodyMetrics: bodyMetrics.items,
       dietRecords: dietRecords.items,
       mealTemplates: mealTemplates.items,
+      dietGoals: dietGoals.goals,
+      dietWater: dietWater.water,
       games: games.items,
       gameSessions: gameSessions.items,
       readingSessions: readingSessions.items,
@@ -360,6 +450,8 @@ export function planImport(
         added: mealTemplates.added,
         skipped: mealTemplates.skipped,
       },
+      dietGoals: dietGoals.plan,
+      dietWater: dietWater.plan,
       games: { incoming: count(backup.games), added: games.added, skipped: games.skipped },
       gameSessions: {
         incoming: count(backup.gameSessions),

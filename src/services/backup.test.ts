@@ -305,6 +305,8 @@ function sampleData(): BackupData {
         createdAt: '2026-09-27T12:00:00.000Z',
       },
     ],
+    dietGoals: { calories: 2100, protein: 120 },
+    dietWater: { '2026-09-27': 8, '2026-09-28': 6 },
     settings: { theme: 'dark' },
     customFoods: [
       {
@@ -334,6 +336,8 @@ const emptyData = (): BackupData => ({
   bodyMetrics: [],
   dietRecords: [],
   mealTemplates: [],
+  dietGoals: { calories: 2000, protein: 80 },
+  dietWater: {},
   games: [],
   gameSessions: [],
   readingSessions: [],
@@ -369,6 +373,8 @@ describe('导出 / 导入 往返', () => {
     expect(plan.data.fitnessRecords).toEqual(original.fitnessRecords);
     expect(plan.data.bodyMetrics).toEqual(original.bodyMetrics);
     expect(plan.data.dietRecords).toEqual(original.dietRecords);
+    expect(plan.data.dietGoals).toEqual(original.dietGoals);
+    expect(plan.data.dietWater).toEqual(original.dietWater);
     expect(plan.data.games).toEqual(original.games);
     expect(plan.data.habits).toEqual(original.habits);
     expect(plan.data.focusSessions).toEqual(original.focusSessions);
@@ -402,7 +408,7 @@ describe('导出 / 导入 往返', () => {
   it('信封结构包含 schemaVersion 与 exportedAt', () => {
     const envelope = buildBackupEnvelope(emptyData(), new Date('2026-09-28T00:00:00.000Z'));
     expect(envelope.app).toBe('life-manager');
-    expect(envelope.schemaVersion).toBe(19);
+    expect(envelope.schemaVersion).toBe(20);
     expect(envelope.exportedAt).toBe('2026-09-28T00:00:00.000Z');
   });
 });
@@ -1037,6 +1043,138 @@ describe('目标的导入兼容', () => {
   });
 });
 
+describe('饮食目标与饮水打卡的导入兼容', () => {
+  it('导出再导入（overwrite）后，目标与饮水逐字段相等', () => {
+    const original = sampleData();
+    const parsed = parseBackup(serializeBackup(original));
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+
+    const plan = planImport(emptyData(), parsed.backup.modules, 'overwrite');
+
+    expect(plan.data.dietGoals).toEqual(original.dietGoals);
+    expect(plan.data.dietWater).toEqual(original.dietWater);
+  });
+
+  it('旧备份里没有这两个模块时，merge 与 overwrite 都不动本机现有的值', () => {
+    const current = {
+      ...emptyData(),
+      dietGoals: { calories: 1800, protein: 90 },
+      dietWater: { '2026-09-01': 4 },
+    };
+    const legacy = { tasks: [] };
+
+    for (const mode of ['merge', 'overwrite'] as const) {
+      const plan = planImport(current, legacy, mode);
+      expect(plan.data.dietGoals).toEqual(current.dietGoals);
+      expect(plan.data.dietWater).toEqual(current.dietWater);
+      expect(plan.stats.dietGoals).toEqual({ incoming: 0, added: 0, skipped: 0 });
+      expect(plan.stats.dietWater).toEqual({ incoming: 0, added: 0, skipped: 0 });
+    }
+  });
+
+  it('merge / append 逐键补缺：本机 2 天 + 备份另外 3 天 = 5 天，重合的键保持本机值', () => {
+    const current = { ...emptyData(), dietWater: { '2026-09-01': 4, '2026-09-02': 5 } };
+    const backup = {
+      dietWater: { '2026-09-02': 9, '2026-09-03': 6, '2026-09-04': 7, '2026-09-05': 8 },
+    };
+
+    for (const mode of ['merge', 'append'] as const) {
+      const plan = planImport(current, backup, mode);
+      expect(plan.data.dietWater).toEqual({
+        '2026-09-01': 4,
+        '2026-09-02': 5,
+        '2026-09-03': 6,
+        '2026-09-04': 7,
+        '2026-09-05': 8,
+      });
+      expect(plan.stats.dietWater).toEqual({ incoming: 4, added: 3, skipped: 1 });
+    }
+  });
+
+  it('overwrite 把饮水整块换成备份的，本机多出来的天会被清掉', () => {
+    const current = { ...emptyData(), dietWater: { '2026-09-01': 4 } };
+    const plan = planImport(current, { dietWater: { '2026-09-03': 6 } }, 'overwrite');
+
+    expect(plan.data.dietWater).toEqual({ '2026-09-03': 6 });
+  });
+
+  it('merge 只在「本机还是默认值」时才采用备份的目标，改过就不动', () => {
+    const untouched = planImport(
+      emptyData(),
+      { dietGoals: { calories: 2600, protein: 140 } },
+      'merge',
+    );
+    expect(untouched.data.dietGoals).toEqual({ calories: 2600, protein: 140 });
+    expect(untouched.stats.dietGoals).toEqual({ incoming: 1, added: 1, skipped: 0 });
+
+    const changed = planImport(
+      { ...emptyData(), dietGoals: { calories: 1800, protein: 90 } },
+      { dietGoals: { calories: 2600, protein: 140 } },
+      'merge',
+    );
+    expect(changed.data.dietGoals).toEqual({ calories: 1800, protein: 90 });
+    expect(changed.stats.dietGoals).toEqual({ incoming: 1, added: 0, skipped: 1 });
+  });
+
+  it('overwrite 用备份的目标', () => {
+    const plan = planImport(
+      { ...emptyData(), dietGoals: { calories: 1800, protein: 90 } },
+      { dietGoals: { calories: 2600, protein: 140 } },
+      'overwrite',
+    );
+
+    expect(plan.data.dietGoals).toEqual({ calories: 2600, protein: 140 });
+  });
+
+  it('备份里的目标缺字段时，解析阶段退回默认值', () => {
+    const parsed = parseBackup(JSON.stringify({ tasks: [], dietGoals: { calories: 2400 } }));
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+
+    expect(parsed.backup.modules.dietGoals).toEqual({ calories: 2400, protein: 80 });
+  });
+
+  it('饮水里的脏值被剔掉，超界的杯数截断到 0–99', () => {
+    const parsed = parseBackup(
+      JSON.stringify({
+        tasks: [],
+        dietWater: { '2026-09-01': 8, '2026-09-02': 'oops', '2026-09-03': 999, '2026-09-04': -3 },
+      }),
+    );
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+
+    expect(parsed.backup.modules.dietWater).toEqual({
+      '2026-09-01': 8,
+      '2026-09-03': 99,
+      '2026-09-04': 0,
+    });
+  });
+
+  it('这两个模块写成数组时记一条警告并当作缺失，不会清空本机数据', () => {
+    const parsed = parseBackup(JSON.stringify({ tasks: [], dietWater: [], dietGoals: [] }));
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+
+    expect(parsed.backup.modules.dietWater).toBeUndefined();
+    expect(parsed.backup.modules.dietGoals).toBeUndefined();
+    expect(
+      parsed.backup.warnings.filter((issue) => issue.message.includes('期望对象')),
+    ).toHaveLength(2);
+  });
+
+  it('v19 的旧文件照常读得进来，导出的新文件 schemaVersion 是 20', () => {
+    const legacy = JSON.stringify({ app: 'life-manager', schemaVersion: 19, data: { tasks: [] } });
+    const parsed = parseBackup(legacy);
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+
+    expect(parsed.backup.schemaVersion).toBe(19);
+    expect(buildBackupEnvelope(emptyData()).schemaVersion).toBe(20);
+  });
+});
+
 describe('导入模式', () => {
   const existing = [{ id: 'a', title: '现有' }];
 
@@ -1114,7 +1252,13 @@ describe('导入模式', () => {
       plan.data.customExercises,
     ].reduce((sum, list) => sum + (list?.length ?? 0), 0);
 
-    expect(totals.added).toBe(actual);
+    // 两个非记录数组的模块：目标是模块单值（整块算 1 项），饮水按天算。
+    // 这里从「备份里有什么」推，而不是读 stats —— 读 stats 就测不出统计有没有算错了。
+    const actualUnits =
+      (parsed.backup.modules.dietGoals === undefined ? 0 : 1) +
+      Object.keys(parsed.backup.modules.dietWater ?? {}).length;
+
+    expect(totals.added).toBe(actual + actualUnits);
   });
 });
 

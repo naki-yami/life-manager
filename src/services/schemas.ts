@@ -4,6 +4,7 @@ import { normalizeSchedule, sanitizeHabitLogs } from '../utils/habits';
 import { readMetric, sanitizeMeasurements } from '../utils/body';
 import { normalizeTimebox } from '../utils/focus';
 import { clampMood } from '../utils/journal';
+import { DEFAULT_DIET_GOALS, sanitizeWater } from '../utils/diet';
 import type { HabitSchedule } from '../types';
 
 /**
@@ -28,8 +29,10 @@ export const APP_ID = 'life-manager';
  *     这几项都在已有的 books / games 里，旧备份缺字段时按 schema 默认值补齐。
  * 19：新增「日记与心情」模块（一天一条，心情 1–5 + 标签 + 正文）；旧文件里没有它，
  *     按缺失处理，不会清空用户已经写下的日记。
+ * 20：新增「每日饮食目标」（模块单值）与「饮水打卡」（日期 → 杯数）两个模块；旧文件里没有它们，
+ *     按缺失处理，不会清空用户已经设好的目标与记下的饮水。
  */
-export const BACKUP_SCHEMA_VERSION = 19;
+export const BACKUP_SCHEMA_VERSION = 20;
 
 const isoDateString = z.string();
 const percent = z.number().min(0).max(100).catch(0);
@@ -357,6 +360,23 @@ export const mealTemplateSchema = z.object({
   createdAt: isoDateString.default(() => new Date().toISOString()),
 });
 
+/**
+ * v20：每日目标是「模块单值」—— 整个模块就一份值，不是记录数组。
+ * 缺字段或脏值退回默认值，与 store 的归一化共用 `utils/diet.ts` 那一套。
+ */
+export const dietGoalsSchema = z.object({
+  calories: z.number().min(0).catch(DEFAULT_DIET_GOALS.calories),
+  protein: z.number().min(0).catch(DEFAULT_DIET_GOALS.protein),
+});
+
+/**
+ * v20：饮水打卡是「日期 → 杯数」的映射，同样不是记录数组。
+ * 结构守卫交给 `z.record`（数组 / 字符串会被拒），逐键清洗交给 `sanitizeWater`。
+ */
+export const dietWaterSchema = z
+  .record(z.string(), z.unknown())
+  .transform((raw) => sanitizeWater(raw));
+
 // ---------- 游戏 ----------
 export const gameAchievementSchema = z.object({
   id: z.string().min(1),
@@ -575,6 +595,9 @@ export const backupDataSchema = z.object({
   dietRecords: z.array(mealRecordSchema).default([]),
   /** v12（F16）：餐次模板。不放进备份就是在丢数据 —— 模板是用户手工攒的，重建不了。 */
   mealTemplates: z.array(mealTemplateSchema).default([]),
+  /** v20：每日目标（模块单值）与饮水打卡（日期 → 杯数）。不是记录数组，但同样是一条都不能丢。 */
+  dietGoals: dietGoalsSchema.default(DEFAULT_DIET_GOALS),
+  dietWater: dietWaterSchema.default({}),
   games: z.array(gameSchema).default([]),
   gameSessions: z.array(gameSessionSchema).default([]),
   readingSessions: z.array(readingSessionSchema).default([]),
@@ -602,6 +625,8 @@ export const BACKUP_MODULES = [
   'bodyMetrics',
   'dietRecords',
   'mealTemplates',
+  'dietGoals',
+  'dietWater',
   'games',
   'gameSessions',
   'readingSessions',
@@ -628,6 +653,8 @@ export const MODULE_LABELS: Record<BackupModule, string> = {
   bodyMetrics: '身体指标',
   dietRecords: '饮食记录',
   mealTemplates: '餐次模板',
+  dietGoals: '每日目标',
+  dietWater: '饮水打卡',
   games: '游戏',
   gameSessions: '游玩记录',
   readingSessions: '阅读记录',

@@ -1,6 +1,7 @@
 import { APP_ID, BACKUP_SCHEMA_VERSION, MODULE_LABELS } from './schemas';
 import type { BackupData, BackupModule } from './schemas';
 import { todayKey } from '../utils/date';
+import type { DietGoals } from '../types';
 
 /**
  * 分模块导出（F15）：把某一个模块单独导成 JSON / CSV / Markdown。
@@ -141,7 +142,25 @@ const summarize = (items: Array<Record<string, unknown>>, keys: string[]): strin
  */
 export type RecordOf<M extends BackupModule> = Extract<BackupData[M], readonly unknown[]>[number];
 
-export const MODULE_EXPORTS: { [K in BackupModule]: ModuleExportSpec<RecordOf<K>> } = {
+/** 饮水打卡导出时的一天（日期 + 杯数）：它不是记录，但表格要按行渲染 */
+export interface DietWaterRow {
+  date: string;
+  glasses: number;
+}
+
+/**
+ * 一个模块导出时的「行」形状。
+ *
+ * 绝大多数模块是记录数组，行就是记录；两个非数组模块各自摊成一行：
+ * `dietGoals` 是模块单值（一行，两个目标各自一列），`dietWater` 一天一行。
+ */
+export type ExportRow<M extends BackupModule> = M extends 'dietGoals'
+  ? DietGoals
+  : M extends 'dietWater'
+    ? DietWaterRow
+    : Extract<BackupData[M], readonly unknown[]>[number];
+
+export const MODULE_EXPORTS: { [K in BackupModule]: ModuleExportSpec<ExportRow<K>> } = {
   tasks: {
     title: (task) => task.title,
     columns: [
@@ -227,6 +246,19 @@ export const MODULE_EXPORTS: { [K in BackupModule]: ModuleExportSpec<RecordOf<K>
       column('餐次', (template) => label(template.type)),
       column('食物', (template) => summarize(template.items, ['name', 'calories'])),
     ],
+  },
+  // 模块单值：整份数据就一行，两个目标各自一列
+  dietGoals: {
+    title: () => '每日目标',
+    columns: [
+      column('每日热量目标 (kcal)', (goals) => goals.calories),
+      column('每日蛋白质目标 (g)', (goals) => goals.protein),
+    ],
+  },
+  // 日期键映射：一天一行，按日期先后排列
+  dietWater: {
+    title: (row) => row.date,
+    columns: [column('日期', (row) => row.date), column('杯数', (row) => row.glasses)],
   },
   dietRecords: {
     title: (record) => `${record.date} ${label(record.type)}`,
@@ -419,7 +451,7 @@ const rowsOf = <T>(
  */
 export function exportModuleJson(
   module: BackupModule,
-  records: unknown[],
+  value: unknown,
   now: Date = new Date(),
 ): string {
   return JSON.stringify(
@@ -428,7 +460,7 @@ export function exportModuleJson(
       module,
       schemaVersion: BACKUP_SCHEMA_VERSION,
       exportedAt: now.toISOString(),
-      data: { [module]: records },
+      data: { [module]: value },
     },
     null,
     2,
@@ -504,7 +536,28 @@ export function jsonOnlyReason(module: BackupModule): string | null {
   return isTabular(spec) ? null : spec.reason;
 }
 
-/** 从全量数据里取某个模块的记录 */
+/**
+ * 从全量数据里取某个模块的「行」。
+ *
+ * 数组模块的行就是记录；两个非数组模块在这里摊平 —— 表格与 Markdown 都按行渲染，
+ * 摊平之后调用方不用分情况。
+ */
 export function moduleRecords(data: BackupData, module: BackupModule): unknown[] {
+  if (module === 'dietGoals') return [data.dietGoals];
+  if (module === 'dietWater') {
+    return Object.entries(data.dietWater)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([date, glasses]) => ({ date, glasses }));
+  }
+  return data[module] ?? [];
+}
+
+/**
+ * JSON 导出用的原始值：数组模块是记录数组，单值 / 映射模块是它本来的形状。
+ *
+ * 与 `moduleRecords` 分开是必须的 —— 把摊平后的行写进 JSON，那个文件就再也导不回来了
+ * （`parseBackup` 对这两个模块只认对象）。
+ */
+export function moduleJsonValue(data: BackupData, module: BackupModule): unknown {
   return data[module] ?? [];
 }

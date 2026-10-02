@@ -7,10 +7,13 @@ import {
   exportModuleMarkdown,
   jsonOnlyReason,
   moduleFileName,
+  moduleJsonValue,
+  moduleRecords,
   supportsFormat,
   toCsv,
 } from './moduleExport';
 import { BACKUP_MODULES, BACKUP_SCHEMA_VERSION, MODULE_LABELS } from './schemas';
+import type { BackupData } from './schemas';
 import { parseBackup } from './backup';
 import type { Book, DevProject, JournalEntry, Task } from '../types';
 
@@ -250,5 +253,58 @@ describe('导出格式与模块标签的一致性', () => {
     for (const module of BACKUP_MODULES) {
       expect(moduleFileName(module, 'json', '2026-01-01')).toContain(MODULE_LABELS[module]);
     }
+  });
+});
+
+describe('非记录数组模块（每日目标 / 饮水打卡）', () => {
+  /** 只填本用例用得到的模块；这些用例不读其它模块 */
+  const dataWith = (modules: Partial<BackupData>): BackupData => modules as BackupData;
+
+  it('饮水摊平成一天一行，按日期先后排列', () => {
+    const rows = moduleRecords(
+      dataWith({ dietWater: { '2026-09-02': 6, '2026-09-01': 8 } }),
+      'dietWater',
+    );
+    expect(rows).toEqual([
+      { date: '2026-09-01', glasses: 8 },
+      { date: '2026-09-02', glasses: 6 },
+    ]);
+
+    const lines = exportModuleCsv('dietWater', rows).split('\r\n');
+    expect(lines[0]).toBe('日期,杯数');
+    expect(lines).toHaveLength(3);
+    expect(lines[1]).toBe('2026-09-01,8');
+    expect(lines[2]).toBe('2026-09-02,6');
+  });
+
+  it('目标是模块单值，摊平成一行两列', () => {
+    const rows = moduleRecords(
+      dataWith({ dietGoals: { calories: 2100, protein: 120 } }),
+      'dietGoals',
+    );
+    expect(rows).toEqual([{ calories: 2100, protein: 120 }]);
+
+    const lines = exportModuleCsv('dietGoals', rows).split('\r\n');
+    expect(lines[0]).toBe('每日热量目标 (kcal),每日蛋白质目标 (g)');
+    expect(lines[1]).toBe('2100,120');
+  });
+
+  it('JSON 导出保留模块本来的形状，能被 parseBackup 读回来', () => {
+    const water = { '2026-09-01': 8, '2026-09-02': 6 };
+    const goals = { calories: 2100, protein: 120 };
+
+    const waterParsed = parseBackup(
+      exportModuleJson('dietWater', moduleJsonValue(dataWith({ dietWater: water }), 'dietWater')),
+    );
+    expect(waterParsed.ok).toBe(true);
+    if (!waterParsed.ok) return;
+    expect(waterParsed.backup.modules.dietWater).toEqual(water);
+
+    const goalsParsed = parseBackup(
+      exportModuleJson('dietGoals', moduleJsonValue(dataWith({ dietGoals: goals }), 'dietGoals')),
+    );
+    expect(goalsParsed.ok).toBe(true);
+    if (!goalsParsed.ok) return;
+    expect(goalsParsed.backup.modules.dietGoals).toEqual(goals);
   });
 });

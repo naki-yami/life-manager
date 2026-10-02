@@ -22,6 +22,7 @@ import { useReviewStore } from '../store/reviewStore';
 import { useGoalStore } from '../store/goalStore';
 import { useThemeStore } from '../store/themeStore';
 import { useUiStore } from '../store/uiStore';
+import { DEFAULT_DIET_GOALS } from '../utils/diet';
 
 beforeEach(() => {
   useTaskStore.setState({ tasks: [], memos: [] });
@@ -29,7 +30,7 @@ beforeEach(() => {
   useDevStore.setState({ projects: [] });
   useWritingStore.setState({ projects: [] });
   useFitnessStore.setState({ plans: [], records: [] });
-  useDietStore.setState({ records: [] });
+  useDietStore.setState({ records: [], goals: { ...DEFAULT_DIET_GOALS }, water: {} });
   useGameStore.setState({ games: [] });
   useHabitStore.setState({ habits: [] });
   useReviewStore.setState({ reviews: [] });
@@ -70,6 +71,8 @@ const emptyBackup: BackupData = {
   bodyMetrics: [],
   dietRecords: [],
   mealTemplates: [],
+  dietGoals: { calories: 2000, protein: 80 },
+  dietWater: {},
   games: [],
   gameSessions: [],
   readingSessions: [],
@@ -371,6 +374,37 @@ describe('SettingsPage', () => {
     expect(await screen.findByText('导入完成')).toBeInTheDocument();
     // 导入前自动留了一份快照
     await waitFor(() => expect(screen.getByText('导入备份前')).toBeInTheDocument());
+  });
+
+  it('导入预览里饮水按「天」、目标按「项」计数，不是「条」', async () => {
+    const text = serializeBackup({
+      ...emptyBackup,
+      dietGoals: { calories: 2100, protein: 120 },
+      dietWater: { '2026-09-01': 8, '2026-09-02': 6 },
+    });
+
+    renderSettings();
+    uploadFile(text);
+    const dialog = await screen.findByRole('dialog', { name: '确认导入' });
+
+    expect(within(dialog).getByRole('cell', { name: '饮水打卡' })).toBeInTheDocument();
+    expect(within(dialog).getByRole('cell', { name: '每日目标' })).toBeInTheDocument();
+    // 「备份中 2 天」与「新增 2 天」两格；目标同理两格「1 项」
+    expect(within(dialog).getAllByRole('cell', { name: /2 天/ })).toHaveLength(2);
+    expect(within(dialog).getAllByRole('cell', { name: /1 项/ })).toHaveLength(2);
+  });
+
+  it('分模块导出饮水：CSV 一天一行，提示按「天」计数', async () => {
+    const { blobs } = stubDownload();
+    useDietStore.setState({ water: { '2026-09-01': 8, '2026-09-02': 6 } });
+    renderSettings();
+
+    await userEvent.selectOptions(screen.getByLabelText('选择要导出的模块'), 'dietWater');
+    await userEvent.click(formatButton(/CSV/));
+
+    expect(blobs).toHaveLength(1);
+    expect(await screen.findByText('已导出饮水打卡')).toBeInTheDocument();
+    expect(screen.getByText(/共 2 天/)).toBeInTheDocument();
   });
 
   it('坏文件会提示解析失败，且不会写入任何数据', async () => {
