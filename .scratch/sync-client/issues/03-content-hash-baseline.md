@@ -1,6 +1,9 @@
 # 03 内容哈希基线与 diff
 
-Status: ready-for-agent
+Status: resolved
+实现：`e745ae9`、`5b77cd3`（2026-10-03。验收用例：`src/services/sync/baseline.test.ts`
+的「两种键序同哈希」「四种判定」「空基线零 delete」「rev 表填 baseRev」，
+`src/services/sync/integration.test.ts` 对着真服务端验证载荷不被拒、rev 往返后不误标冲突）
 Type: task
 Part of: `.scratch/sync-client/spec.md`
 Blocked by: 02
