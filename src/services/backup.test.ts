@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { BackupData } from './schemas';
 import {
   buildBackupEnvelope,
@@ -15,7 +15,10 @@ import {
   serializeBackup,
 } from './backup';
 import { clearAppData } from '../store/storage';
+import { useSyncStore } from '../store/syncStore';
+import { useTaskStore } from '../store/taskStore';
 import { STORAGE_KEYS } from '../utils/storageKeys';
+import { readAllData } from './appData';
 
 /** 一份覆盖所有模块的完整数据，用于往返测试 */
 function sampleData(): BackupData {
@@ -1327,6 +1330,41 @@ describe('自动备份快照', () => {
     localStorage.clear();
     localStorage.setItem('lm:backup:auto:broken', 'not-json');
     expect(await restoreAutoSnapshot('lm:backup:auto:broken')).toBe(false);
+  });
+
+  /*
+   * 令牌与设备标识的红线。导出文件会落到同步盘、U 盘、聊天窗口里，
+   * 令牌跟着走等于把钥匙一起寄出去 —— 所以导出的 JSON 与落在本地的快照里
+   * 都不该出现它们，连 lm:sync 这个键都不该出现。
+   */
+  it('导出与自动快照里都没有令牌、设备标识，也没有 lm:sync 这个键', async () => {
+    localStorage.clear();
+    useTaskStore.getState().addTask('写周报', '', 'medium', '2026-10-03');
+    useSyncStore.getState().setEnabled(true);
+    useSyncStore.getState().setBaseUrl('http://127.0.0.1:8787');
+    useSyncStore.getState().setToken('s3cret-token');
+    const deviceId = useSyncStore.getState().deviceId;
+    expect(deviceId).not.toBe('');
+
+    // 等令牌落盘，否则下面「搜不到」可能只是因为还没写完
+    await vi.waitFor(() => {
+      expect(localStorage.getItem(STORAGE_KEYS.sync)).toContain('s3cret-token');
+    });
+
+    const exported = serializeBackup(readAllData());
+    expect(exported).not.toContain('s3cret-token');
+    expect(exported).not.toContain(deviceId);
+    expect(exported).not.toContain(STORAGE_KEYS.sync);
+
+    const key = await createAutoSnapshot('测试前');
+    expect(key).not.toBeNull();
+    const snapshot = localStorage.getItem(key!) ?? '';
+    expect(snapshot).not.toContain('s3cret-token');
+    expect(snapshot).not.toContain(deviceId);
+    // 快照走 readAppStateEntries()，lm:sync 不在「模块状态」key 之列
+    expect(snapshot).not.toContain(STORAGE_KEYS.sync);
+    // 快照确实抓到了业务数据，不是因为整份快照都是空的才「搜不到」
+    expect(snapshot).toContain(STORAGE_KEYS.tasks);
   });
 });
 

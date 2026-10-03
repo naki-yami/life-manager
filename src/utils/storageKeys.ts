@@ -27,6 +27,15 @@ export const STORAGE_KEYS = {
   library: 'lm:library',
   theme: 'lm:theme',
   ui: 'lm:ui',
+  /**
+   * 同步的元数据（开关 / 服务地址 / 令牌 / 设备标识 / 游标 / 基线）。
+   *
+   * **它不在 `DATA_STORAGE_KEYS` 里**，这是有意的：导出、自动快照、崩溃兜底导出
+   * 三条备份路径都按 `DATA_STORAGE_KEYS` 取数，这个 key 不在册就绝不会跟着备份文件
+   * 走到同步盘、U 盘或聊天窗口里去（令牌跟着备份走 = 把钥匙一起寄出去）。
+   * 想加进备份之前先读 `CONTEXT.md` 的「令牌」与 `.scratch/sync-client/spec.md`。
+   */
+  sync: 'lm:sync',
 } as const;
 
 export type StorageKeyName = keyof typeof STORAGE_KEYS;
@@ -67,8 +76,18 @@ export const LEGACY_STORAGE_KEYS: Record<string, string> = {
   'theme-storage': STORAGE_KEYS.theme,
 };
 
+/**
+ * 「模块状态」key：一个数据模块一个，里面是那个模块的整份持久化状态。
+ *
+ * **不含 `lm:sync`** —— 它虽然也是本应用的 key，但那份状态里有令牌与设备标识，
+ * 而 `readAppStateEntries()` 是自动备份快照的取数入口（`services/backup.ts` 的
+ * `createAutoSnapshot` 直接把它整个序列化进快照）。快照是一份会被恢复、会被导出的
+ * 全量副本，让它带上令牌就等于把钥匙抄进备份文件里。
+ *
+ * 所以这里的「不在册」不是漏写：加进来之前先读 `CONTEXT.md` 的「令牌」。
+ */
 export function appStorageKeys(): string[] {
-  return Object.values(STORAGE_KEYS);
+  return Object.values(STORAGE_KEYS).filter((key) => key !== STORAGE_KEYS.sync);
 }
 
 /** 自动备份快照的 key 前缀，例如 lm:backup:auto:1759000000000 */
