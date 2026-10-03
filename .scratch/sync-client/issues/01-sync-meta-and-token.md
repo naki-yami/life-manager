@@ -1,6 +1,8 @@
 # 01 `lm:sync` 元数据、令牌与设备标识
 
-Status: ready-for-agent
+Status: resolved
+实现：`45d0fe3`（2026-10-03。验收用例：`src/store/syncStore.test.ts` 的持久化与设备标识一组，
+`src/services/backup.test.ts`「导出与自动快照里都没有令牌、设备标识，也没有 `lm:sync` 这个键」）
 Type: task
 Part of: `.scratch/sync-client/spec.md`
 Blocked by: 无
