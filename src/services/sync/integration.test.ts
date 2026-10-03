@@ -22,6 +22,7 @@ import { DEFAULT_DIET_GOALS } from '../../utils/diet';
 import { handlePush } from '../../server/push';
 import { loadReplica } from '../../server/replica';
 import { applyChanges } from './apply';
+import { computeBaseline, diffAgainstBaseline } from './baseline';
 import { readUnits } from './units';
 
 /** 建一个临时数据目录上的真副本 */
@@ -176,5 +177,64 @@ describe('服务端形状落回客户端 store', () => {
     // 饮水落库后是扁平数字，不是 { glasses: 8 }
     expect(useDietStore.getState().water).toEqual({ '2026-10-02': 8 });
     expect(useDietStore.getState().goals).toEqual({ calories: 2100, protein: 120 });
+  });
+});
+
+describe('diff 产出的载荷服务端收得下', () => {
+  /**
+   * 这一条抓的是一个**真实的坑**：单元表里三种单元的值形状并不一样。
+   * 记录集合与 `dietGoals` 的值是对象，而 `dietWater` 的值是**裸数字** ——
+   * diff 若把值原样塞进 `record`，饮水会推成 `record: 8`，
+   * 而服务端 `waterValueOf` 要的是单键对象 `{ '2026-10-02': 8 }`。
+   *
+   * 单测两边都是我自己写的，抓不到这种「我以为是 A、服务端以为是 B」的偏差；
+   * 判据取服务端实现才抓得到。
+   */
+  it('全量比对推上去，饮水落成扁平数字、一条都不被拒', async () => {
+    const replica = freshReplica();
+
+    useTaskStore.setState({ tasks: [task('t1', '写周报')] as never, memos: [] });
+    useDietStore.setState({
+      records: [],
+      templates: [],
+      goals: { calories: 2100, protein: 120 },
+      water: { '2026-10-02': 8, '2026-10-03': 6 },
+    });
+
+    // 空基线 = 首次全量推送
+    const changes = await diffAgainstBaseline({});
+    const response = handlePush(
+      { replica, onHistory: () => {} } as never,
+      { deviceId: 'dev-1', changes } as never,
+    );
+
+    const rejected = response.results.filter((item) => item.outcome === 'rejected');
+    expect(rejected).toEqual([]);
+
+    // 饮水的形状必须对：扁平 date → 数字
+    expect(replica.envelope.data.dietWater).toEqual({ '2026-10-02': 8, '2026-10-03': 6 });
+    expect(replica.envelope.data.dietGoals).toEqual({ calories: 2100, protein: 120 });
+    expect(replica.envelope.data.tasks).toEqual([task('t1', '写周报')]);
+  });
+
+  it('推完之后算的基线，再比一次得不出任何改动', async () => {
+    const replica = freshReplica();
+
+    useTaskStore.setState({ tasks: [task('t1', '写周报')] as never, memos: [] });
+    useDietStore.setState({
+      records: [],
+      templates: [],
+      goals: { calories: 2100, protein: 120 },
+      water: { '2026-10-02': 8 },
+    });
+
+    const changes = await diffAgainstBaseline({});
+    handlePush({ replica, onHistory: () => {} } as never, { deviceId: 'dev-1', changes } as never);
+
+    // 一轮同步成功之后写基线 —— 这就是引擎该做的时序
+    const baseline = await computeBaseline();
+
+    // 本机没再动过 → 第二轮一条都不推（不会把整库按旧值重推一遍）
+    expect(await diffAgainstBaseline(baseline)).toEqual([]);
   });
 });
