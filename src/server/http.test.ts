@@ -22,7 +22,7 @@ import {
 } from './config';
 import { createLogger, type Logger } from './logger';
 import { createRequestHandler } from './http';
-import { loadReplica, REPLICA_FILE } from './replica';
+import { loadReplica, REPLICA_FILE, type Replica } from './replica';
 
 const TOKEN = 'f'.repeat(64);
 
@@ -32,6 +32,8 @@ interface Harness {
   logs: string[];
   /** 数据目录，用来断言「磁盘上到底写了什么」 */
   dataDir: string;
+  /** 当前副本，用来断言内存状态与注入落盘失败 */
+  replica: Replica;
   close: () => Promise<void>;
 }
 
@@ -75,6 +77,7 @@ async function startHarness(overrides: Partial<ServerConfig> = {}): Promise<Harn
     server,
     logs,
     dataDir: config.dataDir,
+    replica,
     close: () => new Promise<void>((resolve) => server.close(() => resolve())),
   };
 }
@@ -436,5 +439,41 @@ describe('POST /v1/push（工单 03 的接口层）', () => {
     expect(body.results[0]!.outcome).toBe('rejected');
     expect(body.results[0]!.error).toContain('升级服务端');
     expect(readFileSync(join(h.dataDir, REPLICA_FILE), 'utf8')).toBe(before);
+  });
+
+  /**
+   * 回归闸：落盘失败必须把**内存也退回去**。
+   *
+   * 否则客户端收到 500 会重试，而它推的内容「已经在内存里了」，重试走幂等分支拿到 `noop` ——
+   * 客户端据此以为成功。进程若在下次成功落盘之前挂掉，这次写入既不在磁盘上、也没人知道它丢了。
+   */
+  it('落盘失败 → 500，且内存改动被回滚（重试能真正重来）', async () => {
+    const h = await startHarness();
+    // 让副本的写入在 rename 那一刻失败（atomicWrite 的最后一步）
+    const replica = h.replica;
+    const realSave = replica.save.bind(replica);
+    let failNext = true;
+    replica.save = () => {
+      if (failNext) {
+        failNext = false;
+        throw new Error('ENOSPC: no space left on device');
+      }
+      realSave();
+    };
+
+    const res = await post(h, { deviceId: 'dev-1', changes: [change()] });
+    expect(res.status).toBe(500);
+    expect(((await res.json()) as { error: string }).error).toBe('replica_write_failed');
+
+    // 关键：内存也被退回去了 —— seq 回到 0、记录不在
+    expect(replica.envelope.sync.seq).toBe(0);
+    expect(replica.envelope.data.tasks).toEqual([]);
+
+    // 客户端重试：因为内存已回滚，这次重新走真实写入，拿到 applied 而不是 noop
+    const retry = await post(h, { deviceId: 'dev-1', changes: [change()] });
+    expect(retry.status).toBe(200);
+    const body = (await retry.json()) as { results: Array<{ outcome: string }>; seq: number };
+    expect(body.results[0]!.outcome).toBe('applied');
+    expect(body.seq).toBe(1);
   });
 });

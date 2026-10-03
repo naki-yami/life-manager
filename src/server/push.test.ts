@@ -379,8 +379,80 @@ describe('设备表', () => {
       deviceId: 'dev-B',
       changes: [{ module: 'tasks', key: 't2', baseRev: 0, op: 'put', record: task('t2', 'B') }],
     });
+    expect(h.replica.envelope.sync.devices.map((d) => d.deviceId)).toEqual(['dev-A', 'dev-B']);
+  });
+
+  /**
+   * 回归闸：设备表只在**真的写进去过东西**时登记。
+   *
+   * 工单 05 的墓碑清理守卫是「所有已注册设备都拉过 ≥ 该墓碑的 seq」。一个整批都被拒、
+   * 从没成功写过的设备若被登记成「已注册」，它永远不会来拉，墓碑就永远清不掉 ——
+   * 一个拼错 deviceId 的客户端足以让墓碑无限堆积。
+   */
+  it('整批都被拒时不登记设备（否则会让工单 05 的墓碑永远清不掉）', () => {
+    const h = makeHarness();
+
+    push(h, {
+      deviceId: 'dev-never-wrote',
+      changes: [{ module: 'settings', key: 's1', baseRev: 0, op: 'put', record: { id: 's1' } }],
+    });
+
+    expect(h.replica.envelope.sync.devices).toEqual([]);
+  });
+
+  it('全是 noop 时也不登记', () => {
+    const h = makeHarness();
+    // 先让另一个设备写进去，再用一个只会命中 noop 的设备推同样的内容
+    push(h, {
+      deviceId: 'dev-A',
+      changes: [{ module: 'tasks', key: 't1', baseRev: 0, op: 'put', record: task('t1', 'A') }],
+    });
+
+    push(h, {
+      deviceId: 'dev-B',
+      changes: [{ module: 'tasks', key: 't1', baseRev: 1, op: 'put', record: task('t1', 'A') }],
+    });
+
+    expect(h.replica.envelope.sync.devices.map((d) => d.deviceId)).toEqual(['dev-A']);
+  });
+
+  it('删除也算法写入：会登记设备', () => {
+    const h = makeHarness();
+    push(h, {
+      deviceId: 'dev-A',
+      changes: [{ module: 'tasks', key: 't1', baseRev: 0, op: 'put', record: task('t1', 'A') }],
+    });
+
+    push(h, {
+      deviceId: 'dev-B',
+      changes: [{ module: 'tasks', key: 't1', baseRev: 1, op: 'delete' }],
+    });
 
     expect(h.replica.envelope.sync.devices.map((d) => d.deviceId)).toEqual(['dev-A', 'dev-B']);
+  });
+});
+
+describe('baseRev 缺失时的归一', () => {
+  it('直接调 handlePush 时 baseRev 缺失按 0 处理（与 HTTP 层同一结论）', () => {
+    const h = makeHarness();
+    push(h, {
+      changes: [{ module: 'tasks', key: 't1', baseRev: 0, op: 'put', record: task('t1', 'v1') }],
+    });
+
+    // 服务端已是 rev 1；缺 baseRev 应当按「客户端认为还没有这条」= 0 处理 → 落后 → conflict。
+    // 原来靠 `undefined < 1 === false` 会判成「不落后」，于是不标冲突。
+    const result = push(h, {
+      changes: [
+        {
+          module: 'tasks',
+          key: 't1',
+          op: 'put',
+          record: task('t1', 'v2'),
+        } as unknown as PushRequest['changes'][number],
+      ],
+    });
+
+    expect(result.results[0]!.outcome).toBe('conflict');
   });
 });
 
@@ -481,6 +553,52 @@ describe('饮水与目标这两个 keyed 模块', () => {
   });
 });
 
+/**
+ * 删除也走 LWW 判定。
+ *
+ * 这一组是回归闸：原来 delete 分支在冲突判定**之前**就返回了，于是「B 端只见过 v1、
+ * 拿过期 baseRev 来删」会把 A 端更新的 v2 **静默抹掉**、还回 `applied`，客户端看不到任何提示 ——
+ * 正是 ADR-0002 排在最高优先级的「同步导致记录丢失」。
+ */
+describe('删除的 LWW 判定（回归闸）', () => {
+  it('过期 baseRev 的 delete 会标 conflict，并把被覆盖的那份写进历史', () => {
+    const h = makeHarness();
+    // A 写 v1，再更新到 v2
+    push(h, {
+      changes: [{ module: 'tasks', key: 't1', baseRev: 0, op: 'put', record: task('t1', 'v1') }],
+    });
+    push(h, {
+      changes: [
+        { module: 'tasks', key: 't1', baseRev: 1, op: 'put', record: task('t1', 'v2 重要内容') },
+      ],
+    });
+
+    // B 只见过 v1，拿 baseRev=0 来删
+    const result = push(h, { changes: [{ module: 'tasks', key: 't1', baseRev: 0, op: 'delete' }] });
+
+    // 删除仍然生效（后到者赢），但必须告诉客户端「你删的时候已经有更新的版本了」
+    expect(result.results[0]!.outcome).toBe('conflict');
+    expect(result.conflicts).toBe(1);
+    // 被删掉的那份（A 的 v2）进了历史，用户还能取回
+    expect(h.history).toHaveLength(1);
+    expect(h.history[0]!.record).toEqual(task('t1', 'v2 重要内容'));
+    expect(h.history[0]!.reason).toBe('conflict');
+  });
+
+  it('baseRev 跟得上时，delete 是普通 applied、不标冲突', () => {
+    const h = makeHarness();
+    push(h, {
+      changes: [{ module: 'tasks', key: 't1', baseRev: 0, op: 'put', record: task('t1', 'v1') }],
+    });
+
+    const result = push(h, { changes: [{ module: 'tasks', key: 't1', baseRev: 1, op: 'delete' }] });
+
+    expect(result.results[0]!.outcome).toBe('applied');
+    expect(result.conflicts).toBe(0);
+    expect(h.history[0]!.reason).toBe('overwritten');
+  });
+});
+
 describe('内容比较的值语义', () => {
   it('键序无关', () => {
     expect(sameContent({ a: 1, b: 2 }, { b: 2, a: 1 })).toBe(true);
@@ -501,6 +619,55 @@ describe('内容比较的值语义', () => {
   it('null 与 undefined 区分', () => {
     expect(sameContent(null, undefined)).toBe(false);
     expect(sameContent(null, null)).toBe(true);
+  });
+
+  /**
+   * 回归闸：`isPlainObject` 原来只查 `typeof === 'object' && !Array.isArray`，
+   * 于是 `Date` / `Map` / `Set` / `RegExp` 都被算成对象 —— 而它们的 `Object.keys()` 是**空数组**，
+   * 两个**不同的** Date 会判为相等，真实改动被当 noop 丢掉。
+   *
+   * 走 HTTP 时 JSON 不会产出这些类型，所以这是潜伏缺陷；但直接调 `handlePush` 的调用方
+   * （工单 06 的 restore 路径）会踩到。
+   */
+  it('Date / Map / Set / RegExp 内容不同时**不**相等', () => {
+    expect(sameContent({ d: new Date('2026-01-01') }, { d: new Date('2026-12-31') })).toBe(false);
+    expect(sameContent({ m: new Map([['a', 1]]) }, { m: new Map([['b', 2]]) })).toBe(false);
+    expect(sameContent({ s: new Set([1]) }, { s: new Set([2]) })).toBe(false);
+    expect(sameContent({ r: /a/ }, { r: /b/ })).toBe(false);
+  });
+
+  it('同值的 Date 仍然相等（别把幂等弄坏）', () => {
+    expect(sameContent({ d: new Date('2026-01-01') }, { d: new Date('2026-01-01') })).toBe(true);
+  });
+
+  it('改一个 Date 字段会被当成真实写入，而不是 noop', () => {
+    const h = makeHarness();
+    push(h, {
+      changes: [
+        {
+          module: 'tasks',
+          key: 't1',
+          baseRev: 0,
+          op: 'put',
+          record: { id: 't1', due: new Date('2026-01-01') },
+        },
+      ],
+    });
+
+    const second = push(h, {
+      changes: [
+        {
+          module: 'tasks',
+          key: 't1',
+          baseRev: 1,
+          op: 'put',
+          record: { id: 't1', due: new Date('2026-12-31') },
+        },
+      ],
+    });
+
+    expect(second.results[0]!.outcome).toBe('applied');
+    expect(second.seq).toBe(2);
   });
 });
 

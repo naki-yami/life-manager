@@ -172,8 +172,17 @@ export function createRequestHandler(context: RequestContext) {
             try {
               replica.save();
             } catch (error) {
+              /*
+               * 落盘失败必须**把内存也退回去**。
+               *
+               * 不然：客户端收到 500 会重试，而它推的内容「已经在内存里了」，重试走幂等分支
+               * 拿到 `noop` —— 客户端据此以为成功。若进程在下次成功落盘之前挂掉，
+               * 这次写入就既不在磁盘上、也没人知道它丢了。
+               * 回滚之后重试会重新走一遍真实写入，这个 500 才是诚实的。
+               */
+              replica.rollback();
               logger.error(
-                `副本落盘失败：${error instanceof Error ? error.message : String(error)}`,
+                `副本落盘失败，已回滚内存改动：${error instanceof Error ? error.message : String(error)}`,
               );
               sendJson(res, 500, { error: 'replica_write_failed' });
               return;

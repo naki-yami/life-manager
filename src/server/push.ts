@@ -25,7 +25,13 @@ import {
   type ReplicaError,
 } from './replica.ts';
 
-/** 一次改动。`record` 在 `op: 'delete'` 时可以不带（墓碑归工单 05）。 */
+/**
+ * 一次改动。`record` 在 `op: 'delete'` 时可以不带（墓碑归工单 05）。
+ *
+ * `baseRev` 是必填的（HTTP 层会拒掉缺失的请求），但 `handlePush` 自己也把 `undefined`
+ * 当作 0 显式处理 —— 两条路径对同一份输入给出同一结论，免得直接调 `handlePush` 的调用方
+ * （测试、工单 06 的 restore）踩到「undefined < 0 恒为 false，于是永远不算冲突」。
+ */
 export interface PushChange {
   module: string;
   key: string;
@@ -85,8 +91,19 @@ export interface PushContext {
   logger?: { warn: (message: string) => void };
 }
 
-const isPlainObject = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
+/**
+ * 「朴素对象」判定：原型必须是 `Object.prototype` 或 `null`。
+ *
+ * **不能只写 `typeof === 'object' && !Array.isArray`** —— 那样 `Date` / `Map` / `Set` / `RegExp`
+ * 都会被算成对象，而它们的 `Object.keys()` 是**空数组**，于是「两个不同的 Date」会判为相等，
+ * 真实改动被当成 `noop` 丢掉（实测过）。走 HTTP 时 JSON 不会产出这些类型，所以这是潜伏缺陷；
+ * 但直接调 `handlePush` 的调用方（包括工单 06 的 restore 路径）会踩到。
+ */
+const isPlainObject = (value: unknown): value is Record<string, unknown> => {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+  const proto = Object.getPrototypeOf(value) as unknown;
+  return proto === Object.prototype || proto === null;
+};
 
 /** 内容相等：键序无关的深比较。用它判幂等 —— 客户端重推时键序可能不同，但内容一样。 */
 export function sameContent(
@@ -101,28 +118,33 @@ export function sameContent(
   if (aKeys.length !== bKeys.length) return false;
   for (let i = 0; i < aKeys.length; i += 1) {
     if (aKeys[i] !== bKeys[i]) return false;
-    const left = a[aKeys[i]!];
-    const right = b[bKeys[i]!];
-    if (isPlainObject(left) && isPlainObject(right)) {
-      if (!sameContent(left, right)) return false;
-    } else if (Array.isArray(left) && Array.isArray(right)) {
-      if (left.length !== right.length) return false;
-      for (let j = 0; j < left.length; j += 1) {
-        if (!sameValue(left[j], right[j])) return false;
-      }
-    } else if (!Object.is(left, right)) {
-      return false;
-    }
+    if (!sameValue(a[aKeys[i]!], b[bKeys[i]!])) return false;
   }
   return true;
 }
 
 function sameValue(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
   if (isPlainObject(a) && isPlainObject(b)) return sameContent(a, b);
   if (Array.isArray(a) && Array.isArray(b)) {
     return a.length === b.length && a.every((item, index) => sameValue(item, b[index]));
   }
-  return Object.is(a, b);
+  // Date / RegExp / Map / Set 的内部状态不看 `Object.keys()`（都是空数组），
+  // 所以必须逐个显式比 —— 尤其 Map/Set 的 JSON.stringify 都是 `{}`，光靠序列化仍会误判相等。
+  if (a instanceof Date && b instanceof Date) return a.getTime() === b.getTime();
+  if (a instanceof RegExp && b instanceof RegExp) {
+    return a.source === b.source && a.flags === b.flags;
+  }
+  if (a instanceof Map && b instanceof Map) {
+    return (
+      a.size === b.size && [...a.entries()].every(([k, v]) => b.has(k) && sameValue(v, b.get(k)))
+    );
+  }
+  if (a instanceof Set && b instanceof Set) {
+    return a.size === b.size && [...a].every((item) => b.has(item));
+  }
+  // 其余非朴素对象（函数、类实例…）退回序列化比较。走 HTTP 时不会出现这些类型。
+  return JSON.stringify(a) === JSON.stringify(b);
 }
 
 /**
@@ -201,11 +223,14 @@ export function handlePush(context: PushContext, request: PushRequest): PushResp
     };
   }
 
-  // 设备表：每次 push 都更新。lastSeq 在整批处理完之后写，因为那时 seq 才定。
-  touchDevice(envelope, request.deviceId, now());
+  // 设备表在整批处理**之后**再登记（见文件末尾）—— 见那里的注释：
+  // 一个从没成功写过任何东西的设备不该被算成「已注册」。
 
   for (const change of request.changes) {
     const key = revKey(change.module, change.key);
+    // `baseRev` 缺失时按 0（= 客户端认为服务端还没有这条）—— 显式归一，不靠
+    // `undefined < 0 === false` 这种巧合，否则缺失会被当成「不落后」而永远不标冲突。
+    const baseRev = typeof change.baseRev === 'number' ? change.baseRev : 0;
 
     if (!(SYNC_MODULES as readonly string[]).includes(change.module)) {
       results.push({
@@ -233,18 +258,35 @@ export function handlePush(context: PushContext, request: PushRequest): PushResp
         results.push({ module: change.module, key: change.key, outcome: 'noop', rev });
         continue;
       }
+
+      /*
+       * 删除同样参与 LWW 判定 —— **这一条曾经漏掉，会静默毁掉更新的记录**：
+       * B 端只见过 v1，它拿 baseRev=0 来删，而服务端已经是 v2（rev 2）。
+       * 不做这条判定，B 的删除会把 A 更新的 v2 直接抹掉、还回 `applied`，客户端不会看到任何提示
+       * —— 正是 ADR-0002 排在最高优先级的「同步导致记录丢失」。
+       *
+       * 判定与 put 完全一致：baseRev 落后就仍然执行（后到的删赢），但标 conflict，
+       * 让客户端知道「你删的时候服务端已经有更新的版本了，那份已进历史」。
+       */
+      const deleteConflict = baseRev < rev;
       pushHistory(context, {
         module: change.module,
         key: change.key,
         rev,
         record: existing,
         replacedAt: now().toISOString(),
-        reason: 'overwritten',
+        reason: deleteConflict ? 'conflict' : 'overwritten',
       });
+      if (deleteConflict) conflicts += 1;
       records.splice(index, 1);
       envelope.sync.rev[key] = rev + 1;
       envelope.sync.seq += 1;
-      results.push({ module: change.module, key: change.key, outcome: 'applied', rev: rev + 1 });
+      results.push({
+        module: change.module,
+        key: change.key,
+        outcome: deleteConflict ? 'conflict' : 'applied',
+        rev: rev + 1,
+      });
       continue;
     }
 
@@ -298,7 +340,7 @@ export function handlePush(context: PushContext, request: PushRequest): PushResp
       continue;
     }
 
-    const isConflict = existing !== null && change.baseRev < rev;
+    const isConflict = existing !== null && baseRev < rev;
     if (isConflict) {
       pushHistory(context, {
         module: change.module,
@@ -324,9 +366,19 @@ export function handlePush(context: PushContext, request: PushRequest): PushResp
     });
   }
 
-  // 设备表的 lastSeq 写整批处理后的值
-  const device = envelope.sync.devices.find((item) => item.deviceId === request.deviceId);
-  if (device) device.lastSeq = envelope.sync.seq;
+  /*
+   * 设备表：只为**真的写进去过东西**的设备登记。
+   *
+   * 为什么不能无条件登记：工单 05 的墓碑清理守卫是「**所有已注册设备**都拉过 ≥ 该墓碑的 seq」。
+   * 一个整批都被拒、从没成功写过的设备如果被登记成「已注册」，它永远不会来拉，
+   * 墓碑就永远清不掉 —— 一个拼错 deviceId 的客户端足以让墓碑无限堆积。
+   */
+  const wroteSomething = results.some(
+    (item) => item.outcome === 'applied' || item.outcome === 'conflict',
+  );
+  if (wroteSomething) {
+    touchDevice(envelope, request.deviceId, now(), envelope.sync.seq);
+  }
 
   return { seq: envelope.sync.seq, conflicts, results };
 }
@@ -341,16 +393,18 @@ function pushHistory(context: PushContext, entry: HistoryEntry): void {
 }
 
 /** 设备表：没有就登记，有就更新 `lastSeenAt`。`lastSeq` 由调用方在整批处理后写。 */
-function touchDevice(envelope: Replica['envelope'], deviceId: string, at: Date): void {
+/** 设备表：没有就登记，有就更新 `lastSeenAt` 与 `lastSeq`（都取整批处理后的 seq）。 */
+function touchDevice(envelope: Replica['envelope'], deviceId: string, at: Date, seq: number): void {
   const existing = envelope.sync.devices.find((item) => item.deviceId === deviceId);
   if (existing) {
     existing.lastSeenAt = at.toISOString();
+    existing.lastSeq = seq;
     return;
   }
   envelope.sync.devices.push({
     deviceId,
     label: '',
     lastSeenAt: at.toISOString(),
-    lastSeq: 0,
+    lastSeq: seq,
   });
 }

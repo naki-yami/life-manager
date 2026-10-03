@@ -89,6 +89,15 @@ export interface Replica {
   saveChecked: (clientSchemaVersion: unknown) => ReplicaError | null;
   /** 相对载入时是否有改动 */
   isDirty: () => boolean;
+  /**
+   * 回到上一次成功落盘（或载入）时的内容。
+   *
+   * 给 push 的失败路径用：`handlePush` 改的是内存，`save()` 才落盘。若落盘失败而内存保持
+   * 前进状态，客户端会收到 500、重试却拿到 `noop`（因为它推的内容「已经在内存里了」），
+   * 于是误判成功 —— 而进程一挂这次写入就无痕消失。
+   * 回滚之后重试会重新走一遍真实写入，500 才是诚实的。
+   */
+  rollback: () => void;
 }
 
 /**
@@ -487,6 +496,13 @@ function makeReplica(
     JSON.stringify({ ...target, exportedAt: '' });
 
   let loaded = fingerprint(envelope);
+  /**
+   * 上一次「已知好」的内容快照，用于 `rollback()`。
+   *
+   * 它在**每次成功 save 之后**前进，所以回滚点是「磁盘上那份」而不是「进程启动时那份」——
+   * 一次失败的回滚不该把之前已经落盘的改动也抹掉。
+   */
+  let lastGood = JSON.parse(JSON.stringify(envelope)) as ReplicaEnvelope;
 
   const replica: Replica = {
     envelope,
@@ -496,6 +512,8 @@ function makeReplica(
       atomicWrite(fs, replicaPath, JSON.stringify(replica.envelope, null, 2));
       // 存完就把基准刷新到当前状态，否则 isDirty 永远为真
       loaded = fingerprint(replica.envelope);
+      // 磁盘上现在是这一份了，回滚点跟着前进
+      lastGood = JSON.parse(JSON.stringify(replica.envelope)) as ReplicaEnvelope;
     },
     saveChecked: (clientSchemaVersion) => {
       const error = checkSchemaVersion(clientSchemaVersion);
@@ -503,6 +521,9 @@ function makeReplica(
       if (error !== null) return error;
       replica.save();
       return null;
+    },
+    rollback: () => {
+      replica.envelope = JSON.parse(JSON.stringify(lastGood)) as ReplicaEnvelope;
     },
   };
   return replica;
