@@ -5,6 +5,7 @@
  * 而不是 404 —— 让客户端能看到「服务在、但这条路还没做」，而不是以为连错了地址。
  */
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import { parseChangesQuery, readChanges, readSnapshot } from './changes.ts';
 import { checkAuth, isPublicPath } from './auth.ts';
 import {
   isOriginAllowed,
@@ -17,7 +18,7 @@ import { handlePush, type PushRequest } from './push.ts';
 import type { Replica } from './replica.ts';
 
 /** 还没实现的路径。做一个删一个 —— 删到空就说明接口齐了。 */
-const PLANNED_PATHS = ['/v1/changes', '/v1/snapshot', '/v1/restore'] as const;
+const PLANNED_PATHS = ['/v1/restore'] as const;
 
 /** 请求体上限：本机服务，正常批次是几十 KB 量级；给足余量但别让人一POST打满内存。 */
 const MAX_BODY_BYTES = 8 * 1024 * 1024;
@@ -139,6 +140,33 @@ export function createRequestHandler(context: RequestContext) {
         schemaVersion: SERVER_SCHEMA_VERSION,
         modules: [...SYNC_MODULES],
       });
+      return;
+    }
+
+    if (pathname === '/v1/changes') {
+      if (req.method !== 'GET') {
+        sendJson(res, 405, { error: 'method_not_allowed' });
+        return;
+      }
+      const page = readChanges(replica, parseChangesQuery(url.searchParams));
+      if (page.needFullResync) {
+        // 不是错误，是「你得走全量对账」—— 客户端据此去拉 /v1/snapshot。
+        // 用 200 而不是 409：它是一次**成功**的协商结果，客户端要靠它做正常分支。
+        logger.warn(
+          `changes：since=${url.searchParams.get('since')} 落在水位 ` +
+            `${page.purgedThroughSeq} 之前，要求全量对账`,
+        );
+      }
+      sendJson(res, 200, page);
+      return;
+    }
+
+    if (pathname === '/v1/snapshot') {
+      if (req.method !== 'GET') {
+        sendJson(res, 405, { error: 'method_not_allowed' });
+        return;
+      }
+      sendJson(res, 200, readSnapshot(replica));
       return;
     }
 

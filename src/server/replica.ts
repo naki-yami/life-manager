@@ -46,6 +46,22 @@ export interface DeviceRecord {
   lastSeq: number;
 }
 
+/**
+ * 变更日志里的一条。`/v1/changes` 就是读它。
+ *
+ * `record` 在 `op: 'delete'` 时不带（客户端按 key 删本地那份）。
+ * 存 `sync` 段里**不另开文件**：一次原子写覆盖全部状态，不必为「副本与日志两个文件
+ * 之间的崩溃一致性」操心。裁剪见工单 05（丢掉 `seq <= purgedThroughSeq` 的条目）。
+ */
+export interface ChangeEntry {
+  seq: number;
+  module: string;
+  key: string;
+  rev: number;
+  op: 'put' | 'delete';
+  record?: Record<string, unknown>;
+}
+
 export interface SyncMeta {
   /** 全局单调递增的变更序号，增量拉取的游标 */
   seq: number;
@@ -55,6 +71,8 @@ export interface SyncMeta {
   rev: Record<string, number>;
   tombstones: Tombstone[];
   devices: DeviceRecord[];
+  /** 变更日志，按 `seq` 升序。工单 04 起写入，工单 05 负责裁剪 */
+  changes: ChangeEntry[];
 }
 
 /**
@@ -174,7 +192,7 @@ export function emptyReplica(now: Date = new Date()): ReplicaEnvelope {
     schemaVersion: SERVER_SCHEMA_VERSION,
     exportedAt: now.toISOString(),
     data,
-    sync: { seq: 0, purgedThroughSeq: 0, rev: {}, tombstones: [], devices: [] },
+    sync: { seq: 0, purgedThroughSeq: 0, rev: {}, tombstones: [], devices: [], changes: [] },
   };
 }
 
@@ -394,6 +412,19 @@ function coerceEnvelope(raw: unknown): {
               (item): item is DeviceRecord =>
                 typeof item === 'object' && item !== null && !Array.isArray(item),
             ) as DeviceRecord[])
+          : [],
+        // 变更日志按 seq 升序存；读回来时重排一次，免得手改过的文件把顺序弄乱、
+        // 让 /v1/changes 的分页漏掉或重复条目
+        changes: Array.isArray(rawSync.changes)
+          ? (rawSync.changes
+              .filter(
+                (item): item is ChangeEntry =>
+                  typeof item === 'object' &&
+                  item !== null &&
+                  !Array.isArray(item) &&
+                  typeof (item as ChangeEntry).seq === 'number',
+              )
+              .sort((left, right) => left.seq - right.seq) as ChangeEntry[])
           : [],
       },
     },

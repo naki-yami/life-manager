@@ -23,6 +23,7 @@ import {
 import { createLogger, type Logger } from './logger';
 import { createRequestHandler } from './http';
 import { loadReplica, REPLICA_FILE, type Replica } from './replica';
+import { backupDataSchema } from '../services/schemas';
 
 const TOKEN = 'f'.repeat(64);
 
@@ -162,8 +163,9 @@ describe('鉴权', () => {
   it('对令牌 → 放行到路由（还没实现的路径返回 501，不是 401）', async () => {
     const h = await startHarness();
 
-    // /v1/push 已在工单 03 实现，所以拿还没做的 /v1/snapshot 来验「放行到了路由」
-    const res = await fetch(`${h.base}/v1/snapshot`, {
+    // /v1/push、/v1/changes、/v1/snapshot 都已实现，所以拿还没做的 /v1/restore 验「放行到了路由」
+    const res = await fetch(`${h.base}/v1/restore`, {
+      method: 'POST',
       headers: { Authorization: `Bearer ${TOKEN}` },
     });
 
@@ -475,5 +477,154 @@ describe('POST /v1/push（工单 03 的接口层）', () => {
     const body = (await retry.json()) as { results: Array<{ outcome: string }>; seq: number };
     expect(body.results[0]!.outcome).toBe('applied');
     expect(body.seq).toBe(1);
+  });
+});
+
+/** GET /v1/changes 与 /v1/snapshot 的接口层（工单 04）。 */
+describe('GET /v1/changes 与 /v1/snapshot', () => {
+  const get = (h: Harness, path: string, token = TOKEN) =>
+    fetch(`${h.base}${path}`, { headers: { Authorization: `Bearer ${token}` } });
+
+  const post = (h: Harness, body: unknown) =>
+    fetch(`${h.base}/v1/push`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+
+  const change = (key: string) => ({
+    module: 'tasks',
+    key,
+    baseRev: 0,
+    op: 'put',
+    record: { id: key, title: key },
+  });
+
+  it('推两条后能拉到两条，带 more 与 nextSince', async () => {
+    const h = await startHarness();
+    await post(h, { deviceId: 'dev-1', changes: [change('t1'), change('t2')] });
+
+    const res = await get(h, '/v1/changes?since=0');
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      changes: Array<{ key: string; seq: number }>;
+      more: boolean;
+      nextSince: number;
+      seq: number;
+    };
+
+    expect(body.changes.map((c) => c.key)).toEqual(['t1', 't2']);
+    expect(body.more).toBe(false);
+    expect(body.nextSince).toBe(2);
+    expect(body.seq).toBe(2);
+  });
+
+  it('分页：limit=1 翻两次拿全，不漏不重', async () => {
+    const h = await startHarness();
+    await post(h, { deviceId: 'dev-1', changes: [change('t1'), change('t2')] });
+
+    const first = (await (await get(h, '/v1/changes?since=0&limit=1')).json()) as {
+      changes: Array<{ key: string }>;
+      more: boolean;
+      nextSince: number;
+    };
+    expect(first.changes.map((c) => c.key)).toEqual(['t1']);
+    expect(first.more).toBe(true);
+
+    const second = (await (
+      await get(h, `/v1/changes?since=${first.nextSince}&limit=1`)
+    ).json()) as { changes: Array<{ key: string }>; more: boolean };
+
+    expect(second.changes.map((c) => c.key)).toEqual(['t2']);
+    expect(second.more).toBe(false);
+  });
+
+  it('since 等于当前 seq → 空结果', async () => {
+    const h = await startHarness();
+    await post(h, { deviceId: 'dev-1', changes: [change('t1')] });
+
+    const body = (await (await get(h, '/v1/changes?since=1')).json()) as {
+      changes: unknown[];
+      more: boolean;
+    };
+    expect(body.changes).toEqual([]);
+    expect(body.more).toBe(false);
+  });
+
+  it('没令牌 / 错令牌 → 401', async () => {
+    const h = await startHarness();
+
+    const noToken = await fetch(`${h.base}/v1/changes`);
+    expect(noToken.status).toBe(401);
+
+    expect((await get(h, '/v1/changes', 'wrong')).status).toBe(401);
+    expect((await get(h, '/v1/snapshot', 'wrong')).status).toBe(401);
+  });
+
+  it('POST /v1/changes → 405', async () => {
+    const h = await startHarness();
+    const res = await fetch(`${h.base}/v1/changes`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${TOKEN}` },
+    });
+    expect(res.status).toBe(405);
+  });
+
+  it('快照返回整份副本，且与磁盘上的副本逐字段一致', async () => {
+    const h = await startHarness();
+    await post(h, { deviceId: 'dev-1', changes: [change('t1')] });
+
+    const snapshot = (await (await get(h, '/v1/snapshot')).json()) as {
+      app: string;
+      schemaVersion: number;
+      data: unknown;
+      sync: { seq: number };
+    };
+    const onDisk = JSON.parse(readFileSync(join(h.dataDir, REPLICA_FILE), 'utf8')) as {
+      app: string;
+      data: unknown;
+      sync: { seq: number };
+    };
+
+    expect(snapshot.app).toBe(onDisk.app);
+    expect(snapshot.sync.seq).toBe(onDisk.sync.seq);
+    expect(snapshot.data).toEqual(onDisk.data);
+  });
+
+  it('快照的 data 段能通过客户端备份校验（换机首同步的唯一路径）', async () => {
+    const h = await startHarness();
+    await post(h, {
+      deviceId: 'dev-1',
+      changes: [
+        change('t1'),
+        {
+          module: 'dietWater',
+          key: '2026-10-02',
+          baseRev: 0,
+          op: 'put',
+          record: { '2026-10-02': 8 },
+        },
+      ],
+    });
+
+    const snapshot = (await (await get(h, '/v1/snapshot')).json()) as { data: unknown };
+    const parsed = backupDataSchema.safeParse(snapshot.data);
+    if (!parsed.success) {
+      throw new Error(`快照不是合法备份：${JSON.stringify(parsed.error.issues.slice(0, 5))}`);
+    }
+    expect(parsed.success).toBe(true);
+  });
+
+  it('水位之前 → 200 + needFullResync（不是错误，是协商结果）', async () => {
+    const h = await startHarness();
+    await post(h, { deviceId: 'dev-1', changes: [change('t1')] });
+    // 直接把水位推高（工单 05 会按清理动作维护它）
+    h.replica.envelope.sync.purgedThroughSeq = 5;
+
+    const res = await get(h, '/v1/changes?since=1');
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { needFullResync: boolean; changes: unknown[] };
+    expect(body.needFullResync).toBe(true);
+    expect(body.changes).toEqual([]);
   });
 });

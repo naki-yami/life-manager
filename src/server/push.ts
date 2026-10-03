@@ -22,6 +22,7 @@ import {
   isKeyedModule,
   revKey,
   validateRecord,
+  type ChangeEntry,
   type ModuleValue,
   type Replica,
   type ReplicaError,
@@ -338,7 +339,12 @@ export function handlePush(context: PushContext, request: PushRequest): PushResp
       if (keyed) deleteKeyed(change.module, change.key, envelope.data);
       else records!.splice(index, 1);
       envelope.sync.rev[key] = rev + 1;
-      envelope.sync.seq += 1;
+      recordChange(envelope, {
+        module: change.module,
+        key: change.key,
+        rev: rev + 1,
+        op: 'delete',
+      });
       results.push({
         module: change.module,
         key: change.key,
@@ -423,7 +429,13 @@ export function handlePush(context: PushContext, request: PushRequest): PushResp
       records!.push(incoming);
     }
     envelope.sync.rev[key] = rev + 1;
-    envelope.sync.seq += 1;
+    recordChange(envelope, {
+      module: change.module,
+      key: change.key,
+      rev: rev + 1,
+      op: 'put',
+      record: incoming,
+    });
     results.push({
       module: change.module,
       key: change.key,
@@ -452,6 +464,17 @@ export function handlePush(context: PushContext, request: PushRequest): PushResp
 function currentRev(revTable: Record<string, number>, module: string, key: string): number {
   const value = revTable[revKey(module, key)];
   return typeof value === 'number' ? value : 0;
+}
+
+/**
+ * 接受一次变更：`seq` +1，并往变更日志追加一条。
+ *
+ * **这两件事必须一起做**，所以合成一个入口 —— 分开写迟早会漏一处，
+ * 而漏掉的那次改动就永远拉不到（`/v1/changes` 只认日志）。
+ */
+function recordChange(envelope: Replica['envelope'], change: Omit<ChangeEntry, 'seq'>): void {
+  envelope.sync.seq += 1;
+  envelope.sync.changes.push({ seq: envelope.sync.seq, ...change });
 }
 
 function pushHistory(context: PushContext, entry: HistoryEntry): void {
