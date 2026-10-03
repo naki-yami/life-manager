@@ -1,6 +1,6 @@
 # 03 push：rev、幂等与 LWW 冲突
 
-Status: ready-for-agent
+Status: claimed
 Type: task
 Part of: `.scratch/sync-service/spec.md`
 Blocked by: 02

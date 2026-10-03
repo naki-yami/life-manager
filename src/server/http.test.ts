@@ -10,7 +10,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { createServer, type Server } from 'node:http';
 import { connect } from 'node:net';
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { AddressInfo } from 'node:net';
@@ -22,6 +22,7 @@ import {
 } from './config';
 import { createLogger, type Logger } from './logger';
 import { createRequestHandler } from './http';
+import { loadReplica, REPLICA_FILE } from './replica';
 
 const TOKEN = 'f'.repeat(64);
 
@@ -29,6 +30,8 @@ interface Harness {
   base: string;
   server: Server;
   logs: string[];
+  /** 数据目录，用来断言「磁盘上到底写了什么」 */
+  dataDir: string;
   close: () => Promise<void>;
 }
 
@@ -56,13 +59,11 @@ async function startHarness(overrides: Partial<ServerConfig> = {}): Promise<Harn
 
   const logs: string[] = [];
   const logger: Logger = createLogger((line) => logs.push(line));
-  const handler = createRequestHandler({
-    config,
-    logger,
-    seq: 0,
-    schemaVersion: SERVER_SCHEMA_VERSION,
-    modules: SYNC_MODULES,
+  const { replica } = loadReplica({
+    dataDir: config.dataDir,
+    now: () => new Date('2026-10-03T00:00:00.000Z'),
   });
+  const handler = createRequestHandler({ config, logger, replica });
 
   const server = createServer(handler);
   openServers.push(server);
@@ -73,6 +74,7 @@ async function startHarness(overrides: Partial<ServerConfig> = {}): Promise<Harn
     base: `http://127.0.0.1:${port}`,
     server,
     logs,
+    dataDir: config.dataDir,
     close: () => new Promise<void>((resolve) => server.close(() => resolve())),
   };
 }
@@ -154,7 +156,18 @@ describe('鉴权', () => {
     expect(res.status).toBe(401);
   });
 
-  it('对令牌 → 放行到路由（已规划但未实现的路径返回 501，不是 401）', async () => {
+  it('对令牌 → 放行到路由（还没实现的路径返回 501，不是 401）', async () => {
+    const h = await startHarness();
+
+    // /v1/push 已在工单 03 实现，所以拿还没做的 /v1/snapshot 来验「放行到了路由」
+    const res = await fetch(`${h.base}/v1/snapshot`, {
+      headers: { Authorization: `Bearer ${TOKEN}` },
+    });
+
+    expect(res.status).toBe(501);
+  });
+
+  it('/v1/push 已实现：对令牌但请求体不合法 → 400（不再是 501）', async () => {
     const h = await startHarness();
 
     const res = await fetch(`${h.base}/v1/push`, {
@@ -162,7 +175,7 @@ describe('鉴权', () => {
       headers: { Authorization: `Bearer ${TOKEN}` },
     });
 
-    expect(res.status).toBe(501);
+    expect(res.status).toBe(400);
   });
 
   it('鉴权失败时日志记了原因，但响应体不泄露细节', async () => {
@@ -278,5 +291,150 @@ describe('畸形请求不能让服务端挂掉', () => {
     await rawRequest(port, 'GET /v1/health HTTP/1.1\r\nHost: ]:99999\r\nConnection: close\r\n\r\n');
 
     expect((await fetch(`${h.base}/v1/health`)).status).toBe(200);
+  });
+});
+
+/** POST /v1/push 走真 HTTP —— handlePush 的单测证明不了「路由接对了、落盘了」。 */
+describe('POST /v1/push（工单 03 的接口层）', () => {
+  const post = (h: Harness, body: unknown, token = TOKEN) =>
+    fetch(`${h.base}/v1/push`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+
+  const change = (over: Record<string, unknown> = {}) => ({
+    module: 'tasks',
+    key: 't1',
+    baseRev: 0,
+    op: 'put',
+    record: { id: 't1', title: '写周报' },
+    ...over,
+  });
+
+  it('推一条 → 200 + applied + rev/seq；health 的 seq 跟着变', async () => {
+    const h = await startHarness();
+
+    const res = await post(h, { deviceId: 'dev-1', changes: [change()] });
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      seq: number;
+      results: Array<{ outcome: string; rev: number }>;
+    };
+    expect(body.results[0]).toMatchObject({ outcome: 'applied', rev: 1 });
+    expect(body.seq).toBe(1);
+
+    // seq 是真的写进副本了，不只是响应里的数字
+    const health = (await (await fetch(`${h.base}/v1/health`)).json()) as { seq: number };
+    expect(health.seq).toBe(1);
+  });
+
+  it('同内容重推 → 第二次 noop，且 seq 不变', async () => {
+    const h = await startHarness();
+    await post(h, { deviceId: 'dev-1', changes: [change()] });
+
+    const res = await post(h, { deviceId: 'dev-1', changes: [change()] });
+    const body = (await res.json()) as { seq: number; results: Array<{ outcome: string }> };
+
+    expect(body.results[0]!.outcome).toBe('noop');
+    expect(body.seq).toBe(1);
+    // 重推不该落盘，所以磁盘上仍是第一次那份
+    expect(JSON.parse(readFileSync(join(h.dataDir, REPLICA_FILE), 'utf8'))).toMatchObject({
+      sync: { seq: 1 },
+    });
+  });
+
+  it('两台设备推同一条 → 后到的标 conflict，内容为后到者', async () => {
+    const h = await startHarness();
+    await post(h, {
+      deviceId: 'dev-A',
+      changes: [change({ record: { id: 't1', title: 'A 的' } })],
+    });
+
+    const res = await post(h, {
+      deviceId: 'dev-B',
+      changes: [change({ record: { id: 't1', title: 'B 的' } })],
+    });
+    const body = (await res.json()) as { conflicts: number; results: Array<{ outcome: string }> };
+
+    expect(body.results[0]!.outcome).toBe('conflict');
+    expect(body.conflicts).toBe(1);
+
+    // 落盘后磁盘上是后到者的内容
+    const onDisk = JSON.parse(readFileSync(join(h.dataDir, REPLICA_FILE), 'utf8')) as {
+      data: { tasks: Array<{ title: string }> };
+      sync: { devices: Array<{ deviceId: string }> };
+    };
+    expect(onDisk.data.tasks[0]!.title).toBe('B 的');
+    expect(onDisk.sync.devices.map((d) => d.deviceId)).toEqual(['dev-A', 'dev-B']);
+  });
+
+  it('一批里混一条坏记录 → 只拒那条，其余照常', async () => {
+    const h = await startHarness();
+
+    const res = await post(h, {
+      deviceId: 'dev-1',
+      changes: [
+        change({ key: 'good', record: { id: 'good', title: '好' } }),
+        { module: 'settings', key: 's1', baseRev: 0, op: 'put', record: { id: 's1' } },
+        { module: 'tasks', key: 't2', baseRev: 0, op: 'put', record: { id: 't2', title: '也好' } },
+      ],
+    });
+
+    const body = (await res.json()) as { results: Array<{ outcome: string; error?: string }> };
+    expect(body.results.map((r) => r.outcome)).toEqual(['applied', 'rejected', 'applied']);
+    expect(body.results[1]!.error).toContain('不在册');
+  });
+
+  it('请求体不是 JSON → 400；结构不对 → 400 并说清缺什么', async () => {
+    const h = await startHarness();
+
+    const bad = await fetch(`${h.base}/v1/push`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
+      body: '这不是 JSON',
+    });
+    expect(bad.status).toBe(400);
+
+    const missing = await post(h, { changes: [] });
+    expect(missing.status).toBe(400);
+    expect(((await missing.json()) as { detail: string }).detail).toContain('deviceId');
+  });
+
+  it('没令牌 → 401，且一个字节都没写进副本', async () => {
+    const h = await startHarness();
+    const before = readFileSync(join(h.dataDir, REPLICA_FILE), 'utf8');
+
+    const res = await post(h, { deviceId: 'dev-1', changes: [change()] }, 'wrong-token');
+
+    expect(res.status).toBe(401);
+    expect(readFileSync(join(h.dataDir, REPLICA_FILE), 'utf8')).toBe(before);
+  });
+
+  it('GET /v1/push → 405', async () => {
+    const h = await startHarness();
+
+    const res = await fetch(`${h.base}/v1/push`, {
+      headers: { Authorization: `Bearer ${TOKEN}` },
+    });
+
+    expect(res.status).toBe(405);
+  });
+
+  it('客户端版本高于服务端 → 200 但整批 rejected，副本不变', async () => {
+    const h = await startHarness();
+    const before = readFileSync(join(h.dataDir, REPLICA_FILE), 'utf8');
+
+    const res = await post(h, {
+      deviceId: 'dev-1',
+      schemaVersion: SERVER_SCHEMA_VERSION + 1,
+      changes: [change()],
+    });
+
+    const body = (await res.json()) as { results: Array<{ outcome: string; error?: string }> };
+    expect(body.results[0]!.outcome).toBe('rejected');
+    expect(body.results[0]!.error).toContain('升级服务端');
+    expect(readFileSync(join(h.dataDir, REPLICA_FILE), 'utf8')).toBe(before);
   });
 });

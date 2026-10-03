@@ -162,9 +162,30 @@ export function revKey(module: string, key: string): string {
 }
 
 /**
+ * 这两类**不是「带 `id` 的记录」**，key 的取法单独定死（spec「同步单位」表后）：
+ *
+ * - `dietGoals` 是**模块单值**：整个模块就一份 `{calories, protein}`，key 固定为模块名本身，
+ *   整块替换、不产生 `delete`（清空等于写回默认目标）。
+ * - `dietWater` 是**日期键映射**：key 是日期串（如 `2026-10-02`），值是该天杯数。
+ *
+ * 它们的结构守卫只查「key 是非空字符串 + 值是 JSON」，**不要求有 `id`** ——
+ * 套用记录那套会让客户端**每一次**推饮水/目标都被拒（实测过：这是最容易漏的一处）。
+ */
+export const KEYED_MODULES: readonly string[] = ['dietWater', 'dietGoals'];
+
+/** 这个模块是不是「不是记录数组」的那两类。 */
+export function isKeyedModule(module: string): boolean {
+  return KEYED_MODULES.includes(module);
+}
+
+/** `dietGoals` 的 key 固定为模块名本身（spec 定死）。 */
+export const DIET_GOALS_KEY = 'dietGoals';
+
+/**
  * 结构守卫：**不校验业务字段**。
  *
- * 只查三件事：模块名在册、`id` 是非空字符串、记录是对象。其余字段原样存。
+ * 记录类模块只查三件事：模块名在册、`id` 是非空字符串、记录是对象。其余字段原样存。
+ * 两个 keyed 模块（饮水 / 目标）另按上一条走：不要求 `id`。
  * 理由见文件头 —— 服务端拿不到客户端的 zod schema，也没有能力做用户可读的修复；
  * 坏记录的兜底是「客户端推之前先过自己的 schema」+ 服务端的每日快照与历史版本。
  */
@@ -175,6 +196,9 @@ export function validateRecord(module: string, record: unknown): ReplicaError | 
   if (typeof record !== 'object' || record === null || Array.isArray(record)) {
     return { kind: 'bad_record', module, reason: '记录应为对象' };
   }
+  // keyed 模块（饮水按日期、目标按模块名）：没有 id 是正常的，到此为止
+  if (isKeyedModule(module)) return null;
+
   const id = (record as Record<string, unknown>).id;
   if (typeof id !== 'string' || id.trim() === '') {
     return { kind: 'bad_record', module, reason: 'id 应为非空字符串' };

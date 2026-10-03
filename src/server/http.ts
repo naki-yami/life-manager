@@ -1,27 +1,51 @@
 /**
  * HTTP 层：路由、JSON 收发、CORS。
  *
- * 这一层只管「把请求翻译成一次处理」，业务状态（副本、seq、墓碑）在工单 02 之后才有，
- * 所以工单 01 只实现 `/v1/health`，其余已注册路径返回「尚未实现」而不是 404 ——
- * 让客户端能看到「服务在、但这条路还没做」，而不是以为连错了地址。
+ * 这一层只管「把请求翻译成一次处理」，业务状态在副本里。已注册但还没实现的路径返回 501
+ * 而不是 404 —— 让客户端能看到「服务在、但这条路还没做」，而不是以为连错了地址。
  */
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { checkAuth, isPublicPath } from './auth.ts';
-import { isOriginAllowed, type ServerConfig } from './config.ts';
+import {
+  isOriginAllowed,
+  SERVER_SCHEMA_VERSION,
+  SYNC_MODULES,
+  type ServerConfig,
+} from './config.ts';
 import type { Logger } from './logger.ts';
+import { handlePush, type PushRequest } from './push.ts';
+import type { Replica } from './replica.ts';
 
-/** 工单 02 会实现它们；现在先如实报「未实现」。 */
-const PLANNED_PATHS = ['/v1/changes', '/v1/push', '/v1/snapshot', '/v1/restore'] as const;
+/** 还没实现的路径。做一个删一个 —— 删到空就说明接口齐了。 */
+const PLANNED_PATHS = ['/v1/changes', '/v1/snapshot', '/v1/restore'] as const;
+
+/** 请求体上限：本机服务，正常批次是几十 KB 量级；给足余量但别让人一POST打满内存。 */
+const MAX_BODY_BYTES = 8 * 1024 * 1024;
 
 export interface RequestContext {
   config: ServerConfig;
   logger: Logger;
-  /** 当前全局 seq。工单 02 起由副本提供；工单 01 恒为 0。 */
-  seq: number;
-  /** 副本结构版本，进 health 让客户端判断要不要升级服务端。 */
-  schemaVersion: number;
-  /** 备份模块名，进 health 让客户端自查清单是否与服务端一致。 */
-  modules: readonly string[];
+  /** 副本（工单 02 起有）。`/v1/health` 与 `/v1/push` 都从它读实时状态。 */
+  replica: Replica;
+}
+
+/** 读请求体，超过上限就中止。 */
+function readBody(req: IncomingMessage, limit = MAX_BODY_BYTES): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    let size = 0;
+    req.on('data', (chunk: Buffer) => {
+      size += chunk.length;
+      if (size > limit) {
+        reject(new Error(`请求体超过 ${limit} 字节`));
+        req.destroy();
+        return;
+      }
+      chunks.push(chunk);
+    });
+    req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
+    req.on('error', reject);
+  });
 }
 
 /** CORS：只有被放行的 origin 才拿到放行头；其它 origin 不带，浏览器自然会拦。 */
@@ -72,7 +96,7 @@ function parseRequestUrl(rawUrl: string | undefined): URL | null {
 }
 
 export function createRequestHandler(context: RequestContext) {
-  const { config, logger, seq, schemaVersion, modules } = context;
+  const { config, logger, replica } = context;
 
   return function handle(req: IncomingMessage, res: ServerResponse): void {
     const url = parseRequestUrl(req.url);
@@ -109,7 +133,62 @@ export function createRequestHandler(context: RequestContext) {
         sendJson(res, 405, { error: 'method_not_allowed' });
         return;
       }
-      sendJson(res, 200, { ok: true, seq, schemaVersion, modules: [...modules] });
+      sendJson(res, 200, {
+        ok: true,
+        seq: replica.envelope.sync.seq,
+        schemaVersion: SERVER_SCHEMA_VERSION,
+        modules: [...SYNC_MODULES],
+      });
+      return;
+    }
+
+    if (pathname === '/v1/push') {
+      if (req.method !== 'POST') {
+        sendJson(res, 405, { error: 'method_not_allowed' });
+        return;
+      }
+      // 读体 + 处理是异步的（要等数据到齐），所以这一支单独走 promise 链。
+      // 任何异常都在这里收住并回 400/500 —— 不能让一个坏请求打死进程（工单 01 的教训）。
+      void readBody(req)
+        .then((raw) => {
+          let body: unknown;
+          try {
+            body = JSON.parse(raw);
+          } catch {
+            sendJson(res, 400, { error: 'bad_json' });
+            return;
+          }
+          const problem = validatePushRequest(body);
+          if (problem !== null) {
+            sendJson(res, 400, { error: 'bad_request', detail: problem });
+            return;
+          }
+          const result = handlePush({ replica, logger }, body as PushRequest);
+          // 有改动就落盘。noop / rejected 不该产生写盘 —— 那会让「幂等不写历史」这条
+          // 在磁盘层面也不成立（每次重推都改 exportedAt）。
+          if (
+            result.results.some((item) => item.outcome === 'applied' || item.outcome === 'conflict')
+          ) {
+            try {
+              replica.save();
+            } catch (error) {
+              logger.error(
+                `副本落盘失败：${error instanceof Error ? error.message : String(error)}`,
+              );
+              sendJson(res, 500, { error: 'replica_write_failed' });
+              return;
+            }
+          }
+          logger.info(
+            `push from ${(body as PushRequest).deviceId}：${result.results.length} 条，` +
+              `${result.conflicts} 冲突，seq=${result.seq}`,
+          );
+          sendJson(res, 200, result);
+        })
+        .catch((error: unknown) => {
+          logger.warn(`读请求体失败：${error instanceof Error ? error.message : String(error)}`);
+          if (!res.headersSent) sendJson(res, 400, { error: 'bad_request' });
+        });
       return;
     }
 
@@ -120,4 +199,28 @@ export function createRequestHandler(context: RequestContext) {
 
     sendJson(res, 404, { error: 'not_found' });
   };
+}
+
+/** 请求体形状检查。缺字段是客户端 bug，回 400 并说清缺什么，别让它变成 500 或静默无操作。 */
+function validatePushRequest(body: unknown): string | null {
+  if (typeof body !== 'object' || body === null || Array.isArray(body)) return '请求体应为对象';
+  const root = body as Record<string, unknown>;
+  if (typeof root.deviceId !== 'string' || root.deviceId.trim() === '') {
+    return 'deviceId 应为非空字符串';
+  }
+  if (!Array.isArray(root.changes)) return 'changes 应为数组';
+  for (const change of root.changes) {
+    if (typeof change !== 'object' || change === null || Array.isArray(change)) {
+      return 'changes 里的每一项应为对象';
+    }
+    const item = change as Record<string, unknown>;
+    if (typeof item.module !== 'string' || item.module === '')
+      return 'change.module 应为非空字符串';
+    if (typeof item.key !== 'string' || item.key === '') return 'change.key 应为非空字符串';
+    if (item.op !== 'put' && item.op !== 'delete') return "change.op 应为 'put' 或 'delete'";
+    if (typeof item.baseRev !== 'number' || !Number.isFinite(item.baseRev)) {
+      return 'change.baseRev 应为数字';
+    }
+  }
+  return null;
 }

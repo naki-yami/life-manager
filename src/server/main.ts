@@ -12,15 +12,10 @@
  */
 import { createServer } from 'node:http';
 import { pathToFileURL } from 'node:url';
-import {
-  loadOrCreateConfig,
-  ensureDirectories,
-  SYNC_MODULES,
-  SERVER_SCHEMA_VERSION,
-  DEFAULT_HOST,
-} from './config.ts';
+import { loadOrCreateConfig, ensureDirectories, DEFAULT_HOST } from './config.ts';
 import { createLogger, type Logger } from './logger.ts';
 import { createRequestHandler } from './http.ts';
+import { loadReplica } from './replica.ts';
 
 /** Windows 上 `127.0.0.1` 是回环；`0.0.0.0` / `::` 是「所有网卡」，等于把服务暴露到局域网。 */
 function isLoopbackHost(host: string): boolean {
@@ -93,14 +88,15 @@ export function startServer(options: { configPath?: string; logger?: Logger } = 
     else log.info(line.message);
   }
 
-  const handler = createRequestHandler({
-    config,
-    logger: log,
-    // 工单 02 起改为从副本读；工单 01 没有副本，如实报 0。
-    seq: 0,
-    schemaVersion: SERVER_SCHEMA_VERSION,
-    modules: SYNC_MODULES,
+  // 载入副本（工单 02）。没有就生成一份 seq=0 的并落盘；半写文件会用 backups/ 里的顶上。
+  const { replica, created: replicaCreated } = loadReplica({
+    dataDir: config.dataDir,
+    onWarn: (message) => log.warn(message),
   });
+  if (replicaCreated) log.info('已新建空副本');
+  log.info(`副本就绪：seq=${replica.envelope.sync.seq}`);
+
+  const handler = createRequestHandler({ config, logger: log, replica });
 
   const server = createServer((req, res) => {
     // 兜底：处理器里任何漏网的异常都不该打死进程。按 ADR-0002 这个服务是无人值守跑在
