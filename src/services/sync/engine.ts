@@ -1,6 +1,12 @@
 import { useSyncStore, type SyncConflict } from '../../store/syncStore';
 import { applyChanges, type AppliedChange } from './apply';
-import { computeBaseline, diffAgainstBaseline, type RevTable, type SyncChange } from './baseline';
+import {
+  computeBaseline,
+  diffAgainstBaseline,
+  withoutDefaultSingletons,
+  type RevTable,
+  type SyncChange,
+} from './baseline';
 
 /**
  * 同步引擎：把一轮同步编排起来。
@@ -141,8 +147,8 @@ function toRevTable(revs: Record<string, number>): RevTable {
   return table;
 }
 
-/** 把 diff 用的嵌套 rev 表拍回 `module:key` 的扁平形状 */
-function fromRevTable(table: RevTable): Record<string, number> {
+/** 把 diff 用的嵌套 rev 表拍回 `module:key` 的扁平形状（`lm:sync.revs` 存的就是它） */
+export function fromRevTable(table: RevTable): Record<string, number> {
   const revs: Record<string, number> = {};
   for (const [module, entries] of Object.entries(table)) {
     for (const [key, rev] of Object.entries(entries)) {
@@ -240,6 +246,68 @@ export async function runSync(http: SyncHttp = createFetchHttp()): Promise<SyncO
 /** 组装一个失败结果（游标保持原值） */
 function failure(reason: string, lastSeq: number): SyncOutcome {
   return { ok: false, reason, pushed: 0, pulled: 0, conflicts: 0, lastSeq };
+}
+
+/**
+ * 算本机相对基线的改动，推上去，再拉增量落库 —— 与 `runSync` 同一套动作，
+ * 但**跳过了 health 与开关检查**，给「用户已经明确选过」的路径用（工单 05）。
+ *
+ * 与 `runSync` 的区别只有一个：`options` 决定拿什么当基线、要不要跳过默认值单值模块。
+ * 单独抽出来而不是复制一遍，是因为这五步的**顺序**本身就是正确性的一部分
+ * （先推后拉、全成功才提交），两处各写一遍迟早会漂。
+ */
+export async function computeAndCommitDiff(
+  http: SyncHttp,
+  options: { ignoreBaseline?: boolean; skipDefaults?: boolean } = {},
+): Promise<SyncOutcome> {
+  const state = useSyncStore.getState();
+  const { baseUrl, token, deviceId, lastSeq } = state;
+  const revTable = toRevTable(state.revs);
+
+  try {
+    // 「以本机为准」= 覆盖语义：把基线当空的、rev 全按 0，于是 diff 出来的是“全部新增”
+    const baseline = options.ignoreBaseline ? {} : state.baseline;
+    const revOf = options.ignoreBaseline
+      ? () => 0
+      : (module: string, key: string) => revTable[module]?.[key] ?? 0;
+
+    let changes = await diffAgainstBaseline(baseline, revOf);
+    if (options.skipDefaults) changes = withoutDefaultSingletons(changes);
+
+    const pushed = await pushChanges(http, baseUrl, token, deviceId, changes, revTable);
+    state.setConflicts(pushed.conflicts);
+    if (pushed.rejected.length > 0) {
+      return failure(`服务端拒绝了 ${pushed.rejected.length} 条改动`, lastSeq);
+    }
+
+    const pulled = await pullChanges(http, baseUrl, token, deviceId, lastSeq, pushed.revs);
+
+    const nextBaseline = await computeBaseline();
+    state.commitSync(pulled.lastSeq, nextBaseline, fromRevTable(pulled.revs));
+
+    return {
+      ok: true,
+      reason: '',
+      pushed: changes.length,
+      pulled: pulled.applied,
+      conflicts: pushed.conflicts.length,
+      lastSeq: pulled.lastSeq,
+    };
+  } catch (error) {
+    return failure(error instanceof Error ? error.message : String(error), lastSeq);
+  }
+}
+
+/**
+ * 按当前本机数据重算基线并提交（连同给定的 rev 表与游标）。
+ *
+ * 给「已经覆盖过本机数据」的路径用（工单 05 的两种对账）：覆盖完必须重算基线，
+ * 否则下一轮会把刚拉下来的每一条都当成「本机新增」再推回去 —— 白跑一趟且制造冲突。
+ */
+export async function computeAndCommit(lastSeq: number, revs: RevTable): Promise<void> {
+  const state = useSyncStore.getState();
+  const baseline = await computeBaseline();
+  state.commitSync(lastSeq, baseline, fromRevTable(revs));
 }
 
 /**
@@ -381,6 +449,9 @@ const MAX_PAGES = 1000;
  *
  * 这是 `needFullResync: true` 的落点 —— **它不是错误**，是服务端一次成功的协商结果
  * （水位之前 / 设备休眠太久）。完事把游标置为快照信封里的 `seq`。
+ *
+ * 工单 05 的「以服务端为准」也走这里（`fetchSnapshot` + `applySnapshot`），
+ * 所以「快照怎么落库」只有一份实现 —— 两处各写一遍迟早会漂。
  */
 async function fullResync(
   http: SyncHttp,
@@ -388,27 +459,14 @@ async function fullResync(
   token: string,
   revs: RevTable,
 ): Promise<{ applied: number; lastSeq: number; revs: RevTable }> {
-  const snapshot = (await http.request({
-    url: `${baseUrl}/v1/snapshot`,
-    method: 'GET',
-    token,
-  })) as { data?: Record<string, unknown>; sync?: { seq?: number; rev?: Record<string, number> } };
+  const snapshot = await fetchSnapshot(http, baseUrl, token);
 
   const data = snapshot.data ?? {};
   const applied = applySnapshot(data);
 
   // 快照里带了完整的 rev 表（`sync.rev`，键是 `module:key`），照它重设。
   // 这份是权威的：它描述的是快照那一刻服务端每条记录的版本。
-  const nextRevs: RevTable = {};
-  for (const [composite, rev] of Object.entries(snapshot.sync?.rev ?? {})) {
-    if (typeof rev !== 'number') continue;
-    const at = composite.indexOf(':');
-    if (at <= 0) continue;
-    const module = composite.slice(0, at);
-    const key = composite.slice(at + 1);
-    if (key === '') continue;
-    nextRevs[module] = { ...nextRevs[module], [key]: Math.floor(rev) };
-  }
+  const nextRevs = revsFromSnapshot(snapshot);
 
   return {
     applied,
@@ -418,13 +476,47 @@ async function fullResync(
   };
 }
 
+/** 副本信封（`/v1/snapshot` 的响应，也是 replica.json 的形状） */
+export interface SnapshotEnvelope {
+  data?: Record<string, unknown>;
+  sync?: { seq?: number; rev?: Record<string, number> };
+}
+
+/** 拉整份副本快照。工单 05 的「以服务端为准」与这里的全量对账共用它。 */
+export async function fetchSnapshot(
+  http: SyncHttp,
+  baseUrl: string,
+  token: string,
+): Promise<SnapshotEnvelope> {
+  return (await http.request({
+    url: `${baseUrl}/v1/snapshot`,
+    method: 'GET',
+    token,
+  })) as SnapshotEnvelope;
+}
+
+/** 把快照里的 `sync.rev`（`module:key` 扁平键）转成嵌套 rev 表 */
+export function revsFromSnapshot(snapshot: SnapshotEnvelope): RevTable {
+  const revs: RevTable = {};
+  for (const [composite, rev] of Object.entries(snapshot.sync?.rev ?? {})) {
+    if (typeof rev !== 'number') continue;
+    const at = composite.indexOf(':');
+    if (at <= 0) continue;
+    const module = composite.slice(0, at);
+    const key = composite.slice(at + 1);
+    if (key === '') continue;
+    revs[module] = { ...revs[module], [key]: Math.floor(rev) };
+  }
+  return revs;
+}
+
 /**
  * 把快照的 `data` 段按单元表拆成变更并落库。
  *
  * 形状直接复用备份的模块形状（`replica.ts` 的 `ModuleValue`）：
  * 记录类模块是数组、`dietWater` 是扁平的 date → 数字、`dietGoals` 是模块单值。
  */
-function applySnapshot(data: Record<string, unknown>): number {
+export function applySnapshot(data: Record<string, unknown>): number {
   const changes: AppliedChange[] = [];
 
   for (const [module, value] of Object.entries(data)) {

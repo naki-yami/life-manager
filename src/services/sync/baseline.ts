@@ -1,3 +1,4 @@
+import { DEFAULT_DIET_GOALS } from '../../utils/diet';
 import { SYNC_UNITS, readUnits } from './units';
 
 /**
@@ -225,4 +226,76 @@ const UNIT_KINDS: ReadonlyMap<string, string> = new Map(
 function toPushRecord(module: string, key: string, value: unknown): Record<string, unknown> {
   if (UNIT_KINDS.get(module) === 'dateMap') return { [key]: value };
   return value as Record<string, unknown>;
+}
+
+/**
+ * 从一份「服务端形状的 `data` 段」算基线：`module → key → 哈希`。
+ *
+ * **与 `computeBaseline()` 的关键区别**：后者算的是**本机当前**的数据，
+ * 前者算的是**服务端那一份**。差异恰好就是「本机有、服务端没有」的条目 ——
+ * 对齐语义（工单 05 的重新对账）必须用这一份：把服务端那份当基线，
+ * 随后 diff 才能算出「本机独有的东西该推上去」。
+ *
+ * 若错用 `computeBaseline()`（本机那份），本机独有的记录会被算进基线，
+ * 于是 diff 认为「没动」—— **那条记录永远推不到服务端**，且没有任何报错。
+ */
+export async function baselineFromSnapshotData(data: Record<string, unknown>): Promise<Baseline> {
+  const baseline: Baseline = {};
+
+  for (const [module, value] of Object.entries(data)) {
+    const hashes: Record<string, string> = {};
+
+    if (Array.isArray(value)) {
+      for (const record of value) {
+        if (typeof record !== 'object' || record === null || Array.isArray(record)) continue;
+        const id = (record as Record<string, unknown>).id;
+        if (typeof id !== 'string' || id === '') continue;
+        hashes[id] = await contentHash(record);
+      }
+    } else if (typeof value === 'object' && value !== null) {
+      if (module === 'dietWater') {
+        // 扁平 date → 数字：一天一个单元，值与 `readUnits()` 的读取器保持一致（裸数字）
+        for (const [date, glasses] of Object.entries(value as Record<string, unknown>)) {
+          if (typeof glasses === 'number') hashes[date] = await contentHash(glasses);
+        }
+      } else {
+        // 模块单值：key 固定为模块名，值就是整块对象
+        hashes[module] = await contentHash(value);
+      }
+    }
+
+    baseline[module] = hashes;
+  }
+
+  return baseline;
+}
+
+/**
+ * 「本机仍是默认值」的模块单值条目 —— 即用户从没设过那一项。
+ *
+ * `dietGoals` 是模块单值，而 store 里它**恒有默认值**，所以空基线下必然算出一条 `put`。
+ * 若本机还是默认值（用户没设过）而服务端已有真实目标，推上去会被判 `conflict` ——
+ * 用户什么都没改，却看到一行莫名其妙的冲突提示。
+ *
+ * 判据是 `DEFAULT_DIET_GOALS`（`utils/diet.ts` 的注释就写着它是「用户从没设过」的基准，
+ * 而 `schemas-parity.test.ts` 断言服务端那份与它相等）。
+ */
+export function isDefaultSingletonChange(change: SyncChange): boolean {
+  if (change.op !== 'put' || change.record === undefined) return false;
+  if (UNIT_KINDS.get(change.module) !== 'singleton') return false;
+  if (change.module !== 'dietGoals') return false;
+
+  const { calories, protein } = change.record;
+  if (typeof calories !== 'number' || typeof protein !== 'number') return false;
+
+  return calories === DEFAULT_DIET_GOALS.calories && protein === DEFAULT_DIET_GOALS.protein;
+}
+
+/**
+ * 筛掉「本机仍是默认值」的模块单值条目，给**对齐语义**的路径用（工单 05 的重新对账）。
+ *
+ * 覆盖语义（「以本机为准」）**不**该用它 —— 用户明确选了覆盖，那就照推。
+ */
+export function withoutDefaultSingletons(changes: readonly SyncChange[]): SyncChange[] {
+  return changes.filter((change) => !isDefaultSingletonChange(change));
 }
