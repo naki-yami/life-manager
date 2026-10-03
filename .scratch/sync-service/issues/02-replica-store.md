@@ -1,6 +1,6 @@
 # 02 副本存储：形状、结构守卫与原子写
 
-Status: ready-for-agent
+Status: claimed
 Type: task
 Part of: `.scratch/sync-service/spec.md`
 Blocked by: 01
