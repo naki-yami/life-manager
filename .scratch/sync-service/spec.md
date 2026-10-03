@@ -144,9 +144,15 @@ ADR-0002 拍板了「同步服务跑在本机、纯本地降为默认」，但�
 在此补齐，并且是**按客户端形状存**：
 
 ```
-data.dietWater = { '2026-10-02': { glasses: 8 }, … }      // 日期 → 杯数
-data.dietGoals = { calories: 2100, protein: 120 }          // 模块单值
+data.dietWater = { '2026-10-02': 8, '2026-10-03': 6, … }   // 日期 → 杯数（值是数字）
+data.dietGoals = { calories: 2100, protein: 120 }           // 模块单值
 ```
+
+**`dietWater` 的值是裸数字，不是 `{ glasses: 8 }`。** 客户端 `dietStore.water` 就是
+`Record<string, number>`，而 `sanitizeWater`（`src/utils/diet.ts`）只认数字值 ——
+包一层对象会让它把**每一个键**都当脏值剔掉，用户的饮水**静默变空**。
+（本文件早先的示例误写成 `{ '2026-10-02': { glasses: 8 } }`，2026-10-03 更正；
+服务端实现早已是扁平形状，`schemas-parity.test.ts` 与 `roundtrip.test.ts` 守着它。）
 
 理由：`data` 段要保持**与客户端备份同形**，这样副本能直接当备份导入、`/v1/snapshot` 的响应能直接
 落库、工单 07 的 mirror 文件（用户拿它当应急备份）也能直接用。若存成「带 key 的单元数组」，

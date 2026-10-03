@@ -46,6 +46,18 @@ describe('副本 → 客户端备份导入（往返）', () => {
     expect(parsed.ok).toBe(true);
     if (!parsed.ok) return;
 
+    /*
+     * **把 spec 里写的示例形状钉住。**
+     *
+     * spec 的「两个 keyed 模块在副本里的形状」一节给的是可复制的示例，早先那版误写成
+     * `{ '2026-10-02': { glasses: 8 } }` —— 而那是**静默清空饮水**的形状。
+     * 这里直接断言落盘形状是扁平数字，示例一旦被改回错的，这条会红。
+     */
+    expect(replica.envelope.data.dietWater).toEqual({ '2026-10-02': 8 });
+    expect(replica.envelope.data.dietGoals).toEqual({ calories: 2100, protein: 120 });
+    // 明确排除那个会静默出错的形状
+    expect(replica.envelope.data.dietWater).not.toEqual({ '2026-10-02': { glasses: 8 } });
+
     // 关键：两个 keyed 模块按客户端形状读回来了，没有变成「模块不在文件里」。
     // 饮水的客户端形状是**扁平的 date -> 数字**（dietStore.water 就是 Record<string, number>），
     // 不是 { date: { glasses } } —— 包一层对象会被 sanitizeWater 当脏值剔掉、静默变空。
