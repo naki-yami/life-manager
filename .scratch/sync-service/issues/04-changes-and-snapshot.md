@@ -1,6 +1,11 @@
 # 04 拉取：增量 `/v1/changes` 与 `/v1/snapshot`
 
-Status: claimed
+Status: resolved
+实现：`853ea26`（2026-10-03。`src/server/changes.ts` + `changes.test.ts`（16 条）+
+HTTP 层的端点组（7 条）+ `push.ts` 里的 `recordChange` 与 `sync.changes` 变更日志）。
+核心用例：分页「不漏不重」（limit=2 反复翻页比对全序列）、快照的 data 段通过客户端
+`backupDataSchema`（换机首同步的唯一路径必须能直接落库）、watermark 分支返回
+`needFullResync` 而不是空数组。
 Type: task
 Part of: `.scratch/sync-service/spec.md`
 Blocked by: 03
