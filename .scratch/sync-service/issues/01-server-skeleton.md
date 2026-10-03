@@ -1,6 +1,10 @@
 # 01 进程骨架、配置与鉴权
 
-Status: claimed
+Status: resolved
+实现：`6d2e535`（2026-10-02。`src/server/` 五个模块 + 四个测试文件；验收用例：
+`http.test.ts` 的 health 免令牌 / 401 且不写数据 / CORS / 畸形 Host 打不挂进程，
+`config.test.ts` 的首次生成与 origin 匹配，`main.test.ts` 的放开监听重复提醒与令牌
+只打印一次，`schemas-parity.test.ts` 的模块清单防漂移）。
 Type: task
 Part of: `.scratch/sync-service/spec.md`
 Blocked by: 无
