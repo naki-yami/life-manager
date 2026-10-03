@@ -108,6 +108,14 @@ describe('/v1/health', () => {
     expect(body.modules).toEqual([...SYNC_MODULES]);
   });
 
+  it('health 里带第二份存储的状态（未配置 mirror 时为 null）', async () => {
+    const h = await startHarness();
+
+    const body = (await (await fetch(`${h.base}/v1/health`)).json()) as { mirror: unknown };
+
+    expect(body.mirror).toBeNull();
+  });
+
   it('带错令牌也照常返回（它是探针路径，不是受保护路径）', async () => {
     const h = await startHarness();
 

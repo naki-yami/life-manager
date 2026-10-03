@@ -17,6 +17,7 @@ import type { Logger } from './logger.ts';
 import { handlePush, type HistorySink, type PushRequest } from './push.ts';
 import type { Replica } from './replica.ts';
 import { restoreReplica, type RestoreRequest } from './restore.ts';
+import { mirrorHealth, type Mirror } from './mirror.ts';
 
 /** 还没实现的路径。做一个删一个 —— 删到空就说明接口齐了。 */
 const PLANNED_PATHS: readonly string[] = [];
@@ -38,6 +39,11 @@ export interface RequestContext {
    * 历史落点（工单 06）：被 LWW 覆盖或删除的旧版本。默认什么都不做 —— 测试里可以不接。
    */
   onHistory?: HistorySink;
+  /**
+   * 第二份存储（工单 07）。给了就在 `/v1/health` 里报它的状态 ——
+   * 「副本写不进去」是 ADR 记下的回滚信号之一，设置页要能看见。
+   */
+  mirror?: Mirror;
 }
 
 /** 读请求体，超过上限就中止。 */
@@ -107,7 +113,7 @@ function parseRequestUrl(rawUrl: string | undefined): URL | null {
 }
 
 export function createRequestHandler(context: RequestContext) {
-  const { config, logger, replica, onAfterWrite, onHistory } = context;
+  const { config, logger, replica, onAfterWrite, onHistory, mirror } = context;
 
   return function handle(req: IncomingMessage, res: ServerResponse): void {
     const url = parseRequestUrl(req.url);
@@ -149,6 +155,8 @@ export function createRequestHandler(context: RequestContext) {
         seq: replica.envelope.sync.seq,
         schemaVersion: SERVER_SCHEMA_VERSION,
         modules: [...SYNC_MODULES],
+        // 第二份存储的状态（ADR 的回滚信号之一）：设置页要能看出「副本写不进去」
+        mirror: mirror ? mirrorHealth(mirror) : null,
       });
       return;
     }
@@ -229,6 +237,8 @@ export function createRequestHandler(context: RequestContext) {
         sendJson(res, 405, { error: 'method_not_allowed' });
         return;
       }
+      // 「耗时」从收到请求算起（spec 要求每次同步记一行含耗时）
+      const startedAt = Date.now();
       // 读体 + 处理是异步的（要等数据到齐），所以这一支单独走 promise 链。
       // 任何异常都在这里收住并回 400/500 —— 不能让一个坏请求打死进程（工单 01 的教训）。
       void readBody(req)
@@ -272,9 +282,10 @@ export function createRequestHandler(context: RequestContext) {
             // 落盘成功之后才做后置动作（例如清墓碑）—— 顺序反了会把没存下来的改动算进去
             onAfterWrite?.();
           }
+          // 每次同步记一行：设备、推了多少条、冲突数、耗时（spec「可观测与运维」）
           logger.info(
             `push from ${(body as PushRequest).deviceId}：${result.results.length} 条，` +
-              `${result.conflicts} 冲突，seq=${result.seq}`,
+              `${result.conflicts} 冲突，seq=${result.seq}，耗时 ${Date.now() - startedAt}ms`,
           );
           sendJson(res, 200, result);
         })

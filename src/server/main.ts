@@ -19,6 +19,7 @@ import { loadReplica } from './replica.ts';
 import { purgeTombstones } from './tombstones.ts';
 import { appendHistory, pruneHistory, writeDailyBackup } from './history.ts';
 import type { HistoryEntry } from './push.ts';
+import { MIRROR_DEBOUNCE_MS, MIRROR_FILE, createMirror } from './mirror.ts';
 
 /** Windows 上 `127.0.0.1` 是回环；`0.0.0.0` / `::` 是「所有网卡」，等于把服务暴露到局域网。 */
 function isLoopbackHost(host: string): boolean {
@@ -148,12 +149,33 @@ export function startServer(options: { configPath?: string; logger?: Logger } = 
   // 别让这个定时器把进程钉住（Ctrl+C / 测试里 close 之后要能退出）
   dailyTimer.unref?.();
 
+  /*
+   * 第二份存储（工单 07）。启动时先做同卷校验 —— 同卷等于第二份与第一份同生共死，
+   * ADR-0002 记下的那条代价就白付了，必须明确告警。
+   */
+  const mirror = createMirror(replica, config.dataDir, config.mirrorDir, { now: () => new Date() });
+  const mirrorWarning = mirror.startupWarning();
+  if (mirrorWarning) log.warn(mirrorWarning);
+  else if (mirror.status.configured) log.info(`第二份存储：${config.mirrorDir}`);
+
+  /*
+   * 去抖写入：每 30 秒看一次「距上次写够久了吗」，够久才写。
+   * 而不是「每次 push 都写」—— 连续推送会把同步盘刷成上传风暴。
+   */
+  const mirrorTimer = setInterval(() => {
+    if (!mirror.needsWrite()) return;
+    if (mirror.write()) log.info(`第二份副本已写：${MIRROR_FILE}`);
+    else log.warn(`第二份副本写失败：${mirror.status.lastError ?? '未知原因'}`);
+  }, MIRROR_DEBOUNCE_MS);
+  mirrorTimer.unref?.();
+
   const handler = createRequestHandler({
     config,
     logger: log,
     replica,
     onAfterWrite: purgeAfterWrite,
     onHistory,
+    mirror,
   });
 
   const server = createServer((req, res) => {
