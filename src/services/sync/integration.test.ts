@@ -22,7 +22,7 @@ import { DEFAULT_DIET_GOALS } from '../../utils/diet';
 import { handlePush } from '../../server/push';
 import { loadReplica } from '../../server/replica';
 import { applyChanges } from './apply';
-import { computeBaseline, diffAgainstBaseline } from './baseline';
+import { computeBaseline, diffAgainstBaseline, revTableResolver, type RevTable } from './baseline';
 import { readUnits } from './units';
 
 /** 建一个临时数据目录上的真副本 */
@@ -236,5 +236,52 @@ describe('diff 产出的载荷服务端收得下', () => {
 
     // 本机没再动过 → 第二轮一条都不推（不会把整库按旧值重推一遍）
     expect(await diffAgainstBaseline(baseline)).toEqual([]);
+  });
+
+  /**
+   * 把 rev 表整条链路接起来：服务端 push 的结果里带 rev → 记进 rev 表 →
+   * 下一轮 diff 拿它当 `baseRev` → 服务端据它判冲突。
+   *
+   * 这一条是工单 03 要求 6（「基线里一并记上次推送后的 rev」）的可执行版本。
+   */
+  it('push 回来记下 rev，下一轮改同一条时带上的 baseRev 就是它', async () => {
+    const replica = freshReplica();
+
+    useTaskStore.setState({ tasks: [task('t1', '写周报')] as never, memos: [] });
+
+    // 第一轮：全量推
+    const first = await diffAgainstBaseline({});
+    const firstResponse = handlePush(
+      { replica, onHistory: () => {} } as never,
+      { deviceId: 'dev-1', changes: first } as never,
+    );
+
+    // 从服务端的结果里收 rev（引擎该做的事）；此时服务端那条是第 1 版
+    const revs: RevTable = {};
+    for (const result of firstResponse.results) {
+      revs[result.module] = { ...revs[result.module], [result.key]: result.rev };
+    }
+    expect(revs.tasks?.t1).toBe(1);
+
+    const baseline = await computeBaseline();
+
+    // 第二轮：本机改了 t1
+    useTaskStore.setState({ tasks: [task('t1', '写周报（改）')] as never, memos: [] });
+    const second = await diffAgainstBaseline(baseline, revTableResolver(revs));
+
+    const pushed = second.find((change) => change.key === 't1')!;
+    // baseRev 如实反映「我上次看到的是第 1 版」
+    expect(pushed.baseRev).toBe(1);
+
+    const secondResponse = handlePush(
+      { replica, onHistory: () => {} } as never,
+      { deviceId: 'dev-1', changes: second } as never,
+    );
+
+    // 服务端没有别处并发改过 → 不该被标冲突（若 baseRev 恒填 0，这里会被标 conflict）
+    const result = secondResponse.results.find((item) => item.key === 't1')!;
+    expect(result.outcome).toBe('applied');
+    expect(secondResponse.conflicts).toBe(0);
+    expect(replica.envelope.data.tasks).toEqual([task('t1', '写周报（改）')]);
   });
 });

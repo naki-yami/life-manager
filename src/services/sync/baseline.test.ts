@@ -8,7 +8,9 @@ import {
   computeBaseline,
   contentHash,
   diffAgainstBaseline,
+  revTableResolver,
   type Baseline,
+  type RevTable,
 } from './baseline';
 
 /*
@@ -243,6 +245,63 @@ describe('baseRev 的来源', () => {
     const changes = await diffAgainstBaseline({});
 
     expect(changes[0]!.baseRev).toBe(0);
+  });
+
+  it('rev 表存在 lm:sync 里，diff 时用它填 baseRev', async () => {
+    useTaskStore.setState({ tasks: [task('t1', '写周报')] as never, memos: [] });
+    const baseline = await computeBaseline();
+
+    // 上一轮同步记下的 rev：服务端那条是第 5 版
+    const revs: RevTable = { tasks: { t1: 5 } };
+    useTaskStore.setState({ tasks: [task('t1', '写周报（改）')] as never, memos: [] });
+
+    const changes = await diffAgainstBaseline(baseline, revTableResolver(revs));
+
+    expect(changes).toEqual([
+      {
+        module: 'tasks',
+        key: 't1',
+        op: 'put',
+        record: task('t1', '写周报（改）'),
+        baseRev: 5,
+      },
+    ]);
+  });
+
+  it('rev 表里没有的条目按 0 处理（服务端还没有这条）', async () => {
+    useTaskStore.setState({ tasks: [task('t9', '新任务')] as never, memos: [] });
+
+    const changes = await diffAgainstBaseline({}, revTableResolver({ tasks: { t1: 5 } }));
+
+    const t9 = changes.find((change) => change.key === 't9')!;
+    expect(t9.baseRev).toBe(0);
+  });
+
+  it('改内容不丢 rev：哈希变了会推 put，而 baseRev 仍是服务端那一版', async () => {
+    useTaskStore.setState({ tasks: [task('t1', '写周报')] as never, memos: [] });
+    const baseline = await computeBaseline();
+    const revs: RevTable = { tasks: { t1: 3 } };
+
+    // 本机改了内容：哈希变了 → 推 put；服务端那一版没变，所以 baseRev 还是 3。
+    // 这正是「两边都改过」能被服务端标成 conflict 的前提。
+    useTaskStore.setState({ tasks: [task('t1', '写周报（本机改）')] as never, memos: [] });
+    const changes = await diffAgainstBaseline(baseline, revTableResolver(revs));
+
+    const t1 = changes.find((change) => change.key === 't1')!;
+    expect(t1.op).toBe('put');
+    expect(t1.baseRev).toBe(3);
+  });
+
+  it('删掉的条目也带它已知的 baseRev（删除同样参与 LWW 判定）', async () => {
+    useTaskStore.setState({ tasks: [task('t1', '写周报')] as never, memos: [] });
+    const baseline = await computeBaseline();
+    const revs: RevTable = { tasks: { t1: 4 } };
+
+    useTaskStore.setState({ ...empty });
+    const changes = await diffAgainstBaseline(baseline, revTableResolver(revs));
+
+    // 服务端拿 baseRev 判「你删的时候已经有更新的一版了」→ 标 conflict 而不是静默抹掉
+    expect(changes).toEqual([{ module: 'tasks', key: 't1', op: 'delete', baseRev: 4 }]);
   });
 });
 

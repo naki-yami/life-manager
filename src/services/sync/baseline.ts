@@ -39,15 +39,30 @@ export interface SyncChange {
    * （后到者赢），但在结果里标 `conflict`。所以它必须如实反映「我上次看到的是哪一版」——
    * 恒填 0 会让每一次推送都被标冲突，把提示栏淹掉。
    *
-   * 值的来源是拉取时服务端给的 `rev`（`/v1/changes` 的每条变更都带），
-   * 由调用方通过 `revOf` 提供。**本模块不自己存 rev 表**：那是「拉到哪了」的一半，
-   * 与拉取循环同生共死，归同步引擎（工单 04）。
+   * 值的来源见 `RevTable`：**与哈希一起**记录（哈希判「本机改没改」，
+   * rev 判「服务端那一版是几」），由同一轮同步一起更新。
    */
   baseRev: number;
 }
 
 /** 基线表：模块 → 条目 key → 内容哈希。形状与 `lm:sync.baseline` 一致 */
 export type Baseline = Record<string, Record<string, string>>;
+
+/**
+ * 记录版本表：模块 → 条目 key → 服务端给的 rev。
+ *
+ * **为什么与基线分开存**：两者判的是两件事，而且失效条件不同 ——
+ * 哈希管「本机这一条改没改」，rev 管「服务端那一版是几」。分开的好处是
+ * `lm:sync` 里已有的 `baseline` 字段形状不动（老存档照常读），rev 表可以独立演进。
+ *
+ * **它与基线由同一轮同步一起更新**，但两者的失效条件不同，这点容易搞混：
+ * - 本机**改了内容** → 哈希变了（会推 `put`），而 rev **仍然有效** ——
+ *   因为服务端那一版确实还是它。带上这个 rev 正是「两边都改过」能被服务端标成
+ *   `conflict` 的前提（恒填 0 会让每次推送都被标冲突，把提示栏淹掉）。
+ * - 只有**拉到了新的一版**（`/v1/changes` 或 `/v1/snapshot` 给了更大的 rev）才更新 rev。
+ * - 删掉 `lm:sync` 时两张表一起丢，退化成「rev 全 0」，等价于首次全量推送。
+ */
+export type RevTable = Record<string, Record<string, number>>;
 
 /**
  * 不产生 `delete` 的模块（模块单值）。
@@ -58,8 +73,18 @@ export type Baseline = Record<string, Record<string, string>>;
  */
 const BASELINE_SINGLETON_MODULES: ReadonlySet<string> = new Set(['dietGoals']);
 
-/** `module:key` → rev 的查询函数；查不到返回 0（= 客户端认为服务端还没有这条） */
+/**
+ * `module:key` → rev 的查询函数；查不到返回 0（= 客户端认为服务端还没有这条）。
+ *
+ * 默认实现从 rev 表里读（见 `revTableResolver`）。单独的接缝是给测试与
+ * 「首次全量推送」这类场景用的 —— 那时表是空的，一律 0。
+ */
 export type RevResolver = (module: string, key: string) => number;
+
+/** 从 rev 表做一个解析器：查不到就是 0 */
+export function revTableResolver(revs: RevTable): RevResolver {
+  return (module, key) => revs[module]?.[key] ?? 0;
+}
 
 /**
  * 规范化：递归按键名排序后再序列化。
@@ -109,10 +134,13 @@ export async function contentHash(value: unknown): Promise<string> {
 }
 
 /**
- * 对当前本机数据算一份基线。
+ * 对当前本机数据算一份基线（内容哈希表）。
  *
  * 这是「一轮同步成功后」要写进 `lm:sync.baseline` 的那份东西 ——
  * 它记录的正是**刚刚推上去／拉下来的状态**，所以下一轮与它比对得到的就是「自那以后改了什么」。
+ *
+ * 它与 rev 表（`RevTable`）由同一轮同步一起更新：哈希回答「改没改」，
+ * rev 回答「服务端那一版是几」，合起来才是下一轮推送要的全部信息。
  */
 export async function computeBaseline(): Promise<Baseline> {
   const units = readUnits();
@@ -135,8 +163,8 @@ export async function computeBaseline(): Promise<Baseline> {
  * 一次同步只推真的改过的那几条，而不是把整库按旧值盖章 ——
  * 服务端 spec 明写「一台离线一个月的设备回来时，动的是它真改过的那几十条」）。
  *
- * `revOf` 提供每条记录的 `baseRev`；不传就一律 0（= 服务端还没有这条），
- * 用于「首次全量推送」这类场景。
+ * `revOf` 提供每条记录的 `baseRev`。不传就是**一律 0**（= 服务端还没有这条），
+ * 对应「首次全量推送」；常规调用传 `revTableResolver(revs)`。
  */
 export async function diffAgainstBaseline(
   baseline: Baseline,
