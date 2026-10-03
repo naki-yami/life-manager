@@ -126,7 +126,10 @@ function singleton(module: string, getValue: () => unknown): SyncUnit {
 }
 
 /**
- * 同步单位表。顺序与服务端 `SYNC_MODULES` 一致（按 store 分组，便于对照阅读）。
+ * 同步单位表。**顺序按 store 分组**（便于对照阅读），与服务端 `SYNC_MODULES` 的顺序不同 ——
+ * 两边分组方式不同（服务端按备份模块名列出），而模块顺序在两边都不承重：
+ * 没有任何地方按下标取模块、也没有逐字节比对 `data` 段的键序。
+ * `parity-verify.test.ts` 断言的是**集合**相等（一个模块都不能少、不能多）。
  *
  * 每个条目对应服务端 spec「同步单位」表里的一个单元 —— 那张表的一行可能切出多个单元
  * （例如 `lm:diet` 一行切出四个）。`units.test.ts` 断言这里覆盖了全部 23 个模块。
