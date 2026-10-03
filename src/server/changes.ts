@@ -55,21 +55,25 @@ export interface ChangesPage {
 }
 
 /**
- * 记下这台设备拉到了哪。**只能由拉取路径调用** —— `lastSeq` 的语义是「拉到哪了」，
- * 推送不代表拉取（push 只更新 `lastSeenAt`）。
+ * 记下这台设备拉到了哪，并刷新它的「还活着」时间。
  *
- * 这个字段是「日志与墓碑能裁到哪」的唯一依据：裁早了会让设备拉不到它还需要的东西，
- * 裁晚了副本文件一直涨。所以只在一页**成功返回之后**推进，且只前进不后退。
+ * - `lastSeq` 的语义是「拉到哪了」，**只能由拉取路径推进**（推送不代表拉取）。
+ *   它是「日志与墓碑能裁到哪」的唯一依据：裁早了会让设备拉不到它还需要的东西，
+ *   裁晚了副本文件一直涨。所以只在一页**成功返回之后**推进，且只前进不后退。
+ * - `lastSeenAt` 推与拉**都刷新**。早先只有 push 刷，于是「定期同步但本地没改动」的设备
+ *   （引擎在没有 diff 时跳过 push）会被永远判成休眠 —— 每次同步都重下全量快照，自己好不了。
  */
 export function recordPullProgress(
   replica: Replica,
   deviceId: string | undefined,
   pulledTo: number,
+  at: Date = new Date(),
 ): void {
   if (!deviceId) return;
   const device = replica.envelope.sync.devices.find((item) => item.deviceId === deviceId);
   if (!device) return;
   if (pulledTo > device.lastSeq) device.lastSeq = pulledTo;
+  device.lastSeenAt = at.toISOString();
 }
 
 /**

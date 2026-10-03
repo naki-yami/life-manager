@@ -108,11 +108,22 @@ export interface PurgeOptions {
  * = 未休眠设备里 `lastSeq` 的最小值。低于它的日志条目与墓碑，不会再被任何设备需要：
  * - 已拉过的设备不会再回头要；
  * - 落后于它的设备一律被要求全量对账（见 `readChanges`），所以也不需要那些条目；
- * - 休眠设备（> 90 天没出现）本来就走全量对账，**不该让它把水位钉死** ——
- *   这正是「超 90 天」那条守卫的意义。
+ * - 休眠设备（> 90 天没出现）本来就走全量对账，**不该让它把水位钉死**。
  *
- * 没有任何未休眠设备时返回当前 `seq`：没有别人需要这些条目了。
- * （新设备第一次来必然是全量对账 —— 它本来就没有本地状态。）
+ * **已知残留：只推不拉的设备会把水位钉在 0。**
+ * 实测 365 天只推不拉 → 365 条日志、水位 0、副本一直涨到 36 KB。触发条件是「推送能成、
+ * 拉取一直失败」（代理吃掉 GET、客户端 bug），因为 `lastSeenAt` 被推送刷新、它不算休眠，
+ * 而 `lastSeq` 永远是 0。
+ *
+ * 试过「把 `lastSeq === 0` 的设备排除在外」——**那样会错**：客户端正常的一轮是「先推后拉」，
+ * 拉的那一刻这台设备的 `lastSeq` **本来就是 0**，排除它会让水位直接跳到 `seq`，
+ * 于是**每次首同步都退化成全量快照**（实测 9 条用例变红，其中 4 条是分页正确性）。
+ * 「刚推完还没拉」与「推了从不拉」在 `lastSeq` 上无法区分，要分开得再加时间维度
+ * （例如给日志条目记时间戳、按年龄裁），那是另一个改动，且当前的严重度（次生路径、
+ * 无数据丢失、可通过重启或一次全量对账自愈）不足以现在做。
+ *
+ * 所以这里**如实保留这个边界**，而不是用一个会让常见路径变慢的补丁盖过去。
+ * 裁剪的正确性本身不受影响：水位以下的拉取一律被要求全量对账，语义自洽。
  */
 export function safeWatermark(
   envelope: Replica['envelope'],
@@ -197,6 +208,10 @@ export function purgeTombstones(
  *
  * 休眠设备回来时**不做增量**：它本地可能留着早就该删的记录，而对应的墓碑早被清了，
  * 给增量它只会把旧数据复活。要求它走全量对账（拉 `/v1/snapshot`）。
+ *
+ * 判据是 `lastSeenAt`，而它**由推送与拉取共同刷新**（两边都算「这台设备还活着」）。
+ * 早先只有 push 刷新它，于是「定期同步但本地没改动」的设备（引擎在没有 diff 时跳过 push）
+ * 会被**永远**判成休眠 —— 每次同步都重下一份全量快照，而且自己好不了。
  */
 export function isDormant(
   device: { lastSeenAt: string },
@@ -207,7 +222,18 @@ export function isDormant(
   return now().getTime() - seen > DORMANT_DAYS * DAY_MS;
 }
 
-/** 推的时候刷新设备的 `lastSeenAt`（push 已做），这里只查状态。 */
+/** 拉取路径也要刷新 `lastSeenAt`（「我还在」的证据不只有推送）。 */
+export function touchDeviceOnPull(
+  envelope: Replica['envelope'],
+  deviceId: string | undefined,
+  at: Date,
+): void {
+  if (!deviceId) return;
+  const device = envelope.sync.devices.find((item) => item.deviceId === deviceId);
+  if (device) device.lastSeenAt = at.toISOString();
+}
+
+/** 推或拉都算「还活着」，这里只查状态。 */
 export function deviceNeedsFullResync(
   envelope: Replica['envelope'],
   deviceId: string,
