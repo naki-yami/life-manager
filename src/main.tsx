@@ -29,6 +29,10 @@ async function boot(): Promise<void> {
 
   // 首屏已经画出来了，再去做备份到文件夹这件事：要读全量数据 + 写文件，不该挡渲染
   void syncFolderBackup();
+
+  // 开机同步一次（跨设备同步）。**同样是动态 import** —— 引擎会拉进 HTTP 与哈希代码，
+  // 不该进首屏包；开关关着时连加载都不会发生，所以这条路径上零网络请求。
+  void import('./services/sync/bootSync').then(({ syncOnBoot }) => void syncOnBoot());
 }
 
 /*

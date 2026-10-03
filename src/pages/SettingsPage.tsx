@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { Book, Game } from '../types';
 import { DemoDataCard } from '../components/DemoDataCard';
+import { SyncCardWithNote } from '../components/sync/SyncCard';
 import { formatNumber } from '../utils/date';
 import {
   Database,
@@ -755,6 +756,20 @@ export const SettingsPage: React.FC = () => {
               </div>
             ))}
           </div>
+        </CardBody>
+      </Card>
+
+      {/*
+        跨设备同步（工单 06）。逻辑全在 services/sync/**，这张卡只做绑定与展示。
+        单独一个组件而不是塞进本文件：本文件已经一千多行，而且同步卡要动态 import 引擎。
+      */}
+      <Card>
+        <CardHeader
+          title="跨设备同步"
+          subtitle="与另一台设备逐条对齐；令牌只存在本机，绝不进备份"
+        />
+        <CardBody>
+          <SyncCardWithNote />
         </CardBody>
       </Card>
 

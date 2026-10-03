@@ -22,6 +22,7 @@ import { useReviewStore } from '../store/reviewStore';
 import { useGoalStore } from '../store/goalStore';
 import { useThemeStore } from '../store/themeStore';
 import { useUiStore } from '../store/uiStore';
+import { useSyncStore } from '../store/syncStore';
 import { DEFAULT_DIET_GOALS } from '../utils/diet';
 
 beforeEach(() => {
@@ -37,6 +38,8 @@ beforeEach(() => {
   useGoalStore.setState({ goals: [] });
   useThemeStore.setState({ themeMode: 'system' });
   useUiStore.setState({ density: 'comfortable', sidebarCollapsed: false });
+  // 同步卡默认必须是关着的 —— 用例之间不串状态
+  useSyncStore.setState({ enabled: false, baseUrl: '', token: '', conflicts: [] });
   localStorage.clear();
 });
 
@@ -628,5 +631,32 @@ describe('SettingsPage', () => {
     expect(useBookStore.getState().books.some((book) => book.id.startsWith('demo-'))).toBe(false);
     // 真实书还在
     expect(useBookStore.getState().books.some((book) => book.title === '真实书')).toBe(true);
+  });
+});
+
+/**
+ * 跨设备同步卡（工单 06）接在设置页里。
+ *
+ * 卡片自身的行为在 `src/components/sync/SyncCard.test.tsx`；这里只断言
+ * 「设置页确实把它渲染出来了、而且默认是关着的」—— 接线断了要能发现。
+ */
+describe('跨设备同步卡', () => {
+  it('设置页里有这张卡，默认关闭且写明关闭时零网络请求', () => {
+    renderSettings();
+
+    expect(screen.getByText('跨设备同步')).toBeInTheDocument();
+    const toggle = screen.getByRole('switch', { name: /开启跨设备同步/ });
+    expect(toggle).toHaveAttribute('aria-checked', 'false');
+    expect(screen.getByText(/关闭时应用仍是零网络请求/)).toBeInTheDocument();
+  });
+
+  it('默认关闭时不发任何请求', async () => {
+    const fetchSpy = vi.fn();
+    vi.stubGlobal('fetch', fetchSpy);
+
+    renderSettings();
+    await userEvent.click(screen.getByRole('button', { name: '立即同步' }));
+
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 });
