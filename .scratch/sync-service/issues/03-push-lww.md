@@ -1,6 +1,12 @@
 # 03 push：rev、幂等与 LWW 冲突
 
-Status: claimed
+Status: resolved
+实现：`6216448`（2026-10-03。`src/server/push.ts` + `push.test.ts`（29 条）+
+`http.ts` 的 `/v1/push` 路由与其 8 条端点用例）。验收用例：同 baseRev + 同内容连推两次
+→ 第二次 noop 且 seq 不变、历史不增；两台设备先后推同一条 → 后到者 rev 更大、内容为后到者、
+先到的进历史；一批里混一条坏记录 → 只拒那条、其余照常。另：饮水/目标两个 keyed 模块
+（日期键 / 模块单值）单独一组用例 —— 它们不是「带 id 的记录」，套用记录那套守卫会让
+这两类**永远推不上去**。
 Type: task
 Part of: `.scratch/sync-service/spec.md`
 Blocked by: 02
