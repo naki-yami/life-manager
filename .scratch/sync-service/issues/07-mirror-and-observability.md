@@ -1,6 +1,10 @@
 # 07 mirrorDir、可观测与运维
 
-Status: ready-for-agent
+Status: resolved
+实现：`f668474`（2026-10-03。`src/server/mirror.ts` + `install-autostart.ps1` +
+`mirror.test.ts`（15 条）、`scripts.test.ts`（7 条）+ health 的 `mirror` 段 +
+`启动说明.md` 的同步服务一节）。真机验证：配好 mirrorDir 起服务 → 30 秒后镜子文件出现、
+内容正确；health 报 `sameVolume: true`；同卷告警如期出现。
 Type: task
 Part of: `.scratch/sync-service/spec.md`
 Blocked by: 06
