@@ -1,6 +1,9 @@
 # 05 首次开启对账与作废后的重对账
 
-Status: ready-for-agent
+Status: resolved
+实现：`150c3f7`（2026-10-03。验收用例：`src/services/sync/firstEnable.test.ts` ——
+「取消：零写请求」「快照确实先落了一份，且用的是固定的 reason」
+「基线清空 + 服务端已有非默认目标 → 重新对账不产生冲突」）
 Type: task
 Part of: `.scratch/sync-client/spec.md`
 Blocked by: 04
