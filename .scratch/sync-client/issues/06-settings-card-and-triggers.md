@@ -1,6 +1,10 @@
 # 06 设置页卡片与触发时机
 
-Status: ready-for-agent
+Status: resolved
+实现：`17e5b4e`（2026-10-03。验收用例：`src/components/sync/SyncCard.test.tsx`
+（关闭时零请求、冲突可点开明细），`src/services/sync/bootSync.test.ts`（开机路径关着时
+连引擎都不加载），`src/pages/SettingsPage.test.tsx`；首屏 167.5 → 167.6 KB gzip，
+引擎落在独立的 12.02 KB 懒加载 chunk 里）
 Type: task
 Part of: `.scratch/sync-client/spec.md`
 Blocked by: 05
