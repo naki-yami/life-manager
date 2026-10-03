@@ -179,7 +179,15 @@ export const nodeFs: FsAdapter = {
   },
   rename: (from, to) => renameSync(from, to),
   fsyncFile: (path) => {
-    const fd = openSync(path, 'r');
+    /*
+     * **必须用 `'r+'`，不能用 `'r'`。** 实测（Windows / Node 24）：
+     * `openSync(path,'r')` 之后再 `fsyncSync` 抛 `EPERM: operation not permitted, fsync` ——
+     * 只读句柄不能 flush，而 `atomicWrite` 把这个异常吞掉了，于是**本平台上的 fsync
+     * 一直是个空操作**：docstring 承诺的「内容真的落盘再改名」从来没有发生。
+     * `'r+'` 打开可写句柄就能正常 fsync。（`'r'` 那版曾在 macOS/Linux 上可用，
+     * 所以这个坑只在 Windows 上暴露。）
+     */
+    const fd = openSync(path, 'r+');
     try {
       fsyncSync(fd);
     } finally {
@@ -674,14 +682,24 @@ function makeReplica(
  * **fsync 失败不抛**：某些文件系统不支持（网络盘、部分同步盘目录），拿它当致命错误会让
  * 整个服务写不进去 —— 那比「可能丢最近一次写入」更糟。但真 fsync 失败（EIO / ENOSPC）
  * 也走这条路径，所以调用方应当把日志里的 `replica.save 失败` 当成需要人看的信号。
+ *
+ * `onFsyncError` 让调用方**至少能看到一次**：早先这个 catch 是空的，于是
+ * 「Windows 上 fsync 一直是空操作」（`openSync(...,'r')` 抛 EPERM）这件事谁也不知道。
+ * 修了打开模式之后仍然保留这个回调 —— 下一次有文件系统不支持 fsync 时，日志里能看见。
  */
-export function atomicWrite(fs: FsAdapter, targetPath: string, contents: string): void {
+export function atomicWrite(
+  fs: FsAdapter,
+  targetPath: string,
+  contents: string,
+  onFsyncError?: (error: unknown) => void,
+): void {
   const tempPath = `${targetPath}.tmp`;
   fs.writeFileSync(tempPath, contents);
   try {
     fs.fsyncFile(tempPath);
-  } catch {
+  } catch (error) {
     // 见上：不支持 fsync 的文件系统不该让写入失败，顺序（先写后改名）本身已经保证不半截
+    onFsyncError?.(error);
   }
   fs.rename(tempPath, targetPath);
 }

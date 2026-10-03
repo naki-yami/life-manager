@@ -206,6 +206,46 @@ describe('原子写', () => {
     expect(fs.contentOf(temp)).toBeUndefined();
   });
 
+  /**
+   * **真 fs 上 fsync 必须真的成功。**
+   *
+   * 这条守的是一个只在 Windows 上暴露的空操作：`openSync(path,'r')` 之后再 `fsyncSync`
+   * 抛 `EPERM`，而 `atomicWrite` 的 catch 是空的 —— 于是 docstring 承诺的
+   * 「内容真的落盘再改名」在本平台**从来没有发生**，谁也不知道。
+   *
+   * 用真 fs 的 fsyncFile 跑一次：它要是抛，这条就红（而不是被静默吞掉）。
+   */
+  it('真 fs 上 fsync 真的成功（Windows 上只读句柄会 EPERM）', () => {
+    const dir = tempDir();
+    const target = join(dir, 'fsync-probe.json');
+    let fsyncError: unknown = null;
+
+    // 用真 fs（nodeFs），把 fsync 的失败暴露出来
+    atomicWrite(nodeFs, target, '{"ok":true}', (error) => {
+      fsyncError = error;
+    });
+
+    expect(fsyncError, `fsync 失败了：${String(fsyncError)}`).toBeNull();
+    expect(JSON.parse(readFileSync(target, 'utf8'))).toEqual({ ok: true });
+  });
+
+  it('fsync 失败时仍不抛、且回调能看见（不支持的盘不该让写入失败）', () => {
+    const fs = createMemoryFs();
+    fs.fsyncFile = () => {
+      throw new Error('EIO: 这个文件系统不支持 fsync');
+    };
+    const seen: unknown[] = [];
+
+    // 不该抛
+    expect(() =>
+      atomicWrite(fs, '/data/replica.json', '{"a":1}', (e) => seen.push(e)),
+    ).not.toThrow();
+    // 但调用方能看见 —— 早先这个 catch 是空的
+    expect(seen).toHaveLength(1);
+    // 写入本身仍然成功（顺序保证了不半截）
+    expect(fs.contentOf('/data/replica.json')).toBe('{"a":1}');
+  });
+
   it('rename 前抛错 → 目标文件仍是上一个好版本，且未留下半截内容', () => {
     const fs = createMemoryFs();
     const target = '/data/replica.json';
