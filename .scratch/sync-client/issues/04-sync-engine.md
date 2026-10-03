@@ -1,6 +1,9 @@
 # 04 同步引擎：先推后拉
 
-Status: ready-for-agent
+Status: resolved
+实现：`cbca7aa`、`eddcc3b`（2026-10-03。验收用例：`src/services/sync/engine.test.ts`
+（顺序、载荷、分页、失败不动游标、冲突、noop 收 rev、快照分支、认证头），
+`src/services/sync/engine-server.test.ts` 对着真服务端验证跨设备往返与删除传播）
 Type: task
 Part of: `.scratch/sync-client/spec.md`
 Blocked by: 01, 03
