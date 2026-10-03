@@ -1,6 +1,6 @@
 # 01 进程骨架、配置与鉴权
 
-Status: ready-for-agent
+Status: claimed
 Type: task
 Part of: `.scratch/sync-service/spec.md`
 Blocked by: 无

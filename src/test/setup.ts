@@ -31,6 +31,11 @@ function createMediaQueryList(query: string): MediaQueryList {
 }
 
 beforeEach(async () => {
+  // 服务端用例跑在 `// @vitest-environment node` 下，没有 window / localStorage。
+  // 那些用例不碰浏览器存储，所以这里直接跳过清理与 matchMedia 打桩，
+  // 否则 setUp 自身就会以「localStorage is not defined」把整份用例打挂。
+  if (typeof localStorage === 'undefined' || typeof window === 'undefined') return;
+
   // 走应用自己的清理入口，顺带保证测试与线上是同一条清除路径
   await clearAppData();
   localStorage.clear();

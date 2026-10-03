@@ -36,3 +36,8 @@ npm-debug.log*
 # Test coverage
 coverage/
 .zcode/
+
+# 同步服务端的本地运行状态（工单 01 的配置 / 数据目录）—— 绝不入库
+# config.json 里存着访问令牌，data/ 是服务端的实际数据。
+src/server/config.json
+src/server/data/
