@@ -17,6 +17,7 @@ const emptyState = {
   deviceId: '',
   lastSeq: 0,
   baseline: {},
+  revs: {},
   conflicts: [],
   needsReconcile: false,
 };
@@ -291,5 +292,105 @@ describe('lm:sync 的持久化', () => {
 
     expect(store().enabled).toBe(false);
     expect(store().token).toBe('');
+  });
+});
+
+/**
+ * 记录版本表（`revs`）。
+ *
+ * 它回答「我这次推是盖在服务端哪一版之上」，推送时作为 `baseRev` 带上。
+ * **丢了它不是「退化」，是每次都误报冲突** —— 恒带 0 会让服务端每次都判成落后。
+ */
+describe('记录版本表', () => {
+  it('整块写入与会话内读取', () => {
+    store().setRevs({ 'tasks:t1': 3, 'books:b1': 1 });
+
+    expect(store().revs).toEqual({ 'tasks:t1': 3, 'books:b1': 1 });
+  });
+
+  it('commitSync 可以一并推进 rev 表（三个参数都给）', () => {
+    store().commitSync(7, { tasks: { t1: 'h' } }, { 'tasks:t1': 2 });
+
+    expect(store().lastSeq).toBe(7);
+    expect(store().baseline).toEqual({ tasks: { t1: 'h' } });
+    expect(store().revs).toEqual({ 'tasks:t1': 2 });
+  });
+
+  it('commitSync 不传 rev 时保持原样（两参数调用仍可用）', () => {
+    store().setRevs({ 'tasks:t1': 5 });
+    store().commitSync(7, { tasks: { t1: 'h' } });
+
+    expect(store().revs).toEqual({ 'tasks:t1': 5 });
+  });
+
+  it('落盘：revs 会写进 lm:sync（写完再读回来仍在）', async () => {
+    store().setRevs({ 'tasks:t1': 4 });
+    // 持久化走后端适配器（IndexedDB 优先、localStorage 兜底），是异步的。
+    // 这里用「等一次微任务 + flush」不靠谱，所以直接验**往返**：
+    // 写完再 rehydrate，读回来的还是那一份 —— 这才说明它真的落了盘。
+    await useSyncStore.persist.rehydrate();
+
+    expect(store().revs).toEqual({ 'tasks:t1': 4 });
+  });
+
+  it('空 rev 表落盘为 {}，不是 undefined', () => {
+    expect(persistedState()).toMatchObject({ revs: {} });
+  });
+
+  it('重新载入后 revs 还在（重启不丢，否则每次都误标冲突）', async () => {
+    localStorage.setItem(
+      STORAGE_KEYS.sync,
+      JSON.stringify({
+        state: { ...emptyState, revs: { 'tasks:t1': 9 } },
+        version: 0,
+      }),
+    );
+
+    await useSyncStore.persist.rehydrate();
+
+    expect(store().revs).toEqual({ 'tasks:t1': 9 });
+  });
+
+  it('脏值被剔掉（非数字 / 负 / 非有限），不会让 baseRev 变成一个不存在的版本号', async () => {
+    localStorage.setItem(
+      STORAGE_KEYS.sync,
+      JSON.stringify({
+        state: {
+          ...emptyState,
+          revs: { good: 3, str: 'x', neg: -1, nan: NaN, inf: Infinity, float: 2.7 },
+        },
+        version: 0,
+      }),
+    );
+
+    await useSyncStore.persist.rehydrate();
+
+    // good 保留；float 取整；str/neg/nan/inf 剔掉
+    expect(store().revs).toEqual({ good: 3, float: 2 });
+  });
+
+  it('老存档（没有 revs 字段）读出来是空表，不报错', async () => {
+    localStorage.setItem(
+      STORAGE_KEYS.sync,
+      JSON.stringify({ state: { enabled: true, deviceId: 'dev-1' }, version: 0 }),
+    );
+
+    await useSyncStore.persist.rehydrate();
+
+    expect(store().revs).toEqual({});
+    expect(store().enabled).toBe(true);
+  });
+
+  it('revs 里不含令牌（仍然不进任何「整份状态」集合）', async () => {
+    store().setToken('super-secret-token');
+    store().setRevs({ 'tasks:t1': 1 });
+
+    const persisted = JSON.stringify(persistedState());
+    // 令牌在 lm:sync 里（这是它的家），但不该出现在 revs 里
+    expect(JSON.stringify(persistedState()?.revs)).not.toContain('super-secret-token');
+    // 而 appStorageKeys（快照 / 导出那条路）看不到整个 lm:sync
+    const { appStorageKeys } = await import('../utils/storageKeys');
+    expect(appStorageKeys()).not.toContain(STORAGE_KEYS.sync);
+    void persisted;
   });
 });

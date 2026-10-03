@@ -50,6 +50,18 @@ export interface SyncState {
    * 「基线里没有的 id 不产生 delete」，所以丢了它不会误删任何东西。
    */
   baseline: Record<string, Record<string, string>>;
+  /**
+   * 记录版本表：`module:key` → **服务端最近一次告诉我们的 rev**。
+   *
+   * 它回答的是「我这次推，是盖在服务端哪一版之上」，推送时作为 `baseRev` 带上。
+   * 与基线**分开存**是因为两者的失效条件不同：
+   * - 本机**改了内容** → 哈希变了要推 `put`，但 rev **仍然有效**（服务端那一版确实是它）；
+   * - 只有**拉到新的一版**才更新 rev。
+   *
+   * 恒填 0 会让服务端每次都判成「落后于当前 rev」→ 每次推送都被标 conflict，
+   * 用户看到一行无意义的冲突提示。所以这张表丢了不是「退化」，是**每次都误报冲突**。
+   */
+  revs: Record<string, number>;
   /** 最近一次同步里服务端判为冲突的条目（只留最近一次） */
   conflicts: SyncConflict[];
   /** 导入 / 回滚 / 清除数据之后置位：id 集合与内容大改，要用户点一下才重新对账 */
@@ -71,12 +83,23 @@ export interface SyncState {
   /** 删掉基线，下次同步退化成全量比对（不会产生任何 delete） */
   clearBaseline: () => void;
   /**
-   * 推进 `lastSeq` 与基线。
+   * 更新记录版本表：键是 `module:key`，值是服务端给的 rev。
+   *
+   * **推到 `noop` 时也要更新** —— 服务端说「内容没变」，那它当前那一版的 rev 就是权威，
+   * 记下来下次推送才不会误判成落后。
+   */
+  setRevs: (revs: Record<string, number>) => void;
+  /**
+   * 推进 `lastSeq`、基线与记录版本表。
    *
    * **只在一轮同步全部成功之后调用** —— 任何一步失败都不该动它们，
    * 否则失败的那一轮会把没落库的改动记成「已经拉过了」，下一轮就不再拉。
    */
-  commitSync: (lastSeq: number, baseline: Record<string, Record<string, string>>) => void;
+  commitSync: (
+    lastSeq: number,
+    baseline: Record<string, Record<string, string>>,
+    revs?: Record<string, number>,
+  ) => void;
   /** 记下最近一次同步的冲突（整块替换，只留这一次） */
   setConflicts: (conflicts: SyncConflict[]) => void;
   /** 导入 / 回滚 / 清除数据之后置位，设置卡据此显示「需要重新对账」 */
@@ -101,6 +124,7 @@ const defaultState = {
   deviceId: '',
   lastSeq: 0,
   baseline: {} as Record<string, Record<string, string>>,
+  revs: {} as Record<string, number>,
   conflicts: [] as SyncConflict[],
   needsReconcile: false,
 };
@@ -127,6 +151,24 @@ function normalizeBaseline(raw: unknown): Record<string, Record<string, string>>
       if (typeof hash === 'string' && key !== '' && hash !== '') entries[key] = hash;
     }
     result[moduleName] = entries;
+  }
+  return result;
+}
+
+/**
+ * 归一化记录版本表：`module:key` → rev。
+ *
+ * 非数字、非有限值、负数的条目直接剔掉 —— 剔掉的后果是该条目下次推送带 `baseRev: 0`，
+ * 服务端会判成「落后于当前 rev」并标一次 conflict（**数据不会丢**，只是多一行提示）。
+ * 留一条脏 rev 反而更糟：它会让服务端拿一个不存在的版本号去做比较。
+ */
+function normalizeRevs(raw: unknown): Record<string, number> {
+  const entries = asRecord(raw);
+  const result: Record<string, number> = {};
+  for (const [key, value] of Object.entries(entries)) {
+    if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) continue;
+    if (key === '') continue;
+    result[key] = Math.floor(value);
   }
   return result;
 }
@@ -180,7 +222,9 @@ export const useSyncStore = create<SyncState>()(
       },
       setBaseline: (baseline) => set({ baseline }),
       clearBaseline: () => set({ baseline: {} }),
-      commitSync: (lastSeq, baseline) => set({ lastSeq, baseline }),
+      setRevs: (revs) => set({ revs }),
+      commitSync: (lastSeq, baseline, revs) =>
+        set(revs === undefined ? { lastSeq, baseline } : { lastSeq, baseline, revs }),
       setConflicts: (conflicts) => set({ conflicts }),
       markNeedsReconcile: () => set({ needsReconcile: true }),
       clearNeedsReconcile: () => set({ needsReconcile: false }),
@@ -194,6 +238,7 @@ export const useSyncStore = create<SyncState>()(
         deviceId: state.deviceId,
         lastSeq: state.lastSeq,
         baseline: state.baseline,
+        revs: state.revs,
         conflicts: state.conflicts,
         needsReconcile: state.needsReconcile,
       }),
@@ -207,6 +252,7 @@ export const useSyncStore = create<SyncState>()(
           deviceId: typeof raw.deviceId === 'string' ? raw.deviceId : '',
           lastSeq: pickNumber(raw.lastSeq, defaultState.lastSeq),
           baseline: normalizeBaseline(raw.baseline),
+          revs: normalizeRevs(raw.revs),
           conflicts: normalizeConflicts(raw.conflicts),
           needsReconcile: pickBoolean(raw.needsReconcile, defaultState.needsReconcile),
         };
