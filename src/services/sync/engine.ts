@@ -1,11 +1,6 @@
 import { useSyncStore, type SyncConflict } from '../../store/syncStore';
 import { applyChanges, type AppliedChange } from './apply';
-import {
-  computeBaseline,
-  diffAgainstBaseline,
-  type RevTable,
-  type SyncChange,
-} from './baseline';
+import { computeBaseline, diffAgainstBaseline, type RevTable, type SyncChange } from './baseline';
 
 /**
  * 同步引擎：把一轮同步编排起来。
