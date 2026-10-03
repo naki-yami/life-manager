@@ -1,6 +1,10 @@
 # 02 同步单元表与落库
 
-Status: ready-for-agent
+Status: resolved
+实现：`ad0aac3`（2026-10-03。验收用例：`src/services/sync/apply.test.ts` 的
+「只变那一条」与「逐字段等于服务端那一份」，`src/services/sync/units.test.ts` 的
+「覆盖服务端每一个模块」「不同步项一个都不在表里」，
+`src/services/sync/integration.test.ts` 对着真服务端验证三种单元都不被结构守卫拒）
 Type: task
 Part of: `.scratch/sync-client/spec.md`
 Blocked by: 无
