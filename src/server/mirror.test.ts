@@ -83,8 +83,8 @@ describe('镜子文件', () => {
   });
 });
 
-describe('去抖', () => {
-  it('第一次就该写；紧接着第二次不该写（30 秒窗口内）', () => {
+describe('去抖与「没改动就不写」', () => {
+  it('第一次写；写完之后**没有新改动**的话，过多久都不再写', () => {
     const mirrorDir = tempDir();
     const h = makeHarness(mirrorDir);
     let clock = fixedClock();
@@ -95,15 +95,42 @@ describe('去抖', () => {
 
     expect(mirror.needsWrite()).toBe(true);
     mirror.write();
-    // 同一时刻再问：还在窗口里
+
+    // 同一时刻再问：不写
     expect(mirror.needsWrite()).toBe(false);
 
-    // 过了去抖窗口就又可以写了
+    /*
+     * 过了去抖窗口**仍然不写** —— 这才是「去抖」和「有改动才写」的区别。
+     * 早先只看时间，于是空闲服务每 30 秒重写一遍整份副本，
+     * 在同步盘上变成上传风暴（实测 10 分钟 20 次）。
+     */
+    clock = new Date(fixedClock().getTime() + MIRROR_DEBOUNCE_MS * 10);
+    expect(mirror.needsWrite()).toBe(false);
+  });
+
+  it('有改动之后、且过了窗口 → 才写', () => {
+    const mirrorDir = tempDir();
+    const h = makeHarness(mirrorDir);
+    let clock = fixedClock();
+    const mirror = createMirror(h.replica, h.dataDir, mirrorDir, {
+      volumeOf: h.volumeOf,
+      now: () => clock,
+    });
+    mirror.write();
+
+    // 副本变了
+    h.replica.envelope.data.tasks = [{ id: 't1', title: '新写入' }];
+
+    // 但还在窗口内 → 先不写
+    clock = new Date(fixedClock().getTime() + 1000);
+    expect(mirror.needsWrite()).toBe(false);
+
+    // 过了窗口 → 该写
     clock = new Date(fixedClock().getTime() + MIRROR_DEBOUNCE_MS + 1);
     expect(mirror.needsWrite()).toBe(true);
   });
 
-  it('窗口边界：刚好 30 秒时算到期', () => {
+  it('窗口边界：有改动且刚好 30 秒时算到期', () => {
     const mirrorDir = tempDir();
     const h = makeHarness(mirrorDir);
     let clock = fixedClock();
@@ -112,6 +139,7 @@ describe('去抖', () => {
       now: () => clock,
     });
     mirror.write();
+    h.replica.envelope.data.tasks = [{ id: 't1', title: 'x' }];
 
     clock = new Date(fixedClock().getTime() + MIRROR_DEBOUNCE_MS);
     expect(mirror.needsWrite()).toBe(true);

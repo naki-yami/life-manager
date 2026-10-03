@@ -36,6 +36,17 @@ export interface Tombstone {
   key: string;
   rev: number;
   deletedAt: string;
+  /**
+   * 这次删除占的全局 `seq`。
+   *
+   * **存在墓碑上，而不是回头去变更日志里查**（2026-10-03 改）。原先靠
+   * 「在日志里找第一条 module+key 匹配的 delete」取 seq，有两个问题：
+   * - 删→复活→再删之后同一个 key 有两条 delete，`.find()` 拿到的是**旧的那条**
+   *   （实测真实 seq 4、查出来 2），墓碑因此显得比实际更早「已被所有设备拉过」；
+   * - 日志被裁到水位以下之后就查不到了，只能退回 0 —— 等于立刻放行清理。
+   * 记在墓碑上没有这两个问题，也不再依赖日志还在不在。
+   */
+  seq: number;
 }
 
 /** 已注册的设备。工单 05 用它判断「所有设备都拉过没有」。 */
@@ -433,7 +444,8 @@ function coerceEnvelope(raw: unknown): {
   };
 }
 
-function isPlainObject(value: unknown): value is Record<string, unknown> {
+/** 「是个对象（不是数组、不是 null）」—— 归一化与恢复路径共用的最小形状判断。 */
+export function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
@@ -458,6 +470,15 @@ export interface LoadResult {
   replica: Replica;
   /** 副本文件是新生成的（而不是读出来的） */
   created: boolean;
+  /**
+   * 磁盘上那份副本有问题、已被救援或收敛（半写文件、含不在册的模块、剔掉过畸形条目…）。
+   *
+   * 与 `created` 分开报，是因为调用方要据此决定**别覆盖今天的备份**：
+   * 副本丢了/坏了时 `loadReplica` 会写回一份空的或修好的，而启动时的每日备份
+   * 按日期命名，会把今天那份**好备份**一起覆盖掉 —— 那就是「先告警说副本丢了，
+   * 然后亲手把备份也毁了」。
+   */
+  repaired: boolean;
 }
 
 /**
@@ -560,7 +581,7 @@ export function loadReplica(options: LoadOptions): LoadResult {
       );
     }
   }
-  return { replica, created };
+  return { replica, created, repaired };
 }
 
 /** 从 backups/ 取最近一份能解析的备份（文件名按时间排序，取最后一个好的）。 */

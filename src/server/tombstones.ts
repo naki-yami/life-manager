@@ -38,19 +38,11 @@ export function recordTombstone(
     key,
     rev,
     deletedAt: now.toISOString(),
+    // 变更日志刚记过这次删除，当前 seq 就是它。**存在墓碑上**，不靠回头查日志
+    seq: envelope.sync.seq,
   };
   envelope.sync.tombstones.push(tombstone);
   return tombstone;
-}
-
-/** 某设备是否已经拉过这条墓碑（`lastSeq` 到了它之后）。 */
-export function deviceAcked(
-  tombstone: Tombstone,
-  lastSeq: number,
-  seqOfTombstone: number,
-): boolean {
-  void tombstone;
-  return lastSeq >= seqOfTombstone;
 }
 
 /**
@@ -72,19 +64,28 @@ export function clearTombstone(
 }
 
 /**
- * 墓碑对应的 `seq` 从哪来。
+ * 墓碑对应的 `seq`。
  *
- * 墓碑本身不存 `seq`（工单 05 定的形状是 `{module,key,rev,deletedAt}`），
- * 但清理守卫必须知道「这条删除发生在哪个 seq」，否则没法跟设备的 `lastSeq` 比。
- * 从变更日志里查 —— 删除一定有一条 `op: 'delete'` 的日志条目，它的 `seq` 就是答案。
- * 找不到（例如日志已经被裁到水位以下）时退回 0，那它会被「所有设备都拉过」这条守卫立刻放行。
+ * 直接读墓碑上记的值（`recordTombstone` 写入时记的）。老副本里没有这个字段时，
+ * 退回「在日志里找**最后一条**匹配的 delete」——
+ * 取最后一条而不是第一条，因为删→复活→再删之后同一个 key 有两条 delete，
+ * 只有最后那条才属于现在这个墓碑（早先用 `.find()` 取第一条，实测真实 seq 4 却查成 2）。
+ * 都查不到就退回 0，与旧行为一致（那它会被「都拉过」守卫立刻放行）。
  */
 export function tombstoneSeq(envelope: Replica['envelope'], tombstone: Tombstone): number {
-  const entry = envelope.sync.changes.find(
-    (change) =>
-      change.op === 'delete' && change.module === tombstone.module && change.key === tombstone.key,
-  );
-  return entry?.seq ?? 0;
+  if (typeof tombstone.seq === 'number' && Number.isFinite(tombstone.seq)) return tombstone.seq;
+
+  for (let i = envelope.sync.changes.length - 1; i >= 0; i -= 1) {
+    const change = envelope.sync.changes[i]!;
+    if (
+      change.op === 'delete' &&
+      change.module === tombstone.module &&
+      change.key === tombstone.key
+    ) {
+      return change.seq;
+    }
+  }
+  return 0;
 }
 
 export interface PurgeResult {

@@ -78,7 +78,8 @@ export function startServer(options: { configPath?: string; logger?: Logger } = 
 } {
   const log = options.logger ?? createLogger();
   const { config, created } = loadOrCreateConfig(options.configPath);
-  ensureDirectories(config);
+  // mirrorDir 建不出来只告警、不抛（同步盘没挂载是常态，不该把整个服务拖停）
+  const { mirrorWarning } = ensureDirectories(config);
 
   for (const line of startupMessages(
     config.host,
@@ -92,8 +93,14 @@ export function startServer(options: { configPath?: string; logger?: Logger } = 
     else log.info(line.message);
   }
 
+  if (mirrorWarning) log.warn(mirrorWarning);
+
   // 载入副本（工单 02）。没有就生成一份 seq=0 的并落盘；半写文件会用 backups/ 里的顶上。
-  const { replica, created: replicaCreated } = loadReplica({
+  const {
+    replica,
+    created: replicaCreated,
+    repaired: replicaRepaired,
+  } = loadReplica({
     dataDir: config.dataDir,
     onWarn: (message) => log.warn(message),
   });
@@ -134,10 +141,30 @@ export function startServer(options: { configPath?: string; logger?: Logger } = 
     }
   };
 
-  /** 每日备份 + 历史裁剪。启动时跑一次，之后每天一次。 */
+  /**
+   * 每日备份 + 历史裁剪。启动时跑一次，之后每天一次。
+   *
+   * **副本这次是新建或修好的时候，不能覆盖今天那份备份**（`skipIfExists`）：
+   * 副本丢了 → 这里写的是刚建出来的空副本 → 按日期命名会把今天那份**好备份**一起毁掉，
+   * 而那正是用户此刻唯一的退路。`loadReplica` 已经就这件事告过警了，
+   * 接下来该做的是**别动它**，而不是亲手把告警的内容实现一遍。
+   */
   const dailyMaintenance = (): void => {
     try {
-      const { name } = writeDailyBackup(config.dataDir, replica.envelope, new Date());
+      const freshlyBuilt = replicaCreated || replicaRepaired;
+      const { name, skipped } = writeDailyBackup(
+        config.dataDir,
+        replica.envelope,
+        new Date(),
+        undefined,
+        { skipIfExists: freshlyBuilt },
+      );
+      if (skipped) {
+        log.warn(
+          `副本刚被重建，今天的备份（${name}）原样保留、没有覆盖 —— 请先确认副本是否需要人工恢复`,
+        );
+        return;
+      }
       const dropped = pruneHistory(config.dataDir);
       log.info(`每日备份已写：${name}${dropped > 0 ? `，清掉 ${dropped} 条过期历史` : ''}`);
     } catch (error) {
@@ -154,8 +181,8 @@ export function startServer(options: { configPath?: string; logger?: Logger } = 
    * ADR-0002 记下的那条代价就白付了，必须明确告警。
    */
   const mirror = createMirror(replica, config.dataDir, config.mirrorDir, { now: () => new Date() });
-  const mirrorWarning = mirror.startupWarning();
-  if (mirrorWarning) log.warn(mirrorWarning);
+  const sameVolumeWarning = mirror.startupWarning();
+  if (sameVolumeWarning) log.warn(sameVolumeWarning);
   else if (mirror.status.configured) log.info(`第二份存储：${config.mirrorDir}`);
 
   /*

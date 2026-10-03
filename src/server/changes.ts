@@ -89,7 +89,19 @@ export function readChanges(
 ): ChangesPage {
   const { sync } = replica.envelope;
 
-  const belowWatermark = query.since < sync.purgedThroughSeq;
+  /*
+   * **把 `since` 夹进 `[0, seq]`。**
+   *
+   * 客户端可以传任意有限正数：`since=1e15` 会被原样收进 `nextSince`，
+   * 而 `http.ts` 又把它写进这台设备的 `lastSeq` → `safeWatermark` 跟着变成 1e15
+   * → 水位被永久钉在 1e15，此后每一次拉取都被判成「落后于水位」、强制全量对账。
+   * 一条数据都不用丢，就足以让同步永远退化成全量。
+   *
+   * 超过 `seq` 的 `since` 语义上等于「我已经拉完了」，夹到 `seq` 即可。
+   */
+  const since = Math.min(Math.max(0, Math.floor(query.since)), sync.seq);
+
+  const belowWatermark = since < sync.purgedThroughSeq;
   const dormant = query.deviceId
     ? deviceNeedsFullResync(replica.envelope, query.deviceId, now)
     : false;
@@ -98,7 +110,7 @@ export function readChanges(
     return {
       changes: [],
       more: false,
-      nextSince: query.since,
+      nextSince: since,
       seq: sync.seq,
       needFullResync: true,
       purgedThroughSeq: sync.purgedThroughSeq,
@@ -106,14 +118,14 @@ export function readChanges(
   }
 
   // 日志按 seq 升序维护，所以「seq > since」就是从头截断；再取 limit 条
-  const pending = sync.changes.filter((entry) => entry.seq > query.since);
+  const pending = sync.changes.filter((entry) => entry.seq > since);
   const page = pending.slice(0, query.limit);
   const last = page[page.length - 1];
 
   return {
     changes: page,
     more: pending.length > page.length,
-    nextSince: last ? last.seq : query.since,
+    nextSince: last ? last.seq : since,
     seq: sync.seq,
     needFullResync: false,
     purgedThroughSeq: sync.purgedThroughSeq,

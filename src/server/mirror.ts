@@ -20,6 +20,11 @@ export const MIRROR_DEBOUNCE_MS = 30 * 1000;
 /** 兜底周期：即便一直没有新写入，也至少这么久写一次。 */
 export const MIRROR_INTERVAL_MS = 5 * 60 * 1000;
 
+/** 内容指纹：整份信封序列化。镜子拿它判断「与上次镜像的是不是同一份」。 */
+function fingerprintOf(envelope: Replica['envelope']): string {
+  return JSON.stringify(envelope);
+}
+
 /**
  * 「是不是同一个卷」的判断。**做成可注入函数**，因为测试里没法真的造两个卷。
  *
@@ -82,6 +87,13 @@ export function createMirror(
   let lastAttemptAt: number | null = null;
   let lastWrittenAt: string | null = null;
   let lastError: string | null = null;
+  /**
+   * 上一次**成功镜像**时的内容指纹。
+   *
+   * 不排除 `exportedAt`：镜子就是要把「整份当前内容」原样复制过去，时间戳变了确实该重写一次
+   * —— 但那只会在真有写入时发生（写入才更新 `exportedAt`）。
+   */
+  let mirroredFingerprint: string | null = null;
 
   const sameVolume = (): boolean => {
     if (!configured) return false;
@@ -110,8 +122,22 @@ export function createMirror(
 
     needsWrite: () => {
       if (!configured) return false;
-      // 从没写过 → 该写
+      /*
+       * **没改动就不写。**
+       *
+       * 去抖窗口只是「别在 30 秒内写两次」，不等于「有改动才写」。
+       * 早先只看时间，于是空闲服务每 30 秒把整份副本重写一遍 ——
+       * 实测 10 分钟空转写了 20 次，而同步盘（OneDrive 之类）会把这当成上传风暴，
+       * 正是 ADR-0002 警告过的那种成本。
+       *
+       * 判据用**镜子自己记的指纹**，而不是 `replica.isDirty()` ——
+       * 后者比的是「与上次 save 的差别」，而每次 push 之后 HTTP 层都会 `save()`，
+       * 于是它恒为 false，镜子会永远不写。镜子关心的是「与上次**镜像**的差别」。
+       *
+       * 例外：从没写过时一定写一次（第一次总得把第二份建出来）。
+       */
       if (lastAttemptAt === null) return true;
+      if (fingerprintOf(replica.envelope) === mirroredFingerprint) return false;
       return now().getTime() - lastAttemptAt >= MIRROR_DEBOUNCE_MS;
     },
 
@@ -121,6 +147,8 @@ export function createMirror(
       try {
         if (!existsSync(mirrorDir)) mkdirSync(mirrorDir, { recursive: true });
         atomicWrite(fs, join(mirrorDir, MIRROR_FILE), JSON.stringify(replica.envelope, null, 2));
+        // 记下「镜像的是哪一份」，这样内容没变时 needsWrite 会说不必再写
+        mirroredFingerprint = fingerprintOf(replica.envelope);
         lastWrittenAt = now().toISOString();
         lastError = null;
         return true;

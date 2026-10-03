@@ -146,12 +146,30 @@ export function loadOrCreateConfig(configPath = defaultConfigPath()): {
 /**
  * 服务启动时会用到的目录，按需创建。
  *
- * `mirrorDir` 为空时不创建、也不报错 —— 那是「用户还没指定第二份存储」的正常状态，
- * 不是错误；工单 07 会据此在 `/v1/health` 里体现。
+ * - `dataDir` 建不出来是**致命的**：没有它服务没有落脚点，让它抛出去。
+ * - `mirrorDir` 建不出来**只记一条警告**，绝不抛。这是 ADR-0002 里那条代价的正常失败形态：
+ *   同步盘没挂载 / 盘符变了 / 开机时还没就绪 —— 都很常见。为了第二份副本把整个服务
+ *   起不来（连第一份也用不了）是把「降级」变成了「全停」，方向反了。
+ *   返回那条警告文案，让调用方决定怎么记（时钟与 logger 都不在这里）。
+ *
+ * `mirrorDir` 为空时不创建、也不报错 —— 那是「用户还没指定第二份存储」的正常状态。
  */
-export function ensureDirectories(config: ServerConfig): void {
+export function ensureDirectories(config: ServerConfig): { mirrorWarning: string | null } {
   mkdirSync(config.dataDir, { recursive: true });
-  if (config.mirrorDir.trim() !== '') mkdirSync(config.mirrorDir, { recursive: true });
+
+  if (config.mirrorDir.trim() === '') return { mirrorWarning: null };
+
+  try {
+    mkdirSync(config.mirrorDir, { recursive: true });
+    return { mirrorWarning: null };
+  } catch (error) {
+    return {
+      mirrorWarning:
+        `第二份存储目录建不出来（${config.mirrorDir}）：` +
+        `${error instanceof Error ? error.message : String(error)}。` +
+        '同步照常进行，但第二份副本暂时写不了 —— 挂上那块盘之后会自己恢复。',
+    };
+  }
 }
 
 /**

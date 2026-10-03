@@ -62,20 +62,33 @@ export function dailyBackupName(now: Date): string {
  * 写一份每日备份，并按文件名（= 日期）裁剪到 `MAX_DAILY_BACKUPS` 份。
  *
  * 同一天重复调用只覆盖那一份 —— 否则一天开十次服务就攒十份。
+ *
+ * **`skipIfExists` 是给「副本刚被重建」那条路用的**（`main.ts` 启动时）：
+ * 副本文件丢了 → `loadReplica` 建一份空的 → 启动时的每日备份会把**今天那份好备份**
+ * 覆盖成空的。于是就出现了「先告警说副本丢了、然后亲手把备份也毁掉」。
+ * 那条路上必须用 `skipIfExists: true`，今天的备份已经有了就**一个字都不改**。
  */
 export function writeDailyBackup(
   dataDir: string,
   envelope: Replica['envelope'],
   now: Date,
   fs: FsAdapter = nodeFs,
-): { name: string; removed: string[] } {
+  options: { skipIfExists?: boolean } = {},
+): { name: string; removed: string[]; skipped: boolean } {
   const dir = join(dataDir, 'backups');
   mkdirSync(dir, { recursive: true });
   const name = dailyBackupName(now);
-  fs.writeFileSync(join(dir, name), JSON.stringify(envelope, null, 2));
+  const target = join(dir, name);
+
+  if (options.skipIfExists && existsSync(target)) {
+    // 存量那份留着；连裁剪都不做（它只会让今天的备份消失，没有好处）
+    return { name, removed: [], skipped: true };
+  }
+
+  fs.writeFileSync(target, JSON.stringify(envelope, null, 2));
 
   const removed = pruneDailyBackups(dir, fs);
-  return { name, removed };
+  return { name, removed, skipped: false };
 }
 
 /** 只留最新的 `MAX_DAILY_BACKUPS` 份。文件名是 `replica-YYYY-MM-DD.json`，字典序即时间序。 */

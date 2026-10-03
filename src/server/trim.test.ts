@@ -15,8 +15,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { loadReplica } from './replica';
 import { handlePush, type PushChange } from './push';
-import { recordPullProgress } from './changes';
-import { purgeTombstones, safeWatermark } from './tombstones';
+import { parseChangesQuery, readChanges, recordPullProgress } from './changes';
+import { purgeTombstones, safeWatermark, tombstoneSeq } from './tombstones';
 
 const BASE = new Date('2026-10-03T00:00:00.000Z');
 const fixedClock = () => BASE;
@@ -194,5 +194,112 @@ describe('裁剪不误伤还在用的增量', () => {
     // 水位到 2 → 只剩第 3 条
     expect(h.replica.envelope.sync.purgedThroughSeq).toBe(2);
     expect(h.replica.envelope.sync.changes.map((c) => c.key)).toEqual(['t3']);
+  });
+});
+
+/**
+ * 墓碑的 `seq` **记在墓碑上**，不靠回头查日志。
+ *
+ * 原实现用 `.find()` 在日志里找第一条 module+key 匹配的 delete：删→复活→再删之后
+ * 同一个 key 有两条 delete，拿到的是**旧的那条**（实测真实 seq 4、查出来 2），
+ * 墓碑因此显得比实际更早「已被所有设备拉过」；日志被裁到水位以下后更只能退回 0。
+ */
+describe('墓碑自己的 seq', () => {
+  const push = (changes: PushChange[]) =>
+    handlePush({ replica: changes as never, now: fixedClock } as never, {} as never);
+
+  it('删→复活→再删之后，墓碑带的是**第二次**删除的 seq', () => {
+    const h = makeHarness();
+    const seqOf = (changes: PushChange[]) =>
+      handlePush({ replica: h.replica, now: fixedClock }, { deviceId: 'dev-A', changes });
+
+    seqOf([
+      { module: 'tasks', key: 't1', baseRev: 0, op: 'put', record: { id: 't1', title: 'v1' } },
+    ]);
+    seqOf([{ module: 'tasks', key: 't1', baseRev: 1, op: 'delete' }]);
+    seqOf([
+      { module: 'tasks', key: 't1', baseRev: 2, op: 'put', record: { id: 't1', title: 'v2' } },
+    ]);
+    seqOf([{ module: 'tasks', key: 't1', baseRev: 3, op: 'delete' }]);
+
+    const tombstone = h.replica.envelope.sync.tombstones[0]!;
+    expect(tombstone.seq).toBe(4);
+    expect(tombstoneSeq(h.replica.envelope, tombstone)).toBe(4);
+    void push;
+  });
+
+  it('日志被裁掉之后仍然知道自己的 seq（老实现只能退回 0）', () => {
+    const h = makeHarness();
+    handlePush(
+      { replica: h.replica, now: fixedClock },
+      {
+        deviceId: 'dev-A',
+        changes: [
+          { module: 'tasks', key: 't1', baseRev: 0, op: 'put', record: { id: 't1', title: 'v1' } },
+        ],
+      },
+    );
+    handlePush(
+      { replica: h.replica, now: fixedClock },
+      { deviceId: 'dev-A', changes: [{ module: 'tasks', key: 't1', baseRev: 1, op: 'delete' }] },
+    );
+    const tombstone = h.replica.envelope.sync.tombstones[0]!;
+
+    // 把日志清空（模拟已裁到水位以下）
+    h.replica.envelope.sync.changes = [];
+
+    expect(tombstone.seq).toBeGreaterThan(0);
+    expect(tombstoneSeq(h.replica.envelope, tombstone)).toBe(tombstone.seq);
+  });
+
+  it('老副本（墓碑没有 seq 字段）退回日志，取**最后一条**匹配的 delete', () => {
+    const h = makeHarness();
+    h.replica.envelope.sync.seq = 5;
+    h.replica.envelope.sync.changes = [
+      { seq: 2, module: 'tasks', key: 't1', rev: 2, op: 'delete' },
+      { seq: 4, module: 'tasks', key: 't1', rev: 4, op: 'delete' },
+    ];
+    const legacy = { module: 'tasks', key: 't1', rev: 4, deletedAt: BASE.toISOString() } as never;
+
+    // 取最后一条（4），不是第一条（2）
+    expect(tombstoneSeq(h.replica.envelope, legacy)).toBe(4);
+  });
+});
+
+/**
+ * `since` 夹进 `[0, seq]`。
+ *
+ * 客户端可以传任意有限正数。`since=1e15` 会被收进 `nextSince`、写进设备的 `lastSeq`、
+ * 把 `safeWatermark` 抬到 1e15 —— 水位永久钉死，此后每次拉取都被判成「落后于水位」、
+ * 强制全量对账。一条数据都不丢，却让同步永远退化成全量。
+ */
+describe('乱传的 since 不会污染水位', () => {
+  it('since 超过 seq 时被夹到 seq', () => {
+    const h = makeHarness();
+    h.pushOne('t1', 'x');
+    const seq = h.replica.envelope.sync.seq;
+
+    const page = readChanges(h.replica, { since: 1e15, limit: 100 });
+
+    expect(page.needFullResync).toBe(false);
+    expect(page.nextSince).toBe(seq);
+  });
+
+  it('用夹过的值推进设备进度 → 水位不会被抬到天文数字', () => {
+    const h = makeHarness();
+    h.pushOne('t1', 'x');
+    const page = readChanges(h.replica, { since: 1e15, limit: 100 });
+
+    recordPullProgress(h.replica, 'dev-A', page.nextSince);
+    purgeTombstones(h.replica.envelope, { now: fixedClock });
+
+    expect(h.replica.envelope.sync.purgedThroughSeq).toBeLessThanOrEqual(
+      h.replica.envelope.sync.seq,
+    );
+  });
+
+  it('负数 / 非有限值不会穿过解析层', () => {
+    expect(parseChangesQuery(new URLSearchParams('since=-5')).since).toBe(0);
+    expect(parseChangesQuery(new URLSearchParams('since=Infinity')).since).toBe(0);
   });
 });
