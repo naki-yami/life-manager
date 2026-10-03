@@ -17,6 +17,8 @@ import { createLogger, type Logger } from './logger.ts';
 import { createRequestHandler } from './http.ts';
 import { loadReplica } from './replica.ts';
 import { purgeTombstones } from './tombstones.ts';
+import { appendHistory, pruneHistory, writeDailyBackup } from './history.ts';
+import type { HistoryEntry } from './push.ts';
 
 /** Windows 上 `127.0.0.1` 是回环；`0.0.0.0` / `::` 是「所有网卡」，等于把服务暴露到局域网。 */
 function isLoopbackHost(host: string): boolean {
@@ -119,11 +121,39 @@ export function startServer(options: { configPath?: string; logger?: Logger } = 
     }
   };
 
+  /*
+   * 历史落点（工单 06）：被 LWW 覆盖或删除的旧版本写进 `history.jsonl`，保留 30 天。
+   * ADR 要求「不能只依赖客户端的自动快照」—— 这是服务端自己留的那一份。
+   */
+  const onHistory = (entry: HistoryEntry): void => {
+    try {
+      appendHistory(config.dataDir, entry);
+    } catch (error) {
+      log.warn(`写历史失败：${error instanceof Error ? error.message : String(error)}`);
+    }
+  };
+
+  /** 每日备份 + 历史裁剪。启动时跑一次，之后每天一次。 */
+  const dailyMaintenance = (): void => {
+    try {
+      const { name } = writeDailyBackup(config.dataDir, replica.envelope, new Date());
+      const dropped = pruneHistory(config.dataDir);
+      log.info(`每日备份已写：${name}${dropped > 0 ? `，清掉 ${dropped} 条过期历史` : ''}`);
+    } catch (error) {
+      log.warn(`每日备份失败：${error instanceof Error ? error.message : String(error)}`);
+    }
+  };
+  dailyMaintenance();
+  const dailyTimer = setInterval(dailyMaintenance, 24 * 60 * 60 * 1000);
+  // 别让这个定时器把进程钉住（Ctrl+C / 测试里 close 之后要能退出）
+  dailyTimer.unref?.();
+
   const handler = createRequestHandler({
     config,
     logger: log,
     replica,
     onAfterWrite: purgeAfterWrite,
+    onHistory,
   });
 
   const server = createServer((req, res) => {

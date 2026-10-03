@@ -14,11 +14,12 @@ import {
   type ServerConfig,
 } from './config.ts';
 import type { Logger } from './logger.ts';
-import { handlePush, type PushRequest } from './push.ts';
+import { handlePush, type HistorySink, type PushRequest } from './push.ts';
 import type { Replica } from './replica.ts';
+import { restoreReplica, type RestoreRequest } from './restore.ts';
 
 /** 还没实现的路径。做一个删一个 —— 删到空就说明接口齐了。 */
-const PLANNED_PATHS = ['/v1/restore'] as const;
+const PLANNED_PATHS: readonly string[] = [];
 
 /** 请求体上限：本机服务，正常批次是几十 KB 量级；给足余量但别让人一POST打满内存。 */
 const MAX_BODY_BYTES = 8 * 1024 * 1024;
@@ -33,6 +34,10 @@ export interface RequestContext {
    * 失败了不影响这次写入的结果，所以调用方要自己把它包进 try/catch。
    */
   onAfterWrite?: () => void;
+  /**
+   * 历史落点（工单 06）：被 LWW 覆盖或删除的旧版本。默认什么都不做 —— 测试里可以不接。
+   */
+  onHistory?: HistorySink;
 }
 
 /** 读请求体，超过上限就中止。 */
@@ -102,7 +107,7 @@ function parseRequestUrl(rawUrl: string | undefined): URL | null {
 }
 
 export function createRequestHandler(context: RequestContext) {
-  const { config, logger, replica, onAfterWrite } = context;
+  const { config, logger, replica, onAfterWrite, onHistory } = context;
 
   return function handle(req: IncomingMessage, res: ServerResponse): void {
     const url = parseRequestUrl(req.url);
@@ -175,6 +180,50 @@ export function createRequestHandler(context: RequestContext) {
       return;
     }
 
+    if (pathname === '/v1/restore') {
+      if (req.method !== 'POST') {
+        sendJson(res, 405, { error: 'method_not_allowed' });
+        return;
+      }
+      void readBody(req)
+        .then((raw) => {
+          let body: unknown;
+          try {
+            body = JSON.parse(raw);
+          } catch {
+            sendJson(res, 400, { error: 'bad_json' });
+            return;
+          }
+          const result = restoreReplica(replica, (body ?? {}) as RestoreRequest, config.dataDir);
+          if (!result.ok) {
+            logger.warn(`restore 被拒：${result.error}`);
+            sendJson(res, result.status, { error: result.error });
+            return;
+          }
+          try {
+            replica.save();
+            onAfterWrite?.();
+          } catch (error) {
+            replica.rollback();
+            logger.error(
+              `restore 落盘失败，已回滚：${error instanceof Error ? error.message : String(error)}`,
+            );
+            sendJson(res, 500, { error: 'replica_write_failed' });
+            return;
+          }
+          logger.info(
+            `restore 完成：来源 ${String((body as RestoreRequest).source)}，` +
+              `ref=${String((body as RestoreRequest).ref)}，seq=${result.seq}`,
+          );
+          sendJson(res, 200, result);
+        })
+        .catch((error: unknown) => {
+          logger.warn(`读请求体失败：${error instanceof Error ? error.message : String(error)}`);
+          if (!res.headersSent) sendJson(res, 400, { error: 'bad_request' });
+        });
+      return;
+    }
+
     if (pathname === '/v1/push') {
       if (req.method !== 'POST') {
         sendJson(res, 405, { error: 'method_not_allowed' });
@@ -196,7 +245,7 @@ export function createRequestHandler(context: RequestContext) {
             sendJson(res, 400, { error: 'bad_request', detail: problem });
             return;
           }
-          const result = handlePush({ replica, logger }, body as PushRequest);
+          const result = handlePush({ replica, logger, onHistory }, body as PushRequest);
           // 有改动就落盘。noop / rejected 不该产生写盘 —— 那会让「幂等不写历史」这条
           // 在磁盘层面也不成立（每次重推都改 exportedAt）。
           if (

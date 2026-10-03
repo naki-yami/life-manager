@@ -25,6 +25,7 @@ import { createRequestHandler } from './http';
 import { loadReplica, REPLICA_FILE, type Replica } from './replica';
 import { backupDataSchema } from '../services/schemas';
 import { purgeTombstones } from './tombstones';
+import { appendHistory, listBackups } from './history';
 
 const TOKEN = 'f'.repeat(64);
 
@@ -169,16 +170,22 @@ describe('鉴权', () => {
     expect(res.status).toBe(401);
   });
 
-  it('对令牌 → 放行到路由（还没实现的路径返回 501，不是 401）', async () => {
+  it('对令牌 → 放行到路由（四个接口都已实现，不再有 501）', async () => {
     const h = await startHarness();
 
-    // /v1/push、/v1/changes、/v1/snapshot 都已实现，所以拿还没做的 /v1/restore 验「放行到了路由」
-    const res = await fetch(`${h.base}/v1/restore`, {
-      method: 'POST',
+    // 工单 04/06 之后 PLANNED_PATHS 是空的 —— 拿一个未实现的路径验 404 而不是 401，
+    // 同时确认四个真接口都活着（都不是 401/501）
+    const unknown = await fetch(`${h.base}/v1/nope`, {
       headers: { Authorization: `Bearer ${TOKEN}` },
     });
+    expect(unknown.status).toBe(404);
 
-    expect(res.status).toBe(501);
+    for (const path of ['/v1/health', '/v1/changes', '/v1/snapshot']) {
+      const res = await fetch(`${h.base}${path}`, {
+        headers: { Authorization: `Bearer ${TOKEN}` },
+      });
+      expect(res.status).toBe(200);
+    }
   });
 
   it('/v1/push 已实现：对令牌但请求体不合法 → 400（不再是 501）', async () => {
@@ -736,5 +743,105 @@ describe('删除的传播与清理', () => {
     expect(h.replica.envelope.sync.purgedThroughSeq).toBeGreaterThan(0);
     // 日志只留水位以上的，这里应该空
     expect(h.replica.envelope.sync.changes).toEqual([]);
+  });
+});
+
+/** POST /v1/restore 的接口层（工单 06）。 */
+describe('POST /v1/restore', () => {
+  const post = (h: Harness, path: string, body: unknown, token = TOKEN) =>
+    fetch(`${h.base}${path}`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+
+  const put = (key: string, title: string, baseRev = 0) => ({
+    module: 'tasks',
+    key,
+    baseRev,
+    op: 'put',
+    record: { id: key, title },
+  });
+
+  it('缺 confirm → 400，副本不变', async () => {
+    const h = await startHarness();
+    await post(h, '/v1/push', { deviceId: 'dev-1', changes: [put('t1', 'A')] });
+    const before = readFileSync(join(h.dataDir, REPLICA_FILE), 'utf8');
+
+    const res = await post(h, '/v1/restore', { source: 'history', ref: 'x' });
+
+    expect(res.status).toBe(400);
+    expect(((await res.json()) as { error: string }).error).toContain('restore');
+    expect(readFileSync(join(h.dataDir, REPLICA_FILE), 'utf8')).toBe(before);
+  });
+
+  it('不存在的 ref → 404', async () => {
+    const h = await startHarness();
+
+    const res = await post(h, '/v1/restore', {
+      confirm: 'restore',
+      source: 'history',
+      ref: '不存在',
+    });
+
+    expect(res.status).toBe(404);
+  });
+
+  it('没令牌 → 401', async () => {
+    const h = await startHarness();
+
+    const res = await post(
+      h,
+      '/v1/restore',
+      { confirm: 'restore', source: 'history', ref: 'x' },
+      'wrong',
+    );
+
+    expect(res.status).toBe(401);
+  });
+
+  it('GET /v1/restore → 405', async () => {
+    const h = await startHarness();
+
+    const res = await fetch(`${h.base}/v1/restore`, {
+      headers: { Authorization: `Bearer ${TOKEN}` },
+    });
+
+    expect(res.status).toBe(405);
+  });
+
+  it('从历史恢复成功 → 200、数据回到那一版、seq 前进且落盘', async () => {
+    const h = await startHarness();
+    await post(h, '/v1/push', { deviceId: 'dev-1', changes: [put('t1', 'v1')] });
+    // 手工造一条历史（正常路径由 LWW 覆盖时产生）
+    const entry = appendHistory(h.dataDir, {
+      replacedAt: '2026-10-03T00:00:00.000Z',
+      module: 'tasks',
+      key: 't1',
+      rev: 1,
+      record: { id: 't1', title: '捞回来的' },
+      reason: 'conflict',
+    });
+    const seqBefore = h.replica.envelope.sync.seq;
+
+    const res = await post(h, '/v1/restore', {
+      confirm: 'restore',
+      source: 'history',
+      ref: entry.id,
+    });
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { ok: boolean; seq: number; safetyBackup: string };
+    expect(body.ok).toBe(true);
+    expect(body.seq).toBeGreaterThan(seqBefore);
+    expect(h.replica.envelope.data.tasks).toEqual([{ id: 't1', title: '捞回来的' }]);
+
+    // 落盘了：磁盘上的副本也是恢复后的内容
+    const onDisk = JSON.parse(readFileSync(join(h.dataDir, REPLICA_FILE), 'utf8')) as {
+      data: { tasks: unknown[] };
+    };
+    expect(onDisk.data.tasks).toEqual([{ id: 't1', title: '捞回来的' }]);
+    // 退路也在
+    expect(listBackups(h.dataDir)).toContain(body.safetyBackup);
   });
 });
