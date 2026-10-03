@@ -15,10 +15,14 @@ import { atomicWrite, nodeFs, type FsAdapter } from './replica.ts';
 /** 镜子文件名。**刻意**与客户端 `folderSync` 的 `life-manager-auto-backup.json` 分开 ——
  *  同目录里两边各写各的，互不覆盖。 */
 export const MIRROR_FILE = 'life-manager-server-replica.json';
-/** 每次写入后的去抖窗口。 */
+/**
+ * 去抖窗口：**有改动**时，两次镜像至少隔这么久。
+ *
+ * 注意它**不是**「每隔这么久写一次」—— 内容没变就不写（见 `needsWrite`）。
+ * spec 早先还写了「5 分钟兜底周期」，那条在「没改动就不写」之后就没有意义了
+ * （没有新内容可镜像，兜底写出去的还是同一份），已移除，免得留着一段永不生效的代码。
+ */
 export const MIRROR_DEBOUNCE_MS = 30 * 1000;
-/** 兜底周期：即便一直没有新写入，也至少这么久写一次。 */
-export const MIRROR_INTERVAL_MS = 5 * 60 * 1000;
 
 /** 内容指纹：整份信封序列化。镜子拿它判断「与上次镜像的是不是同一份」。 */
 function fingerprintOf(envelope: Replica['envelope']): string {
