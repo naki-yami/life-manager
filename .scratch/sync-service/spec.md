@@ -168,12 +168,20 @@ data.dietGoals = { calories: 2100, protein: 120 }           // 模块单值
 
 **协议（四个接口，全部 `Authorization: Bearer <令牌>`，`/v1/health` 除外）。**
 
-| 方法 | 路径                                | 语义                                                                                                                                     |
-| ---- | ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| GET  | `/v1/health`                        | `{ ok, seq, schemaVersion, modules }`，给探针与设置页「连得上吗」用                                                                      |
-| GET  | `/v1/changes?since=<seq>&limit=<n>` | 增量拉取：返回 `seq` 大于游标的变更（含墓碑），带 `more` 表示还有；`since` 落在 `purgedThroughSeq` 之前 → 不给增量，返回「需要全量对账」 |
-| POST | `/v1/push`                          | 推本地改动：`{ deviceId, baseSeq, changes: [{module, key, baseRev, op, record?}] }`，逐条返回 `applied` / `noop` / `conflict`            |
-| GET  | `/v1/snapshot`                      | 整份副本（换机首同步、休眠太久、或 `since` 落后于水位时的全量对账）                                                                      |
+| 方法 | 路径                                                  | 语义                                                                                                                                     |
+| ---- | ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| GET  | `/v1/health`                                          | `{ ok, seq, schemaVersion, modules, mirror }`，给探针与设置页「连得上吗」用                                                              |
+| GET  | `/v1/changes?since=<seq>&limit=<n>&deviceId=<id>`     | 增量拉取：返回 `seq` 大于游标的变更（含墓碑），带 `more` 与 `nextSince`；`since` 落后于水位、或该设备休眠太久 → `needFullResync`        |
+| POST | `/v1/push`                                            | 推本地改动：`{ deviceId, baseSeq, changes: [{module, key, baseRev, op, record?}] }`，逐条返回 `applied` / `noop` / `conflict`            |
+| GET  | `/v1/snapshot`                                        | 整份副本（换机首同步、休眠太久、或 `since` 落后于水位时的全量对账）                                                                      |
+| POST | `/v1/restore`                                         | `{ confirm: 'restore', source, ref }`，取回旧版本；**不倒退 `seq`**                                                                      |
+
+**`/v1/changes` 的 `deviceId` 参数是「休眠设备兜底」的开关**（2026-10-03 实现时补）：
+服务端靠它查这台设备是否 > 90 天没出现，是则要求全量对账。**不带这个参数，那道守卫就不生效** ——
+一台离线三个月的设备会拿着旧数据把已删记录复活。客户端必须带上自己的设备标识。
+
+响应里的 `nextSince` 是**本页最后一行的 `seq`**，客户端应当直接用它当下一轮的游标；
+不要自己算 `since + limit`（有被裁掉或空洞的区间时那会跳过变更）。
 
 **幂等**是硬要求：`op: 'put'` 且内容与现存记录完全一致时返回 `noop`，**不产生新 rev、不写历史**。
 客户端第一版靠「内容哈希基线」找改动（没有 `updatedAt` 可用），重推是常态，不是异常。

@@ -651,6 +651,33 @@ describe('GET /v1/changes 与 /v1/snapshot', () => {
     expect(body.needFullResync).toBe(true);
     expect(body.changes).toEqual([]);
   });
+
+  /**
+   * `deviceId` 是「休眠设备」那道守卫的开关 —— 不带它，守卫静默不生效。
+   *
+   * 这条是接口层的回归闸：客户端 spec 一度漏了这个参数（2026-10-03 补上），
+   * 漏了的话一台离线三个月的设备会拿着旧数据把已删记录复活。
+   */
+  it('带 deviceId 且该设备休眠 → needFullResync；不带 deviceId 则不判定', async () => {
+    const h = await startHarness();
+    await post(h, { deviceId: 'dev-old', changes: [change('t1')] });
+    // 把它的 lastSeenAt 拨回 91 天前
+    const device = h.replica.envelope.sync.devices.find((d) => d.deviceId === 'dev-old')!;
+    device.lastSeenAt = new Date(Date.now() - 91 * 24 * 60 * 60 * 1000).toISOString();
+
+    const withId = (await (await get(h, '/v1/changes?since=0&deviceId=dev-old')).json()) as {
+      needFullResync: boolean;
+    };
+    expect(withId.needFullResync).toBe(true);
+
+    // 不带 deviceId：服务端不知道是谁，只能按正常增量给（守卫不生效）
+    const withoutId = (await (await get(h, '/v1/changes?since=0')).json()) as {
+      needFullResync: boolean;
+      changes: unknown[];
+    };
+    expect(withoutId.needFullResync).toBe(false);
+    expect(withoutId.changes.length).toBeGreaterThan(0);
+  });
 });
 
 /** 墓碑端到端（工单 05）：A 删 → B 拉到 delete。 */

@@ -86,7 +86,13 @@ Type: spec
 1. `GET /v1/health`：连不上就到此为止（离线是正常状态，不是错误）。
 2. 算 diff → `POST /v1/push`（每条带 `baseRev` 与 `deviceId`）。
 3. 记下 `status: 'conflict'` 的条目（进 `lm:sync.conflicts`，只留最近一次）。
-4. `GET /v1/changes?since=<lastSeq>` 分页拉完 → 逐条落库（`put` / `delete`）。
+4. `GET /v1/changes?since=<lastSeq>&deviceId=<自己>` 分页拉完 → 逐条落库（`put` / `delete`）。
+   **`deviceId` 必须带上**（2026-10-03 补）：服务端要靠它判断这台设备是不是
+   「休眠太久」（> 90 天没出现）—— 是的话不给增量、要求全量对账。不带这个参数，
+   那道兜底守卫**永远不会触发**，一台离线三个月的设备会拿着旧数据把已删记录复活。
+   - 响应里 `needFullResync: true` → 别当错误，改走 `GET /v1/snapshot` 全量对账，
+     完事把 `lastSeq` 置为响应里的 `seq`。
+   - `nextSince` 取**响应给的**值（本页最后一行的 seq），不要自己算 `since + limit`。
 5. **全部成功之后**才更新 `lastSeq` 与基线表。
 
 任何一步失败：不改 `lastSeq`、不动基线（已落库的条目保持已落库）—— 幂等，下一轮重来即可。
