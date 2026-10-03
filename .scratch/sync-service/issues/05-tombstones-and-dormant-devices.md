@@ -1,6 +1,12 @@
 # 05 墓碑生命周期与休眠设备
 
-Status: ready-for-agent
+Status: resolved
+实现：`f957000`（2026-10-03。`src/server/tombstones.ts` + `tombstones.test.ts`（19 条）+
+`changes.ts` 的水位与休眠分支 + HTTP 层的删除传播组）。核心验收用例：
+「lastSeq 落在水位之前的设备来拉 → 被要求全量对账，而不是拿到空增量」，
+并断言它与「你已是最新」可区分（`needFullResync`）—— 替换掉了原先恒真的写法。
+另覆盖：日志只留 `seq > purgedThroughSeq` 且水位以上一条不少、超 90 天即便有设备没拉过也清、
+没有可清的东西时不推水位、记录被写回来时撤墓碑。
 Type: task
 Part of: `.scratch/sync-service/spec.md`
 Blocked by: 04

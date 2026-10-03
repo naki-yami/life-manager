@@ -1,6 +1,11 @@
 # 06 自带备份、历史与 `/v1/restore`
 
-Status: ready-for-agent
+Status: resolved
+实现：`2a038f5`（2026-10-03。`src/server/history.ts` + `restore.ts` +
+`restore.test.ts`（22 条）+ HTTP 层的 restore 端点组）。核心不变量用例：
+恢复后 seq 大于恢复前、用恢复前游标能拉到恢复产生的变更、恢复前那份副本进了
+backups/ 且内容仍是恢复前的。另有「从每日备份恢复：数据等于那一版」——
+它守住「先读目标再写安全备份」这个顺序（同日备份会互相覆盖）。
 Type: task
 Part of: `.scratch/sync-service/spec.md`
 Blocked by: 05
