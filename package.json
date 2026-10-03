@@ -16,6 +16,8 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "e2e": "node e2e/run.mjs",
+    "sync:e2e": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/sync-e2e.ps1",
+    "sync": "node src/server/main.ts",
     "size": "node scripts/check-bundle-size.mjs"
   },
   "dependencies": {

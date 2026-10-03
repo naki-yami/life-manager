@@ -18,6 +18,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const serverDir = join(__dirname);
+const repoRoot = join(serverDir, '..', '..');
 const read = (name: string): Buffer => readFileSync(join(serverDir, name));
 
 describe('start-sync-server.bat', () => {
@@ -61,5 +62,20 @@ describe('install-autostart.ps1', () => {
     const text = read('install-autostart.ps1').toString('utf8');
     expect(text).toContain('Unregister-ScheduledTask');
     expect(text).toContain('-Remove');
+  });
+});
+
+describe('scripts/sync-e2e.ps1（服务端集成验收脚本）', () => {
+  it('同样是 UTF-8 BOM（它也有中文，5.1 读无 BOM 会乱码）', () => {
+    const bytes = readFileSync(join(repoRoot, 'scripts', 'sync-e2e.ps1'));
+    expect([bytes[0], bytes[1], bytes[2]]).toEqual([0xef, 0xbb, 0xbf]);
+  });
+
+  it('覆盖了每条工单的关键验收点（脚本名与实际断言的对应）', () => {
+    const text = readFileSync(join(repoRoot, 'scripts', 'sync-e2e.ps1')).toString('utf8');
+    // 幂等（03）、分页（04）、水位/墓碑（05）、恢复不倒退 seq（06）、镜子（07）
+    for (const marker of ['noop', 'more', 'delete', '不倒退', '镜子']) {
+      expect(text).toContain(marker);
+    }
   });
 });
