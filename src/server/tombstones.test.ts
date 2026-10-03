@@ -11,7 +11,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { loadReplica } from './replica';
 import { handlePush, type PushChange } from './push';
-import { readChanges } from './changes';
+import { readChanges, recordPullProgress } from './changes';
 import {
   DORMANT_DAYS,
   TOMBSTONE_MAX_AGE_DAYS,
@@ -144,7 +144,11 @@ describe('清理守卫', () => {
     const h = makeHarness();
     h.push([put('t1')]);
     h.push([del('t1', 1)], 'dev-A');
-    // dev-A 自己删的，lastSeq 已经到最新
+    /*
+     * dev-A 拉一次（真实客户端流程是「先推后拉」）。
+     * `lastSeq` 只由**拉取**推进 —— push 只更新 `lastSeenAt`。
+     */
+    recordPullProgress(h.replica, 'dev-A', h.replica.envelope.sync.seq);
     const seqOfTombstone = tombstoneSeq(h.replica.envelope, h.replica.envelope.sync.tombstones[0]!);
 
     const result = purgeTombstones(h.replica.envelope, { now: fixedClock });
@@ -191,14 +195,36 @@ describe('清理守卫', () => {
     expect(result.purgedTombstones).toBe(1);
   });
 
-  it('没有可清的东西时什么都不做（不推水位，免得平白要求一堆设备全量对账）', () => {
+  /**
+   * 早先这条叫「没有可清的东西时什么都不做（不推水位）」，但那个语义**是错的**：
+   * 只在有墓碑可清时才裁日志，会让「只增不删」的用法（最常见的那种）日志无界增长 ——
+   * 实测 3000 次写入留下 3000 条日志。现在水位由 `safeWatermark` 独立驱动：
+   * 设备都拉过了就该裁，与有没有墓碑无关。
+   *
+   * 真正要守的是另一条：**设备还没拉过时不能推水位**（否则它拉不到自己需要的东西）。
+   */
+  it('设备还没拉过时不动水位（不裁还没被消费的条目）', () => {
     const h = makeHarness();
     h.push([put('t1')]);
 
+    // 此时 dev-A 的 lastSeq 还是 0（push 不推进它）→ 水位不该动
     const result = purgeTombstones(h.replica.envelope, { now: fixedClock });
 
     expect(result).toMatchObject({ purgedTombstones: 0, purgedThroughSeq: 0 });
     expect(h.replica.envelope.sync.purgedThroughSeq).toBe(0);
+    expect(h.replica.envelope.sync.changes).toHaveLength(1);
+  });
+
+  it('设备拉过之后即便没有墓碑也会裁日志（这正是无界增长的修法）', () => {
+    const h = makeHarness();
+    h.push([put('t1')]);
+    recordPullProgress(h.replica, 'dev-A', h.replica.envelope.sync.seq);
+
+    const result = purgeTombstones(h.replica.envelope, { now: fixedClock });
+
+    expect(result.purgedTombstones).toBe(0);
+    expect(h.replica.envelope.sync.purgedThroughSeq).toBe(1);
+    expect(h.replica.envelope.sync.changes).toEqual([]);
   });
 });
 
@@ -207,7 +233,8 @@ describe('清理时顺手裁变更日志', () => {
     const h = makeHarness();
     h.push([put('t1'), put('t2')]); // seq 1,2
     h.push([del('t1', 1)]); // seq 3 + 墓碑
-    // dev 的 lastSeq 已到 3，所以墓碑可以清
+    // dev 拉过（lastSeq 到 3），所以墓碑可以清、日志可以裁
+    recordPullProgress(h.replica, 'dev-A', h.replica.envelope.sync.seq);
     const before = h.replica.envelope.sync.changes.length;
     expect(before).toBe(3);
 
@@ -224,11 +251,12 @@ describe('清理时顺手裁变更日志', () => {
     const h = makeHarness();
     h.push([put('t1')]);
     h.push([del('t1', 1)]);
+    recordPullProgress(h.replica, 'dev-A', h.replica.envelope.sync.seq);
     purgeTombstones(h.replica.envelope, { now: fixedClock }); // 水位到 2
 
     // 之后再推一条：seq 3，在水位之上
     h.push([put('t2')]);
-    purgeTombstones(h.replica.envelope, { now: fixedClock }); // 没有墓碑可清 → 不动水位
+    purgeTombstones(h.replica.envelope, { now: fixedClock }); // 还没拉过 → 不动水位
 
     const page = readChanges(h.replica, { since: 2, limit: 100 });
     expect(page.needFullResync).toBe(false);
@@ -298,22 +326,24 @@ describe('墓碑清理后的 seq 空洞（工单 05 的核心验收）', () => {
     h.push([put('t1'), put('t2')], 'dev-A');
     h.push([del('t1', 1)], 'dev-A');
 
-    // dev-B 注册过但停在 seq 1（没见过那次删除）
+    /*
+     * dev-B 注册过、也**真的拉过** seq 1（模拟它当时在），之后就再没出现过。
+     * 这样水位能推进（两台设备都拉过 1、A 拉到了 3），而 B 停在 1 —— 正是要测的那条路径。
+     */
     h.replica.envelope.sync.devices.push({
       deviceId: 'dev-B',
       label: '',
       lastSeenAt: BASE.toISOString(),
       lastSeq: 1,
     });
-    // 清墓碑：dev-B 会挡住它，所以直接给它一个「已拉过」的 ack 来模拟它后来拉过了
-    purgeTombstones(h.replica.envelope, {
-      now: fixedClock,
-      deviceAcks: [{ deviceId: 'dev-A', lastSeq: 99 }],
-    });
-    expect(h.replica.envelope.sync.purgedThroughSeq).toBeGreaterThan(0);
+    // A 拉过全部（它自己在场），水位因此能推到墓碑的 seq
+    recordPullProgress(h.replica, 'dev-A', h.replica.envelope.sync.seq);
+    // 但 B 挡着 → 水位只能推到 B 已拉到的位置（1）
+    const result = purgeTombstones(h.replica.envelope, { now: fixedClock });
+    expect(result.purgedThroughSeq).toBe(1);
 
-    // 现在 dev-B 用一个**落在水位之前**的 since 来拉
-    const page = readChanges(h.replica, { since: 1, limit: 100 });
+    // 现在 B 用一个**落在水位之前**的 since 来拉（它只有 0）
+    const page = readChanges(h.replica, { since: 0, limit: 100 });
 
     expect(page.needFullResync).toBe(true);
     expect(page.changes).toEqual([]);
@@ -326,10 +356,13 @@ describe('墓碑清理后的 seq 空洞（工单 05 的核心验收）', () => {
     const h = makeHarness();
     h.push([put('t1')], 'dev-A');
     h.push([del('t1', 1)], 'dev-A');
+    // A 拉过全部 → 水位推到墓碑的 seq
+    recordPullProgress(h.replica, 'dev-A', h.replica.envelope.sync.seq);
     purgeTombstones(h.replica.envelope, { now: fixedClock });
     const watermark = h.replica.envelope.sync.purgedThroughSeq;
 
     h.push([put('t2')], 'dev-A');
+    recordPullProgress(h.replica, 'dev-A', h.replica.envelope.sync.seq);
     const page = readChanges(h.replica, { since: watermark, limit: 100 });
 
     expect(page.needFullResync).toBe(false);

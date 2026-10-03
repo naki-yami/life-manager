@@ -759,7 +759,13 @@ describe('删除的传播与清理', () => {
     expect(h.replica.envelope.sync.tombstones).toEqual([]);
   });
 
-  it('单台设备自己删的，下一次 push 之后墓碑被清、水位前移、日志变短', async () => {
+  /**
+   * 「单设备推完就该能清」这个前提**被修掉了** —— push 不再推进 `lastSeq`。
+   *
+   * 原因见 push.ts 的 `touchDevice` 注释：`lastSeq` 是「拉到哪了」，推送不代表拉取。
+   * 所以这里要走**真实客户端的一轮**（先推后拉），墓碑与日志才会被清。
+   */
+  it('单台设备走完一轮（推 + 拉）之后，墓碑被清、水位前移、日志变短', async () => {
     const h = await startHarness();
     await post(h, {
       deviceId: 'dev-A',
@@ -773,10 +779,17 @@ describe('删除的传播与清理', () => {
       changes: [{ module: 'tasks', key: 't1', baseRev: 1, op: 'delete' }],
     });
 
-    // dev-A 自己就是唯一设备，lastSeq 已到最新 → 墓碑立刻可清
+    // 还没拉过 → 还不能清（它确实还没拿到那次删除）
+    expect(h.replica.envelope.sync.purgedThroughSeq).toBe(0);
+    expect(h.replica.envelope.sync.tombstones).toHaveLength(1);
+
+    // 客户端拉一轮（带上自己的 deviceId，这样服务端才知道是谁拉到了哪）
+    const res = await get(h, '/v1/changes?since=0&deviceId=dev-A');
+    expect(res.status).toBe(200);
+
+    // 拉取路径自己会推进 lastSeq 并跑后置清理 —— 不需要手工补一刀
     expect(h.replica.envelope.sync.tombstones).toEqual([]);
     expect(h.replica.envelope.sync.purgedThroughSeq).toBeGreaterThan(0);
-    // 日志只留水位以上的，这里应该空
     expect(h.replica.envelope.sync.changes).toEqual([]);
   });
 });

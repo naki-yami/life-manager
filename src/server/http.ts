@@ -5,7 +5,7 @@
  * 而不是 404 —— 让客户端能看到「服务在、但这条路还没做」，而不是以为连错了地址。
  */
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { parseChangesQuery, readChanges, readSnapshot } from './changes.ts';
+import { parseChangesQuery, readChanges, readSnapshot, recordPullProgress } from './changes.ts';
 import { checkAuth, isPublicPath } from './auth.ts';
 import {
   isOriginAllowed,
@@ -166,7 +166,8 @@ export function createRequestHandler(context: RequestContext) {
         sendJson(res, 405, { error: 'method_not_allowed' });
         return;
       }
-      const page = readChanges(replica, parseChangesQuery(url.searchParams));
+      const query = parseChangesQuery(url.searchParams);
+      const page = readChanges(replica, query);
       if (page.needFullResync) {
         // 不是错误，是「你得走全量对账」—— 客户端据此去拉 /v1/snapshot。
         // 用 200 而不是 4xx：它是一次**成功**的协商结果，客户端要靠它做正常分支。
@@ -174,6 +175,24 @@ export function createRequestHandler(context: RequestContext) {
           `changes：since=${url.searchParams.get('since') ?? '0'} 不再可用` +
             `（设备 ${url.searchParams.get('deviceId') ?? '(未报)'}），要求全量对账`,
         );
+      } else {
+        /*
+         * 拉取成功才推进这台设备的 `lastSeq` —— 它是「日志与墓碑能裁到哪」的唯一依据。
+         * 放在这里（而不是 push）是因为只有拉取能说明「这台设备真的拿到了」；
+         * 推完就以为自己拉过了，会让它自己的变更被立刻裁掉、下次一条都拿不到。
+         */
+        recordPullProgress(replica, query.deviceId, page.nextSince);
+        try {
+          replica.save();
+          // 进度变了，顺手跑一次清理（与写入后同一套后置动作）：
+          // 一台只拉不推的设备也该让日志有机会被裁掉。
+          onAfterWrite?.();
+        } catch (error) {
+          // 进度没存下来不是致命错误：下次拉取会重报一次，只是裁剪晚一点
+          logger.warn(
+            `记录拉取进度失败：${error instanceof Error ? error.message : String(error)}`,
+          );
+        }
       }
       sendJson(res, 200, page);
       return;

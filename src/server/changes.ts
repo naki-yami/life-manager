@@ -55,6 +55,24 @@ export interface ChangesPage {
 }
 
 /**
+ * 记下这台设备拉到了哪。**只能由拉取路径调用** —— `lastSeq` 的语义是「拉到哪了」，
+ * 推送不代表拉取（push 只更新 `lastSeenAt`）。
+ *
+ * 这个字段是「日志与墓碑能裁到哪」的唯一依据：裁早了会让设备拉不到它还需要的东西，
+ * 裁晚了副本文件一直涨。所以只在一页**成功返回之后**推进，且只前进不后退。
+ */
+export function recordPullProgress(
+  replica: Replica,
+  deviceId: string | undefined,
+  pulledTo: number,
+): void {
+  if (!deviceId) return;
+  const device = replica.envelope.sync.devices.find((item) => item.deviceId === deviceId);
+  if (!device) return;
+  if (pulledTo > device.lastSeq) device.lastSeq = pulledTo;
+}
+
+/**
  * 取一页增量。
  *
  * 两条「要求全量对账」的分支，优先级都高于正常增量：

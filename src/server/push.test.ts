@@ -340,7 +340,16 @@ describe('版本守卫', () => {
 });
 
 describe('设备表', () => {
-  it('新设备被登记，lastSeenAt 与 lastSeq 都写上', () => {
+  /**
+   * **push 只更新 `lastSeenAt`，不碰 `lastSeq`。**
+   *
+   * `lastSeq` 的语义是「这台设备**拉**到哪里了」—— 推送与拉取是两件事。
+   * 早先 push 顺手把 `lastSeq` 推到当前 `seq`，后果是：一台刚推完、还没拉过的设备
+   * 被当成「已经全拉过了」，它自己的那些变更立刻被从日志里裁掉，
+   * 下次它来拉时 `since` 落在水位之前 → 被要求全量对账（数据没丢，但要多跑一趟，
+   * 而且单设备场景下等于每次推完自己的东西都拉不回来）。
+   */
+  it('新设备被登记，但 lastSeq 停在 0（还没拉过任何东西）', () => {
     const h = makeHarness();
 
     push(h, {
@@ -351,10 +360,11 @@ describe('设备表', () => {
     const device = h.replica.envelope.sync.devices.find((d) => d.deviceId === 'dev-A')!;
     expect(device).toBeDefined();
     expect(device.lastSeenAt).toBe('2026-10-03T00:00:00.000Z');
-    expect(device.lastSeq).toBe(1);
+    // 关键：推不等于拉
+    expect(device.lastSeq).toBe(0);
   });
 
-  it('同一设备再推不会重复登记，lastSeq 跟着 seq 走', () => {
+  it('同一设备再推不会重复登记，lastSeq 仍然不动', () => {
     const h = makeHarness();
     push(h, {
       deviceId: 'dev-A',
@@ -366,7 +376,7 @@ describe('设备表', () => {
     });
 
     expect(h.replica.envelope.sync.devices).toHaveLength(1);
-    expect(h.replica.envelope.sync.devices[0]!.lastSeq).toBe(2);
+    expect(h.replica.envelope.sync.devices[0]!.lastSeq).toBe(0);
   });
 
   it('两台设备各自一行', () => {

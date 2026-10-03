@@ -99,23 +99,40 @@ export interface PurgeResult {
 export interface PurgeOptions {
   /** 时钟可注入（与 `loadReplica` / `handlePush` 同一约定：传函数，不是 Date） */
   now?: () => Date;
-  /** 视为「已拉过」的设备序号表；缺省用副本里的 `devices` */
-  deviceAcks?: Array<{ deviceId: string; lastSeq: number }>;
 }
 
 /**
- * 清理墓碑，并顺手裁掉水位以下的变更日志。
+ * 安全水位：**所有「还需要增量」的设备都已经拉过的位置**。
+ *
+ * = 未休眠设备里 `lastSeq` 的最小值。低于它的日志条目与墓碑，不会再被任何设备需要：
+ * - 已拉过的设备不会再回头要；
+ * - 落后于它的设备一律被要求全量对账（见 `readChanges`），所以也不需要那些条目；
+ * - 休眠设备（> 90 天没出现）本来就走全量对账，**不该让它把水位钉死** ——
+ *   这正是「超 90 天」那条守卫的意义。
+ *
+ * 没有任何未休眠设备时返回当前 `seq`：没有别人需要这些条目了。
+ * （新设备第一次来必然是全量对账 —— 它本来就没有本地状态。）
+ */
+export function safeWatermark(
+  envelope: Replica['envelope'],
+  now: () => Date = () => new Date(),
+): number {
+  const active = envelope.sync.devices.filter((device) => !isDormant(device, now));
+  if (active.length === 0) return envelope.sync.seq;
+  return Math.min(...active.map((device) => device.lastSeq));
+}
+
+/**
+ * 清理墓碑、裁掉用不到的变更日志、推进水位。
  *
  * 两条守卫取先到者：
- * 1. **所有已注册设备都拉过 ≥ 该墓碑的 seq** —— 没人还需要它了；
- * 2. **超过 90 天** —— 防止一台永远不上线的设备把墓碑钉死。
+ * 1. **所有还需要增量的设备都拉过 ≥ 该墓碑的 seq**（即 `seq <= safeWatermark`）；
+ * 2. **墓碑本身超过 90 天** —— 防止一台永远不上线的设备把墓碑钉死。
  *
- * 同一个动作里把 `purgedThroughSeq` 推到这批墓碑里最大的 `seq`，并丢掉
- * `seq <= purgedThroughSeq` 的日志条目：水位以下不会再被谁消费（落后于水位的拉取
- * 一律被要求全量对账），留着只是让副本文件无界增长。
- *
- * **没有可清的东西时什么都不做** —— 否则每次同步都把水位往前推，会平白让一堆设备
- * 被要求全量对账。
+ * **日志的裁剪与墓碑无关**（这一点我一开始做错了，实测会无界增长）：
+ * 早先的实现在「没有墓碑可清」时直接返回，于是**只增不删**的用法（最常见的那种 ——
+ * 加的东西远多于删的）日志会一路涨到 `seq`，副本文件无界变大。现在裁剪由
+ * `safeWatermark` 独立驱动：只要设备都拉过了，那些条目就没用了，与有没有墓碑无关。
  */
 export function purgeTombstones(
   envelope: Replica['envelope'],
@@ -123,9 +140,7 @@ export function purgeTombstones(
 ): PurgeResult {
   const now = options.now ?? (() => new Date());
   const at = now();
-  const acks =
-    options.deviceAcks ??
-    envelope.sync.devices.map((d) => ({ deviceId: d.deviceId, lastSeq: d.lastSeq }));
+  const watermark = safeWatermark(envelope, now);
 
   const keep: Tombstone[] = [];
   let purged = 0;
@@ -135,9 +150,7 @@ export function purgeTombstones(
     const seq = tombstoneSeq(envelope, tombstone);
     const ageMs = at.getTime() - new Date(tombstone.deletedAt).getTime();
     const tooOld = Number.isFinite(ageMs) && ageMs > TOMBSTONE_MAX_AGE_DAYS * DAY_MS;
-    // 没有注册设备时「所有设备都拉过」是真空真 —— 但那意味着还没有第二台设备，
-    // 此时删掉的记录不需要墓碑（没有别人要知道），所以也允许清。
-    const everyoneAcked = acks.every((device) => device.lastSeq >= seq);
+    const everyoneAcked = seq <= watermark;
 
     if (tooOld || everyoneAcked) {
       purged += 1;
@@ -147,7 +160,13 @@ export function purgeTombstones(
     }
   }
 
-  if (purged === 0) {
+  // 水位取「已推进的」与「安全水位」里更高的那个：
+  // 前者可能因为一条老墓碑被推得更高（那台落后设备会被要求全量对账），
+  // 后者保证「只增不删」的用法也能持续裁日志。水位单调不减。
+  const nextWatermark = Math.max(highestPurgedSeq, watermark);
+  const watermarkMoved = nextWatermark > envelope.sync.purgedThroughSeq;
+
+  if (purged === 0 && !watermarkMoved) {
     return {
       purgedTombstones: 0,
       trimmedChanges: 0,
@@ -156,7 +175,7 @@ export function purgeTombstones(
   }
 
   envelope.sync.tombstones = keep;
-  envelope.sync.purgedThroughSeq = highestPurgedSeq;
+  envelope.sync.purgedThroughSeq = nextWatermark;
 
   // 裁日志：水位以下不会再被消费
   const before = envelope.sync.changes.length;

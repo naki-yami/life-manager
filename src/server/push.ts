@@ -467,15 +467,22 @@ export function handlePush(context: PushContext, request: PushRequest): PushResp
   /*
    * 设备表：只为**真的写进去过东西**的设备登记。
    *
-   * 为什么不能无条件登记：工单 05 的墓碑清理守卫是「**所有已注册设备**都拉过 ≥ 该墓碑的 seq」。
+   * 为什么不能无条件登记：墓碑清理守卫是「所有还需要增量的设备都拉过 ≥ 该墓碑的 seq」。
    * 一个整批都被拒、从没成功写过的设备如果被登记成「已注册」，它永远不会来拉，
    * 墓碑就永远清不掉 —— 一个拼错 deviceId 的客户端足以让墓碑无限堆积。
+   *
+   * **只更新 `lastSeenAt`，不碰 `lastSeq`。** 这是个容易搞错的地方：
+   * `lastSeq` 的语义是「这台设备**拉**到哪里了」，而 push 只说明它还活着。
+   * 早先这里顺手把 `lastSeq` 推到了当前 `seq`，后果是：
+   * 一台刚推完、还没拉过的设备被当成「已经全拉过了」→ 它自己的那些变更立刻被从日志里裁掉
+   * → 它下一次拉的时候**一条都拿不到**（`since` 落在水位之前，直接被要求全量对账）。
+   * 推送与拉取是两件事，进度只能由拉取来报。
    */
   const wroteSomething = results.some(
     (item) => item.outcome === 'applied' || item.outcome === 'conflict',
   );
   if (wroteSomething) {
-    touchDevice(envelope, request.deviceId, now(), envelope.sync.seq);
+    touchDevice(envelope, request.deviceId, now());
   }
 
   return { seq: envelope.sync.seq, conflicts, results };
@@ -501,19 +508,24 @@ function pushHistory(context: PushContext, entry: HistoryEntry): void {
   context.onHistory?.(entry);
 }
 
-/** 设备表：没有就登记，有就更新 `lastSeenAt`。`lastSeq` 由调用方在整批处理后写。 */
-/** 设备表：没有就登记，有就更新 `lastSeenAt` 与 `lastSeq`（都取整批处理后的 seq）。 */
-function touchDevice(envelope: Replica['envelope'], deviceId: string, at: Date, seq: number): void {
+/**
+ * 设备表：没有就登记，有就更新 `lastSeenAt`。
+ *
+ * **`lastSeq` 不在这里动** —— 它的语义是「拉到哪了」，只能由拉取路径（`/v1/changes`）
+ * 来报。push 只说明这台设备还活着。早先把两者混在一起，
+ * 会导致「刚推完还没拉过的设备被当成已拉过」，它自己的变更立刻被裁掉、下次一条都拉不到。
+ */
+function touchDevice(envelope: Replica['envelope'], deviceId: string, at: Date): void {
   const existing = envelope.sync.devices.find((item) => item.deviceId === deviceId);
   if (existing) {
     existing.lastSeenAt = at.toISOString();
-    existing.lastSeq = seq;
     return;
   }
   envelope.sync.devices.push({
     deviceId,
     label: '',
     lastSeenAt: at.toISOString(),
-    lastSeq: seq,
+    // 新设备还没拉过任何东西
+    lastSeq: 0,
   });
 }
