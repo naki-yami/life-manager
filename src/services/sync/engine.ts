@@ -99,6 +99,8 @@ interface PushResponse {
     outcome: 'applied' | 'noop' | 'conflict' | 'rejected';
     rev: number;
     error?: string;
+    /** 仅 `conflict`：被覆盖的那一份自己的时间戳（服务端从记录里取的） */
+    replacedAt?: string;
   }>;
   conflicts: number;
 }
@@ -362,15 +364,17 @@ async function pushChanges(
 
     if (result.outcome !== 'conflict') continue;
 
-    // 冲突条目：模块 + 条目标题 + 服务端那一份的时间（取本机这份的字段做标题）
+    // 冲突条目：模块 + 条目标题 + **被覆盖的那一份**的时间
     const local = changes.find(
       (change) => change.module === result.module && change.key === result.key,
     );
     conflicts.push({
       module: result.module,
       key: result.key,
+      // 标题取本机这份的（用户认得出是哪条）；服务端那份的时间取服务端给的 ——
+      // 早先这里恒为 `''`，于是 spec 说的「服务端那份的时间」**永远不会显示**。
       title: recordTitle(local?.record, result.key),
-      serverUpdatedAt: '',
+      serverUpdatedAt: result.replacedAt ?? '',
     });
   }
 

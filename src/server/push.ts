@@ -62,6 +62,14 @@ export interface ChangeResult {
   rev: number;
   /** 仅 `rejected` 时有值：为什么拒 */
   error?: string;
+  /**
+   * 仅 `conflict` 时有值：**被覆盖的那一份**自己的时间戳。
+   *
+   * 客户端那行冲突提示要显示「服务端那份是什么时候的」，用户才知道自己覆盖掉的是新的还是旧的。
+   * 取记录里最像时间的字段（各模块普遍有 `updatedAt` / `createdAt`）；
+   * 取不到就是空串，界面上那一行会省略 —— 好过编一个时间出来。
+   */
+  replacedAt?: string;
 }
 
 export interface PushResponse {
@@ -363,6 +371,7 @@ export function handlePush(context: PushContext, request: PushRequest): PushResp
         key: change.key,
         outcome: deleteConflict ? 'conflict' : 'applied',
         rev: rev + 1,
+        ...(deleteConflict ? { replacedAt: recordTimestamp(existing) } : {}),
       });
       continue;
     }
@@ -423,12 +432,13 @@ export function handlePush(context: PushContext, request: PushRequest): PushResp
 
     const isConflict = existing !== null && baseRev < rev;
     if (isConflict) {
+      const replacedAt = now().toISOString();
       pushHistory(context, {
         module: change.module,
         key: change.key,
         rev,
         record: existing,
-        replacedAt: now().toISOString(),
+        replacedAt,
         reason: 'conflict',
       });
       conflicts += 1;
@@ -461,6 +471,8 @@ export function handlePush(context: PushContext, request: PushRequest): PushResp
       key: change.key,
       outcome: isConflict ? 'conflict' : 'applied',
       rev: rev + 1,
+      // 冲突时告诉客户端「被你覆盖的那一份是什么时候的」
+      ...(isConflict ? { replacedAt: recordTimestamp(existing) } : {}),
     });
   }
 
@@ -491,6 +503,30 @@ export function handlePush(context: PushContext, request: PushRequest): PushResp
 function currentRev(revTable: Record<string, number>, module: string, key: string): number {
   const value = revTable[revKey(module, key)];
   return typeof value === 'number' ? value : 0;
+}
+
+/**
+ * 从一条记录里取出「它是什么时候的」，给冲突提示用。
+ *
+ * 各模块普遍有 `updatedAt`（改过）或 `createdAt`（新建），没有统一字段 ——
+ * 服务端不该为此规定死一个（那是客户端数据模型的自由）。所以按优先级找一个像时间的字符串：
+ * `updatedAt` → `createdAt` → `deletedAt` → 任何看起来是 ISO 时间的字符串字段。
+ *
+ * 取不到就返回空串，**不编一个时间出来** —— 界面上那一行会省略时间，
+ * 比显示一个假的「刚刚」诚实。keyed 模块（饮水那样的裸数字、目标那样的单值对象）
+ * 本来就没有时间字段，返回空串是正常结果。
+ */
+function recordTimestamp(record: Record<string, unknown> | null): string {
+  if (record === null) return '';
+  for (const field of ['updatedAt', 'createdAt', 'deletedAt', 'at', 'date']) {
+    const value = record[field];
+    if (typeof value === 'string' && value !== '') return value;
+  }
+  // 兜底：任何形如 ISO 时间的值（客户端自定义字段）
+  for (const value of Object.values(record)) {
+    if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(value)) return value;
+  }
+  return '';
 }
 
 /**
