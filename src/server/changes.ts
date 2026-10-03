@@ -8,6 +8,7 @@
  * 且返回的 `nextSince` 永远是这一页最后一条的 `seq`（不是「请求的 since + 页大小」）。
  */
 import type { ChangeEntry, Replica } from './replica.ts';
+import { deviceNeedsFullResync } from './tombstones.ts';
 
 /** 一页最多给多少条。客户端可以传更小的值，但服务端有上限。 */
 export const DEFAULT_LIMIT = 500;
@@ -18,9 +19,11 @@ export interface ChangesQuery {
   since: number;
   /** 本页最多几条 */
   limit: number;
+  /** 发起这次拉取的设备（可选）。给了就顺带检查它是不是休眠太久 */
+  deviceId?: string;
 }
 
-/** 从查询串里解析 `since` / `limit`，非法值退回默认而不是报错（探针与手测更省事）。 */
+/** 从查询串里解析 `since` / `limit` / `deviceId`，非法值退回默认而不是报错。 */
 export function parseChangesQuery(params: URLSearchParams): ChangesQuery {
   const rawSince = Number(params.get('since') ?? '0');
   const rawLimit = Number(params.get('limit') ?? String(DEFAULT_LIMIT));
@@ -29,7 +32,8 @@ export function parseChangesQuery(params: URLSearchParams): ChangesQuery {
     Number.isFinite(rawLimit) && rawLimit > 0
       ? Math.min(Math.floor(rawLimit), MAX_LIMIT)
       : DEFAULT_LIMIT;
-  return { since, limit };
+  const deviceId = params.get('deviceId');
+  return deviceId ? { since, limit, deviceId } : { since, limit };
 }
 
 export interface ChangesPage {
@@ -53,13 +57,26 @@ export interface ChangesPage {
 /**
  * 取一页增量。
  *
- * 水位判定优先于一切：`since < purgedThroughSeq` 时**不返回任何变更**，
- * 只回 `needFullResync`（工单 05 的定案：保留水位而不是让墓碑永不删）。
+ * 两条「要求全量对账」的分支，优先级都高于正常增量：
+ * 1. `since < purgedThroughSeq` —— 那段 `seq` 里的墓碑已被清掉，增量已经不完整；
+ * 2. 发起设备**休眠太久**（> 90 天没出现）—— 它本地可能留着早该删的记录，
+ *    而对应的墓碑早被清了，给增量它只会把旧数据复活。
+ *
+ * 两条都**不能只是返回空数组**：空数组与「你已经是最新的」无法区分。
  */
-export function readChanges(replica: Replica, query: ChangesQuery): ChangesPage {
+export function readChanges(
+  replica: Replica,
+  query: ChangesQuery,
+  now: () => Date = () => new Date(),
+): ChangesPage {
   const { sync } = replica.envelope;
 
-  if (query.since < sync.purgedThroughSeq) {
+  const belowWatermark = query.since < sync.purgedThroughSeq;
+  const dormant = query.deviceId
+    ? deviceNeedsFullResync(replica.envelope, query.deviceId, now)
+    : false;
+
+  if (belowWatermark || dormant) {
     return {
       changes: [],
       more: false,

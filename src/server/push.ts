@@ -27,6 +27,7 @@ import {
   type Replica,
   type ReplicaError,
 } from './replica.ts';
+import { clearTombstone, recordTombstone } from './tombstones.ts';
 
 /**
  * 一次改动。`record` 在 `op: 'delete'` 时可以不带（墓碑归工单 05）。
@@ -345,6 +346,18 @@ export function handlePush(context: PushContext, request: PushRequest): PushResp
         rev: rev + 1,
         op: 'delete',
       });
+      /*
+       * 记墓碑，让删除能传到**还没拉过这次删除**的设备。
+       *
+       * 不记的话：B 端本地还留着那条记录，它下次推上来时 `baseRev` 已经落后，
+       * 会走 LWW 把记录「复活」—— 用户会看到删掉的东西自己回来了。
+       *
+       * keyed 模块（饮水 / 目标）**不记墓碑**：它们是记录内部的映射或模块单值，
+       * 一次删除只是该单元的字段变更（spec 定死）。
+       */
+      if (!keyed) {
+        recordTombstone(envelope, change.module, change.key, rev + 1, now());
+      }
       results.push({
         module: change.module,
         key: change.key,
@@ -436,6 +449,13 @@ export function handlePush(context: PushContext, request: PushRequest): PushResp
       op: 'put',
       record: incoming,
     });
+    /*
+     * 这条记录又被写回来了 → 它的墓碑必须撤掉。
+     *
+     * 「晚到的写能复活已删记录」是 LWW 的固有语义（spec 明说不是 bug），但墓碑如果留着，
+     * 下次清理时会把它当成「已删」继续传播，客户端刚写回来的东西又会被当成该删的。
+     */
+    if (!keyed) clearTombstone(envelope, change.module, change.key);
     results.push({
       module: change.module,
       key: change.key,

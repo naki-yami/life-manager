@@ -28,6 +28,11 @@ export interface RequestContext {
   logger: Logger;
   /** 副本（工单 02 起有）。`/v1/health` 与 `/v1/push` 都从它读实时状态。 */
   replica: Replica;
+  /**
+   * 一次成功落盘之后的钩子。工单 05 用它清墓碑（清理只在有新写入时才可能有效果）。
+   * 失败了不影响这次写入的结果，所以调用方要自己把它包进 try/catch。
+   */
+  onAfterWrite?: () => void;
 }
 
 /** 读请求体，超过上限就中止。 */
@@ -97,7 +102,7 @@ function parseRequestUrl(rawUrl: string | undefined): URL | null {
 }
 
 export function createRequestHandler(context: RequestContext) {
-  const { config, logger, replica } = context;
+  const { config, logger, replica, onAfterWrite } = context;
 
   return function handle(req: IncomingMessage, res: ServerResponse): void {
     const url = parseRequestUrl(req.url);
@@ -151,10 +156,10 @@ export function createRequestHandler(context: RequestContext) {
       const page = readChanges(replica, parseChangesQuery(url.searchParams));
       if (page.needFullResync) {
         // 不是错误，是「你得走全量对账」—— 客户端据此去拉 /v1/snapshot。
-        // 用 200 而不是 409：它是一次**成功**的协商结果，客户端要靠它做正常分支。
+        // 用 200 而不是 4xx：它是一次**成功**的协商结果，客户端要靠它做正常分支。
         logger.warn(
-          `changes：since=${url.searchParams.get('since')} 落在水位 ` +
-            `${page.purgedThroughSeq} 之前，要求全量对账`,
+          `changes：since=${url.searchParams.get('since') ?? '0'} 不再可用` +
+            `（设备 ${url.searchParams.get('deviceId') ?? '(未报)'}），要求全量对账`,
         );
       }
       sendJson(res, 200, page);
@@ -215,6 +220,8 @@ export function createRequestHandler(context: RequestContext) {
               sendJson(res, 500, { error: 'replica_write_failed' });
               return;
             }
+            // 落盘成功之后才做后置动作（例如清墓碑）—— 顺序反了会把没存下来的改动算进去
+            onAfterWrite?.();
           }
           logger.info(
             `push from ${(body as PushRequest).deviceId}：${result.results.length} 条，` +

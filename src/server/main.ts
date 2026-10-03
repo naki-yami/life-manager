@@ -16,6 +16,7 @@ import { loadOrCreateConfig, ensureDirectories, DEFAULT_HOST } from './config.ts
 import { createLogger, type Logger } from './logger.ts';
 import { createRequestHandler } from './http.ts';
 import { loadReplica } from './replica.ts';
+import { purgeTombstones } from './tombstones.ts';
 
 /** Windows 上 `127.0.0.1` 是回环；`0.0.0.0` / `::` 是「所有网卡」，等于把服务暴露到局域网。 */
 function isLoopbackHost(host: string): boolean {
@@ -96,7 +97,34 @@ export function startServer(options: { configPath?: string; logger?: Logger } = 
   if (replicaCreated) log.info('已新建空副本');
   log.info(`副本就绪：seq=${replica.envelope.sync.seq}`);
 
-  const handler = createRequestHandler({ config, logger: log, replica });
+  /*
+   * 每次 push 之后顺手清墓碑（工单 05）。
+   *
+   * 放在 push 之后而不是定时任务里：墓碑只在「又有设备动过」时才可能变得可清
+   * （要么所有设备都拉过了、要么超了 90 天），没有写入时清理不会改变结果。
+   * 清理动作本身很便宜（遍历几十条），且只在真有可清的东西时才推水位。
+   */
+  const purgeAfterWrite = (): void => {
+    try {
+      const result = purgeTombstones(replica.envelope);
+      if (result.purgedTombstones > 0) {
+        log.info(
+          `清理墓碑 ${result.purgedTombstones} 条，裁掉变更日志 ${result.trimmedChanges} 条，` +
+            `水位推到 ${result.purgedThroughSeq}`,
+        );
+      }
+    } catch (error) {
+      // 清理失败不该影响这次写入的结果
+      log.warn(`清理墓碑失败：${error instanceof Error ? error.message : String(error)}`);
+    }
+  };
+
+  const handler = createRequestHandler({
+    config,
+    logger: log,
+    replica,
+    onAfterWrite: purgeAfterWrite,
+  });
 
   const server = createServer((req, res) => {
     // 兜底：处理器里任何漏网的异常都不该打死进程。按 ADR-0002 这个服务是无人值守跑在

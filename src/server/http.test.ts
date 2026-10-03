@@ -24,6 +24,7 @@ import { createLogger, type Logger } from './logger';
 import { createRequestHandler } from './http';
 import { loadReplica, REPLICA_FILE, type Replica } from './replica';
 import { backupDataSchema } from '../services/schemas';
+import { purgeTombstones } from './tombstones';
 
 const TOKEN = 'f'.repeat(64);
 
@@ -66,7 +67,15 @@ async function startHarness(overrides: Partial<ServerConfig> = {}): Promise<Harn
     dataDir: config.dataDir,
     now: () => new Date('2026-10-03T00:00:00.000Z'),
   });
-  const handler = createRequestHandler({ config, logger, replica });
+  // 与 main.ts 一样接上后置清理（工单 05），否则 HTTP 层测不到墓碑被清
+  const handler = createRequestHandler({
+    config,
+    logger,
+    replica,
+    onAfterWrite: () => {
+      purgeTombstones(replica.envelope, { now: () => new Date('2026-10-03T00:00:00.000Z') });
+    },
+  });
 
   const server = createServer(handler);
   openServers.push(server);
@@ -626,5 +635,106 @@ describe('GET /v1/changes 与 /v1/snapshot', () => {
     const body = (await res.json()) as { needFullResync: boolean; changes: unknown[] };
     expect(body.needFullResync).toBe(true);
     expect(body.changes).toEqual([]);
+  });
+});
+
+/** 墓碑端到端（工单 05）：A 删 → B 拉到 delete。 */
+describe('删除的传播与清理', () => {
+  const post = (h: Harness, body: unknown) =>
+    fetch(`${h.base}/v1/push`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  const get = (h: Harness, path: string) =>
+    fetch(`${h.base}${path}`, { headers: { Authorization: `Bearer ${TOKEN}` } });
+
+  it('A 写 → A 删 → 还落后的 B 能从 since 拉到那条 delete', async () => {
+    const h = await startHarness();
+    /*
+     * 先让 dev-B 注册并停在 seq 1。
+     *
+     * 没有第二台设备的话，A 一删就自己把墓碑清掉了 —— 只有一台设备时确实不需要墓碑
+     * （没有别人要知道），所以那个场景测不出「删除被传出去」。
+     */
+    await post(h, {
+      deviceId: 'dev-B',
+      changes: [{ module: 'tasks', key: 'other', baseRev: 0, op: 'put', record: { id: 'other' } }],
+    });
+    h.replica.envelope.sync.devices.find((d) => d.deviceId === 'dev-B')!.lastSeq = 1;
+
+    await post(h, {
+      deviceId: 'dev-A',
+      changes: [
+        { module: 'tasks', key: 't1', baseRev: 0, op: 'put', record: { id: 't1', title: 'x' } },
+      ],
+    });
+    // A 自己也停在 1，这样它删的时候仍有一台设备（B）没拉过 → 墓碑留着
+    h.replica.envelope.sync.devices.find((d) => d.deviceId === 'dev-A')!.lastSeq = 1;
+    await post(h, {
+      deviceId: 'dev-A',
+      changes: [{ module: 'tasks', key: 't1', baseRev: 1, op: 'delete' }],
+    });
+
+    const body = (await (await get(h, '/v1/changes?since=1')).json()) as {
+      changes: Array<{ op: string; key: string; record?: unknown }>;
+    };
+    const del = body.changes.find((c) => c.op === 'delete')!;
+
+    expect(del).toBeDefined();
+    expect(del.key).toBe('t1');
+    // 墓碑不带 record（客户端按 key 删本地那份）
+    expect(del.record).toBeUndefined();
+    // B 还没拉过 → 墓碑必须留着
+    expect(h.replica.envelope.sync.tombstones).toHaveLength(1);
+  });
+
+  it('删完之后推回来 → 墓碑被撤掉', async () => {
+    const h = await startHarness();
+    await post(h, {
+      deviceId: 'dev-A',
+      changes: [
+        { module: 'tasks', key: 't1', baseRev: 0, op: 'put', record: { id: 't1', title: 'x' } },
+      ],
+    });
+    await post(h, {
+      deviceId: 'dev-A',
+      changes: [{ module: 'tasks', key: 't1', baseRev: 1, op: 'delete' }],
+    });
+    await post(h, {
+      deviceId: 'dev-A',
+      changes: [
+        {
+          module: 'tasks',
+          key: 't1',
+          baseRev: 2,
+          op: 'put',
+          record: { id: 't1', title: '回来了' },
+        },
+      ],
+    });
+
+    expect(h.replica.envelope.sync.tombstones).toEqual([]);
+  });
+
+  it('单台设备自己删的，下一次 push 之后墓碑被清、水位前移、日志变短', async () => {
+    const h = await startHarness();
+    await post(h, {
+      deviceId: 'dev-A',
+      changes: [
+        { module: 'tasks', key: 't1', baseRev: 0, op: 'put', record: { id: 't1', title: 'x' } },
+      ],
+    });
+    // 这次删除自己会触发后置清理
+    await post(h, {
+      deviceId: 'dev-A',
+      changes: [{ module: 'tasks', key: 't1', baseRev: 1, op: 'delete' }],
+    });
+
+    // dev-A 自己就是唯一设备，lastSeq 已到最新 → 墓碑立刻可清
+    expect(h.replica.envelope.sync.tombstones).toEqual([]);
+    expect(h.replica.envelope.sync.purgedThroughSeq).toBeGreaterThan(0);
+    // 日志只留水位以上的，这里应该空
+    expect(h.replica.envelope.sync.changes).toEqual([]);
   });
 });
