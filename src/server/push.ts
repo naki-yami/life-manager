@@ -17,10 +17,12 @@
 import { SYNC_MODULES } from './config.ts';
 import {
   checkSchemaVersion,
+  DEFAULT_DIET_GOALS,
   DIET_GOALS_KEY,
   isKeyedModule,
   revKey,
   validateRecord,
+  type ModuleValue,
   type Replica,
   type ReplicaError,
 } from './replica.ts';
@@ -148,39 +150,92 @@ function sameValue(a: unknown, b: unknown): boolean {
 }
 
 /**
- * keyed 模块在 `data` 段里怎么存。
+ * keyed 模块在 `data` 段里的读写。
  *
- * 记录类模块存记录本身（identity 在 `id` 里）；keyed 模块的值里**没有身份信息**
- * （饮水是 `{glasses: 8}`、目标是 `{calories, protein}`），所以存的时候把 key 一并带上 ——
- * 否则从副本里读不回来「这 8 杯是哪一天的」。`rev` 表也按同一个 key 记账，两处一致。
+ * 它们**按客户端形状存**：
+ * - `dietWater` 是扁平映射 `{ '2026-10-02': 8 }`（**值是数字，不是 `{glasses: 8}`** ——
+ *   客户端 `dietStore.water` 就是 `Record<string, number>`，包一层对象会让
+ *   客户端 `sanitizeWater` 把每个键都当脏值剔掉，结果**静默变成空**）。
+ * - `dietGoals` 是模块单值 `{ calories, protein }`。
+ *
+ * 不存「带 key 的单元数组」的理由见 `replica.ts` 的 `ModuleValue` 注释：副本要能直接当备份导入、
+ * 直接当 snapshot 落库，多一层形状就得让每个消费方都记得还原一次，漏一处就是又一次「静默变空」。
+ * 身份由 `rev` 表的 key 承载（`dietWater:2026-10-02`），不需要塞进值里。
  */
-function incomingForStore(
+function readKeyed(module: string, data: Record<string, ModuleValue>): Record<string, unknown> {
+  const value = data[module];
+  return isPlainObject(value) ? value : {};
+}
+
+/** 读出 keyed 模块里某个 key 的当前值（幂等比较与历史用）。没有就返回 null。 */
+function getKeyed(
+  module: string,
+  key: string,
+  data: Record<string, ModuleValue>,
+): Record<string, unknown> | null {
+  const holder = readKeyed(module, data);
+  if (module === DIET_GOALS_KEY) return Object.keys(holder).length > 0 ? holder : null;
+  // 饮水的值是裸数字，不是对象 —— 直接取出来当「这条记录」参与比较
+  return key in holder ? ({ [key]: holder[key] } as Record<string, unknown>) : null;
+}
+
+/** 写一个 keyed 值：目标是整块替换（模块单值），饮水是按日期设一个键（值是数字）。 */
+function setKeyed(
+  module: string,
+  key: string,
+  record: Record<string, unknown>,
+  data: Record<string, ModuleValue>,
+): void {
+  if (module === DIET_GOALS_KEY) {
+    data[module] = { ...record };
+    return;
+  }
+  const holder = readKeyed(module, data);
+  holder[key] = waterValueOf(key, record);
+  data[module] = holder;
+}
+
+/**
+ * 从客户端推来的 record 里取出那天的杯数。
+ *
+ * 客户端形状是 `date -> 数字`，所以进来的 record 通常是单键对象 `{ '2026-10-02': 8 }`；
+ * 也接受直接给数字、或给 `{glasses: 8}`（旧实现的形状）—— 三种都归一成数字。
+ * **不归一的话**：存成对象会被客户端 `sanitizeWater` 当成脏值剔掉，用户的饮水**静默变空**。
+ */
+function waterValueOf(key: string, record: Record<string, unknown>): unknown {
+  const direct = record[key];
+  if (typeof direct === 'number') return direct;
+  const glasses = record.glasses;
+  if (typeof glasses === 'number') return glasses;
+  const values = Object.values(record);
+  return values.length === 1 ? values[0] : direct;
+}
+
+/** 归一成「与 `existing` 可比」的形状（饮水那边 existing 是 `{date: 8}`）。 */
+function normaliseForCompare(
   keyed: boolean,
   key: string,
   record: Record<string, unknown>,
 ): Record<string, unknown> {
-  return keyed ? { ...record, key } : record;
+  if (!keyed) return record;
+  if (key === DIET_GOALS_KEY) return record;
+  return { [key]: waterValueOf(key, record) };
 }
 
-/** 在当前模块数组里找一条记录的下标。 */
+/** 删一个 keyed 值：目标删掉等于回到默认目标（spec：整块替换、不产生 delete）。 */
+function deleteKeyed(module: string, key: string, data: Record<string, ModuleValue>): void {
+  if (module === DIET_GOALS_KEY) {
+    data[module] = { ...DEFAULT_DIET_GOALS };
+    return;
+  }
+  const holder = readKeyed(module, data);
+  delete holder[key];
+  data[module] = holder;
+}
+
+/** 在当前模块数组里找一条记录的下标（记录类模块用）。 */
 function indexOfRecord(records: Array<Record<string, unknown>>, key: string): number {
   return records.findIndex((record) => record.id === key);
-}
-
-/**
- * keyed 模块（饮水 / 目标）在 `data` 段里不是「一条条记录」，而是自带 `key` 的单元。
- * 找法因此与记录类不同。
- */
-function indexOfKeyed(
-  records: Array<Record<string, unknown>>,
-  module: string,
-  key: string,
-): number {
-  if (module === DIET_GOALS_KEY) {
-    // 模块单值：整个模块只有一项
-    return records.findIndex((record) => record.key === key || records.length === 1);
-  }
-  return records.findIndex((record) => record.key === key);
 }
 
 /** keyed 模块的 key 拼法（spec 定死）：目标固定用模块名，饮水必须是日期串。 */
@@ -243,13 +298,15 @@ export function handlePush(context: PushContext, request: PushRequest): PushResp
       continue;
     }
 
-    const records = envelope.data[change.module]!;
     const keyed = isKeyedModule(change.module);
-    // 记录类模块按 `id` 找；饮水（日期键）与目标（模块单值）按各自定的 key 找
-    const index = keyed
-      ? indexOfKeyed(records, change.module, change.key)
-      : indexOfRecord(records, change.key);
-    const existing = index >= 0 ? records[index]! : null;
+    // 记录类模块在数组里按 `id` 找；keyed 模块（饮水按日期、目标整块）按各自的 key 取
+    const records = keyed ? null : (envelope.data[change.module] as Array<Record<string, unknown>>);
+    const index = records === null ? -1 : indexOfRecord(records, change.key);
+    const existing = keyed
+      ? getKeyed(change.module, change.key, envelope.data)
+      : index >= 0
+        ? records![index]!
+        : null;
     const rev = typeof envelope.sync.rev[key] === 'number' ? envelope.sync.rev[key]! : 0;
 
     if (change.op === 'delete') {
@@ -278,7 +335,8 @@ export function handlePush(context: PushContext, request: PushRequest): PushResp
         reason: deleteConflict ? 'conflict' : 'overwritten',
       });
       if (deleteConflict) conflicts += 1;
-      records.splice(index, 1);
+      if (keyed) deleteKeyed(change.module, change.key, envelope.data);
+      else records!.splice(index, 1);
       envelope.sync.rev[key] = rev + 1;
       envelope.sync.seq += 1;
       results.push({
@@ -334,8 +392,12 @@ export function handlePush(context: PushContext, request: PushRequest): PushResp
     }
 
     // 幂等：内容完全一致 → noop。不产生新 rev、不写历史、seq 不变。
-    // keyed 模块存的是「带 key 的单元」，所以比对时要拿同一形状比，否则永远不相等。
-    if (existing !== null && sameContent(existing, incomingForStore(keyed, change.key, incoming))) {
+    // keyed 模块要比「归一化之后」的形状：饮水的客户端形状是裸数字（`{date: 8}`），
+    // 而 existing 是 `{date: 8}`、incoming 可能是 `{glasses: 8}` 之类 —— 先各自归一再比。
+    if (
+      existing !== null &&
+      sameContent(existing, normaliseForCompare(keyed, change.key, incoming))
+    ) {
       results.push({ module: change.module, key: change.key, outcome: 'noop', rev });
       continue;
     }
@@ -353,9 +415,13 @@ export function handlePush(context: PushContext, request: PushRequest): PushResp
       conflicts += 1;
     }
 
-    const stored = incomingForStore(keyed, change.key, incoming);
-    if (index >= 0) records[index] = stored;
-    else records.push(stored);
+    if (keyed) {
+      setKeyed(change.module, change.key, incoming, envelope.data);
+    } else if (index >= 0) {
+      records![index] = incoming;
+    } else {
+      records!.push(incoming);
+    }
     envelope.sync.rev[key] = rev + 1;
     envelope.sync.seq += 1;
     results.push({

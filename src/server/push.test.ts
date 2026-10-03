@@ -462,17 +462,37 @@ describe('baseRev 缺失时的归一', () => {
  * **每一次**推饮水/目标都被拒 —— 而且因为「不在册」不报错的路径不同，表现会很迷惑。
  */
 describe('饮水与目标这两个 keyed 模块', () => {
-  it('推饮水：key 是日期串，记录里没有 id 也能进', () => {
+  it('推饮水：key 是日期串，值是裸数字（客户端形状），没有 id 也能进', () => {
     const h = makeHarness();
 
     const result = push(h, {
       changes: [
-        { module: 'dietWater', key: '2026-10-02', baseRev: 0, op: 'put', record: { glasses: 8 } },
+        {
+          module: 'dietWater',
+          key: '2026-10-02',
+          baseRev: 0,
+          op: 'put',
+          record: { '2026-10-02': 8 },
+        },
       ],
     });
 
     expect(result.results[0]!.outcome).toBe('applied');
-    expect(h.replica.envelope.data.dietWater).toEqual([{ glasses: 8, key: '2026-10-02' }]);
+    // **按客户端形状存**：扁平的 date -> 数字（dietStore.water 是 Record<string, number>）。
+    // 包一层 { glasses: 8 } 会被客户端 sanitizeWater 当脏值剔掉 —— 用户的饮水静默变空。
+    expect(h.replica.envelope.data.dietWater).toEqual({ '2026-10-02': 8 });
+  });
+
+  it('客户端给 { glasses } 这种旧写法也收（归一成数字）', () => {
+    const h = makeHarness();
+
+    push(h, {
+      changes: [
+        { module: 'dietWater', key: '2026-10-03', baseRev: 0, op: 'put', record: { glasses: 5 } },
+      ],
+    });
+
+    expect(h.replica.envelope.data.dietWater).toEqual({ '2026-10-03': 5 });
   });
 
   it('推目标：key 固定为模块名，记录里没有 id 也能进', () => {
@@ -491,9 +511,11 @@ describe('饮水与目标这两个 keyed 模块', () => {
     });
 
     expect(result.results[0]!.outcome).toBe('applied');
+    // **单值对象**，不是数组 —— 与客户端 dietGoalsSchema（z.object）一致
+    expect(h.replica.envelope.data.dietGoals).toEqual({ calories: 2100, protein: 120 });
   });
 
-  it('饮水按日期各自成单元，互不覆盖', () => {
+  it('饮水按日期各占一个键，互不覆盖', () => {
     const h = makeHarness();
     push(h, {
       changes: [
@@ -502,7 +524,10 @@ describe('饮水与目标这两个 keyed 模块', () => {
       ],
     });
 
-    expect(h.replica.envelope.data.dietWater).toHaveLength(2);
+    expect(h.replica.envelope.data.dietWater).toEqual({
+      '2026-10-01': 8,
+      '2026-10-02': 6,
+    });
     expect(h.replica.envelope.sync.rev[revKey('dietWater', '2026-10-01')]).toBe(1);
     expect(h.replica.envelope.sync.rev[revKey('dietWater', '2026-10-02')]).toBe(1);
   });
@@ -522,10 +547,10 @@ describe('饮水与目标这两个 keyed 模块', () => {
 
     expect(second.results[0]!.outcome).toBe('noop');
     expect(second.seq).toBe(1);
-    expect(h.replica.envelope.data.dietWater).toHaveLength(1);
+    expect(h.replica.envelope.data.dietWater).toEqual({ '2026-10-02': 8 });
   });
 
-  it('饮水的 key 不是日期串 → 拒（否则副本里会堆出幽灵单元）', () => {
+  it('饮水的 key 不是日期串 → 拒（否则副本里会堆出幽灵键）', () => {
     const h = makeHarness();
 
     const result = push(h, {
@@ -536,7 +561,7 @@ describe('饮水与目标这两个 keyed 模块', () => {
 
     expect(result.results[0]!.outcome).toBe('rejected');
     expect(result.results[0]!.error).toContain('日期串');
-    expect(h.replica.envelope.data.dietWater).toEqual([]);
+    expect(h.replica.envelope.data.dietWater).toEqual({});
   });
 
   it('目标的 key 不是模块名 → 拒', () => {

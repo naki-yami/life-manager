@@ -57,11 +57,24 @@ export interface SyncMeta {
   devices: DeviceRecord[];
 }
 
+/**
+ * `data` 段里一个模块的值。
+ *
+ * 绝大多数模块是**记录数组**；两个 keyed 模块不是（见 `KEYED_MODULES`）：
+ * `dietWater` 是「日期 → 杯数」的映射、`dietGoals` 是模块单值对象。
+ *
+ * 这个形状**刻意与客户端备份一致** —— 副本要能直接当备份导入，也要能直接当 `/v1/snapshot`
+ * 的响应落库。若把 keyed 模块存成「带 key 的单元数组」，restore、全量对账、snapshot 导入、
+ * 以及工单 07 那个用户拿来做应急备份的 mirror 文件，每一处都得记得还原一次形状，
+ * 漏一处就是又一次「静默变空」。
+ */
+export type ModuleValue = Array<Record<string, unknown>> | Record<string, unknown>;
+
 export interface ReplicaEnvelope {
   app: string;
   schemaVersion: number;
   exportedAt: string;
-  data: Record<string, Array<Record<string, unknown>>>;
+  data: Record<string, ModuleValue>;
   sync: SyncMeta;
 }
 
@@ -147,10 +160,15 @@ export const nodeFs: FsAdapter = {
   readdir: (path) => readdirSync(path).map(String),
 };
 
-/** 空副本：`seq = 0`，`data` 段每个模块都是空数组，一个不多一个不少。 */
+/**
+ * 空副本：`seq = 0`，`data` 段每个模块都在，一个不多一个不少。
+ *
+ * 记录类模块是空数组，keyed 模块按客户端形状给空值（饮水是空映射、目标是默认目标）——
+ * 「空」也要是**客户端认得的形状**，否则一份空副本导回去仍然会在那两个模块上报错。
+ */
 export function emptyReplica(now: Date = new Date()): ReplicaEnvelope {
-  const data: Record<string, Array<Record<string, unknown>>> = {};
-  for (const module of SYNC_MODULES) data[module] = [];
+  const data: Record<string, ModuleValue> = {};
+  for (const module of SYNC_MODULES) data[module] = emptyModuleValue(module);
   return {
     app: 'life-manager',
     schemaVersion: SERVER_SCHEMA_VERSION,
@@ -158,6 +176,59 @@ export function emptyReplica(now: Date = new Date()): ReplicaEnvelope {
     data,
     sync: { seq: 0, purgedThroughSeq: 0, rev: {}, tombstones: [], devices: [] },
   };
+}
+
+/**
+ * 每日饮食目标的默认值。与客户端 `src/utils/diet.ts` 的 `DEFAULT_DIET_GOALS` **必须一致**
+ * （服务端不能 import 它，见文件头）；`schemas-parity.test.ts` 会断言两者相等，防漂移。
+ */
+export const DEFAULT_DIET_GOALS = { calories: 2000, protein: 80 } as const;
+
+/** 一个模块的「空值」，形状必须与客户端 schema 对得上。 */
+export function emptyModuleValue(module: string): ModuleValue {
+  if (module === 'dietWater') return {};
+  if (module === DIET_GOALS_KEY) return { ...DEFAULT_DIET_GOALS };
+  return [];
+}
+
+/**
+ * 把 keyed 模块读到的值收敛成**客户端形状**。
+ *
+ * 两种情况：
+ * - 已经是客户端形状（映射 / 单值对象）→ 原样用；
+ * - 是 2026-10-03 之前的「单元数组」`[{key, …}]` → 摊回去。这份兼容不能省：
+ *   直连过旧版本服务端的副本就长这样，不管它等于把用户的饮水记录当成「模块不在文件里」。
+ */
+function coerceKeyedValue(
+  module: string,
+  value: unknown,
+): { value: ModuleValue; migrated: boolean } {
+  if (module === DIET_GOALS_KEY) {
+    if (Array.isArray(value)) {
+      const first = value.find(
+        (item): item is Record<string, unknown> =>
+          typeof item === 'object' && item !== null && !Array.isArray(item),
+      );
+      if (first === undefined) return { value: { ...DEFAULT_DIET_GOALS }, migrated: false };
+      const { key: _key, ...rest } = first;
+      return { value: rest, migrated: true };
+    }
+    if (isPlainObject(value)) return { value, migrated: false };
+    return { value: { ...DEFAULT_DIET_GOALS }, migrated: false };
+  }
+
+  // dietWater：日期 → 杯数
+  if (Array.isArray(value)) {
+    const water: Record<string, number> = {};
+    for (const item of value) {
+      if (typeof item !== 'object' || item === null || Array.isArray(item)) continue;
+      const { key, glasses } = item as Record<string, unknown>;
+      if (typeof key === 'string' && typeof glasses === 'number') water[key] = glasses;
+    }
+    return { value: water, migrated: true };
+  }
+  if (isPlainObject(value)) return { value, migrated: false };
+  return { value: {}, migrated: false };
 }
 
 /**
@@ -254,12 +325,22 @@ function coerceEnvelope(raw: unknown): {
       : {};
 
   let recovered = root.app !== 'life-manager';
-  const data: Record<string, Array<Record<string, unknown>>> = {};
+  const data: Record<string, ModuleValue> = {};
   /** 被剔掉的畸形条目：数目与所在模块。**必须告警** —— 静默丢数据是本仓库的头号禁忌 */
   const dropped: Array<{ module: string; count: number }> = [];
   for (const module of SYNC_MODULES) {
     const value = rawData[module];
-    if (Array.isArray(value)) {
+    if (isKeyedModule(module)) {
+      // keyed 模块按客户端形状存（饮水是映射、目标是单值）。
+      // **旧形状兼容**：单元数组（`[{key, …}]`）是 2026-10-03 之前的写法，
+      // 读到时摊回客户端形状并告警 —— 直连过旧服务端的副本会带这种形状。
+      const converted = coerceKeyedValue(module, value);
+      if (converted.migrated) {
+        dropped.push({ module, count: 0 });
+        recovered = true;
+      }
+      data[module] = converted.value;
+    } else if (Array.isArray(value)) {
       const kept = value.filter(
         (item): item is Record<string, unknown> =>
           typeof item === 'object' && item !== null && !Array.isArray(item),
