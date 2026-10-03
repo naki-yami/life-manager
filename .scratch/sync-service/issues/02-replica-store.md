@@ -1,6 +1,12 @@
 # 02 副本存储：形状、结构守卫与原子写
 
-Status: claimed
+Status: resolved
+实现：`a11b66a`（2026-10-03。`src/server/replica.ts` + `replica.test.ts`（33 条）+
+`test-memory-fs.ts`；验收用例：空目录生成 seq=0、`data` 键集合 == `BACKUP_MODULES`（23 条，
+逐元素 + 顺序 + 数量）且不含 `settings`、`settings` 进守卫被拒、注入 rename 前抛错的 fs
+→ 副本仍是上一版（内存替身 + 真 fs 各一条）、半写文件 + 好备份 → 顶替且告警（并写回磁盘）、
+高 `schemaVersion` 被拒且**逐字节不变**（含不留 .tmp）。
+另：`isDirty` 的脏判定有独立用例 —— 它是工单 07 去抖镜像的前提。
 Type: task
 Part of: `.scratch/sync-service/spec.md`
 Blocked by: 01
