@@ -81,8 +81,77 @@ describe('创建桌面快捷方式（.bat + .ps1）', () => {
      */
     const target = /Join-Path\s+\$root\s+'([^']+)'/.exec(text);
     expect(target, '找不到脚本里拼的启动器路径').not.toBeNull();
-    expect(target![1]).toBe('启动 Life Manager.bat');
+    expect(target![1]).toBe('启动 Life Manager.vbs');
     expect(existsSync(join(repoRoot, target![1]))).toBe(true);
+  });
+
+  /**
+   * 启动器必须是 `.vbs`，不能退回 `.bat`。
+   *
+   * 这是用户直接反馈的两条之一：「打开快捷方式就会出一个终端对话框 不好」。
+   * `.bat` 双击**必然**弹一个 cmd 控制台窗口，而且关不掉（关掉 = 停服务）。
+   * `.vbs` 由 `wscript.exe` 跑，天然无窗口 —— 这是 Windows 上最轻的零依赖办法。
+   */
+  it('启动器是 .vbs（.bat 会弹终端窗口，用户明确不接受）', () => {
+    expect(existsSync(join(repoRoot, '启动 Life Manager.vbs'))).toBe(true);
+    expect(existsSync(join(repoRoot, '启动 Life Manager.bat'))).toBe(false);
+
+    const vbs = readAt('启动 Life Manager.vbs');
+    // UTF-16LE + BOM —— VBScript 读无 BOM 的 UTF-8 会当 ANSI，中文注释直接解析崩
+    // （实测报「无效字符」，这里踩过）
+    expect([vbs[0], vbs[1]]).toEqual([0xff, 0xfe]);
+  });
+
+  it('.vbs 隐藏窗口起服务，且不套 cmd（套了会多留一个 cmd.exe）', () => {
+    const vbs = readAt('启动 Life Manager.vbs').toString('utf16le');
+    // 窗口风格 0 = 隐藏，这是「不要黑框」的落点。
+    // 这个调用跨了两行（VBScript 的行延续符 `_`），所以先把续行折起来再断言。
+    const joined = vbs.replace(/_\r?\n\s*/g, ' ');
+    expect(joined).toMatch(/shell\.Run\s+"?"?[^\n]*,\s*0,\s*False/i);
+
+    /*
+     * 起服务那一行必须**直接调 node.exe**，不能套 `cmd /c cd ... && node`。
+     * 套一层会在任务管理器里多留一个 cmd.exe（实测过）。
+     *
+     * 注意：首次构建那一步**可以**用 cmd /c（npm 的输出要看得见），
+     * 所以这里只检查「启动服务」那一段，不做全局断言。
+     */
+    const serverBlock = /preview --port[\s\S]{0,200}/.test(joined);
+    expect(serverBlock, '找不到起服务的那一段').toBe(true);
+    const launchLine = joined
+      .split(/\r?\n/)
+      .find((line) => line.includes('preview --port') && line.includes('shell.Run'));
+    expect(launchLine, '起服务的那一行不是 shell.Run').toBeDefined();
+    expect(launchLine).toMatch(/nodeExe/);
+    expect(launchLine).not.toMatch(/cmd\s*\/c/i);
+  });
+
+  /**
+   * 快捷方式的图标必须是 `.ico`。
+   *
+   * 用户的第二条反馈：「快捷方式没有UI 白色的很丑」。根因是图标指向 `.png` ——
+   * Windows 快捷方式**只接受 .ico / exe / dll 里的图标资源**，给 `.png` 会静默退回
+   * 系统默认白图标（实测 `System.Drawing.Icon('...png')` 直接抛
+   * "must be a picture that can be used as a Icon"）。
+   */
+  it('快捷方式图标必须是 .ico（给 .png 会变成默认白图标）', () => {
+    const text = readAt(join('scripts', 'create-desktop-shortcut.ps1')).toString('utf8');
+    expect(text).toMatch(/\.ico/);
+
+    const icon = /Join-Path\s+\$root\s+'([^']*\.ico)'/.exec(text);
+    expect(icon, '脚本里没有拼出 .ico 路径').not.toBeNull();
+    expect(existsSync(join(repoRoot, icon![1])), 'ico 文件不存在，快捷方式会退回白图标').toBe(true);
+  });
+
+  it('那个 .ico 真的是多尺寸 ico（Windows 会按显示尺寸挑）', () => {
+    const bytes = readAt(join('public', 'icons', 'life-manager.ico'));
+    // ICONDIR：reserved(2)=0, type(2)=1(icon), count(2)=档位数
+    expect(bytes[0]).toBe(0);
+    expect(bytes[1]).toBe(0);
+    expect(bytes[2]).toBe(1);
+    expect(bytes[3]).toBe(0);
+    const count = bytes[4]! | (bytes[5]! << 8);
+    expect(count, 'ico 里至少要有 16/32/48/256 这几档').toBeGreaterThanOrEqual(4);
   });
 
   it('.ps1 把目标、工作目录都设上（缺工作目录会在错的地方找 dist）', () => {
