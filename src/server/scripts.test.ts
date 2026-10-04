@@ -22,6 +22,94 @@ const serverDir = join(__dirname);
 const repoRoot = join(serverDir, '..', '..');
 const read = (name: string): Buffer => readFileSync(join(serverDir, name));
 const readText = (name: string): string => read(name).toString('utf8');
+/** 读仓库根或任意相对路径的字节 */
+const readAt = (relative: string): Buffer => readFileSync(join(repoRoot, relative));
+
+/**
+ * 桌面快捷方式的创建脚本。
+ *
+ * 这一组守的是一个**文档承诺了、但从来没实现**的入口：`启动说明.md` 一直写着
+ * 「双击桌面上的『Life Manager』快捷方式」，而仓库里没有任何代码会写 `.lnk` ——
+ * 照说明去找必然找不到，用户看到的就是「打不开」。
+ *
+ * 现在拆成两个文件，各自的编码要求都是本仓库实测过的坑：
+ * - `.bat` 必须**纯 ASCII**（cmd 在 936 代码页下解析 UTF-8 中文会崩）；
+ * - `.ps1` 必须**UTF-8 带 BOM**（5.1 读无 BOM 的 UTF-8 会当 ANSI，报「缺少 }」）。
+ * 中文文件名只能写在 `.ps1` 里，所以逻辑必须在 `.ps1`。
+ */
+describe('创建桌面快捷方式（.bat + .ps1）', () => {
+  const batName = '创建桌面快捷方式.bat';
+
+  it('.bat 是纯 ASCII（中文不能出现在 .bat 内容里）', () => {
+    const bytes = readAt(batName);
+    expect([...bytes].filter((byte) => byte > 127)).toEqual([]);
+  });
+
+  it('.bat 真的调用那个 .ps1（不是只打印一句话）', () => {
+    const text = readAt(batName).toString('utf8');
+    expect(text).toMatch(/powershell\b/);
+    expect(text).toContain('create-desktop-shortcut.ps1');
+    // 不能是注释掉的一行
+    const line = text.split(/\r?\n/).find((l) => l.includes('create-desktop-shortcut.ps1'));
+    expect(line?.trim().startsWith('REM')).toBe(false);
+  });
+
+  it('.bat 把退出码透出去（创建失败要让调用方知道）', () => {
+    const text = readAt(batName).toString('utf8');
+    expect(text).toMatch(/exit\s+\/b\s+%RC%/i);
+  });
+
+  it('.ps1 是 UTF-8 BOM（它要写中文文件名与中文提示）', () => {
+    const bytes = readAt(join('scripts', 'create-desktop-shortcut.ps1'));
+    expect([bytes[0], bytes[1], bytes[2]]).toEqual([0xef, 0xbb, 0xbf]);
+  });
+
+  it('.ps1 真的创建快捷方式并指向真正的启动器', () => {
+    const text = readAt(join('scripts', 'create-desktop-shortcut.ps1')).toString('utf8');
+    // 真的调用 COM 的 CreateShortcut，而不是把字样塞进字符串
+    expect(text).toMatch(/New-Object\s+-ComObject\s+WScript\.Shell/);
+    expect(text).toMatch(/\$shell\.CreateShortcut\(/);
+    expect(text).toMatch(/\.Save\(\)/);
+
+    /*
+     * 目标必须是**真的启动器文件**。两件事缺一不可：
+     * 1. 脚本里拼的文件名就是那个真启动器（改成别的名字要红）；
+     * 2. 那个文件在磁盘上真的存在。
+     *
+     * 早先只断言了第 2 条对一个**写死的**仓库路径成立 —— 于是把脚本里的目标改成
+     * 「不存在的启动器.bat」照样全绿（变异测试抓到的），那等于没守住。
+     */
+    const target = /Join-Path\s+\$root\s+'([^']+)'/.exec(text);
+    expect(target, '找不到脚本里拼的启动器路径').not.toBeNull();
+    expect(target![1]).toBe('启动 Life Manager.bat');
+    expect(existsSync(join(repoRoot, target![1]))).toBe(true);
+  });
+
+  it('.ps1 把目标、工作目录都设上（缺工作目录会在错的地方找 dist）', () => {
+    const text = readAt(join('scripts', 'create-desktop-shortcut.ps1')).toString('utf8');
+    expect(text).toMatch(/\.TargetPath\s*=/);
+    expect(text).toMatch(/\.WorkingDirectory\s*=/);
+  });
+
+  it('PowerShell 语法解析通过（若有 pwsh 可用）', () => {
+    const script = join(repoRoot, 'scripts', 'create-desktop-shortcut.ps1');
+    const probe = `
+      $errors = $null
+      $null = [System.Management.Automation.Language.Parser]::ParseFile('${script.replace(/'/g, "''")}', [ref]$null, [ref]$errors)
+      if ($errors.Count -eq 0) { 'PARSE_OK' } else { $errors | ForEach-Object { $_.Message } }
+    `;
+    let output: string;
+    try {
+      output = execFileSync('pwsh', ['-NoProfile', '-Command', probe], {
+        encoding: 'utf8',
+        timeout: 30000,
+      });
+    } catch {
+      return; // 没有 pwsh 的环境跳过（不让环境差异变成假红灯）
+    }
+    expect(output).toContain('PARSE_OK');
+  });
+});
 
 describe('start-sync-server.bat', () => {
   it('纯 ASCII：一个非 ASCII 字节都没有', () => {
