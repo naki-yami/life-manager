@@ -26,6 +26,44 @@ const readText = (name: string): string => read(name).toString('utf8');
 const readAt = (relative: string): Buffer => readFileSync(join(repoRoot, relative));
 
 /**
+ * 用 PowerShell 真解析一遍某个 `.ps1`，返回输出；**跑不了就返回 `null`**（调用方跳过）。
+ *
+ * 为什么要有这个公共实现，而不是每条测试各写一遍 —— 这里踩过一个 CI 专属的坑：
+ * 早先每条都直接 `execFileSync('pwsh', …, { timeout: 30000 })`，而那个 timeout
+ * **比 vitest 自己的 5000ms 上限还长**。本地 Windows 上 pwsh 400ms 就返回，看不出问题；
+ * Ubuntu CI runner 上 pwsh 是**预装的**（所以不会抛「找不到命令」，而是慢慢启动），
+ * 于是 vitest 先到 5 秒把这条判成超时失败，我写的 catch 根本没机会执行 ——
+ * 表现就是「本地 2036 条全绿、CI 挂」。
+ *
+ * 现在：非 Windows 直接跳过（这些脚本本来就只有 Windows 会跑），
+ * Windows 上给足 15 秒并显式放宽该用例的时间。拿不到结果一律跳过，
+ * **不让环境差异变成假红灯**。
+ */
+function parseWithPowerShell(scriptPath: string): string | null {
+  if (process.platform !== 'win32') return null;
+
+  const probe = `
+    $errors = $null
+    $null = [System.Management.Automation.Language.Parser]::ParseFile('${scriptPath.replace(/'/g, "''")}', [ref]$null, [ref]$errors)
+    if ($errors.Count -eq 0) { 'PARSE_OK' } else { $errors | ForEach-Object { $_.Message } }
+  `;
+
+  // 优先 pwsh（PowerShell 7），退回 Windows PowerShell 5.1
+  for (const exe of ['pwsh', 'powershell']) {
+    try {
+      return execFileSync(exe, ['-NoProfile', '-Command', probe], {
+        encoding: 'utf8',
+        timeout: 15_000,
+        stdio: ['ignore', 'pipe', 'ignore'],
+      });
+    } catch {
+      // 这个 exe 不可用（或解析超时）：试下一个
+    }
+  }
+  return null;
+}
+
+/**
  * 桌面快捷方式的创建脚本。
  *
  * 这一组守的是一个**文档承诺了、但从来没实现**的入口：`启动说明.md` 一直写着
@@ -140,7 +178,19 @@ describe('创建桌面快捷方式（.bat + .ps1）', () => {
 
     const icon = /Join-Path\s+\$root\s+'([^']*\.ico)'/.exec(text);
     expect(icon, '脚本里没有拼出 .ico 路径').not.toBeNull();
-    expect(existsSync(join(repoRoot, icon![1])), 'ico 文件不存在，快捷方式会退回白图标').toBe(true);
+
+    /*
+     * 脚本里写的是 **Windows 反斜杠路径**（`public\icons\life-manager.ico`），
+     * 而 CI 跑在 Ubuntu 上 —— 那里反斜杠是**普通文件名字符**，不是分隔符。
+     * 直接把捕获到的字符串喂给 `join()` 会在 Linux 上拼出一个不存在的名字，
+     * 于是断言必然失败（这正是 CI 红的原因：本地 2036 全绿、CI 却挂在
+     * `expected false to be true`）。
+     *
+     * 所以这里先把反斜杠统一成正斜杠再拼 —— 两边都能过，
+     * 而「脚本里写的确实是一个 .ico 路径」这条语义没有减弱。
+     */
+    const relative = icon![1].replace(/\\/g, '/');
+    expect(existsSync(join(repoRoot, relative)), 'ico 文件不存在，快捷方式会退回白图标').toBe(true);
   });
 
   it('那个 .ico 真的是多尺寸 ico（Windows 会按显示尺寸挑）', () => {
@@ -160,24 +210,11 @@ describe('创建桌面快捷方式（.bat + .ps1）', () => {
     expect(text).toMatch(/\.WorkingDirectory\s*=/);
   });
 
-  it('PowerShell 语法解析通过（若有 pwsh 可用）', () => {
-    const script = join(repoRoot, 'scripts', 'create-desktop-shortcut.ps1');
-    const probe = `
-      $errors = $null
-      $null = [System.Management.Automation.Language.Parser]::ParseFile('${script.replace(/'/g, "''")}', [ref]$null, [ref]$errors)
-      if ($errors.Count -eq 0) { 'PARSE_OK' } else { $errors | ForEach-Object { $_.Message } }
-    `;
-    let output: string;
-    try {
-      output = execFileSync('pwsh', ['-NoProfile', '-Command', probe], {
-        encoding: 'utf8',
-        timeout: 30000,
-      });
-    } catch {
-      return; // 没有 pwsh 的环境跳过（不让环境差异变成假红灯）
-    }
-    expect(output).toContain('PARSE_OK');
-  });
+  it('PowerShell 语法解析通过（若本机有 PowerShell）', () => {
+    const result = parseWithPowerShell(join(repoRoot, 'scripts', 'create-desktop-shortcut.ps1'));
+    if (result === null) return; // 跳过（见 parseWithPowerShell 的说明）
+    expect(result).toContain('PARSE_OK');
+  }, 20_000);
 });
 
 describe('start-sync-server.bat', () => {
@@ -269,26 +306,13 @@ describe('install-autostart.ps1', () => {
    * 语法解析：能跑 PowerShell 就真解析一遍。
    *
    * grep 永远查不出拼错的括号或漏掉的引号 —— 而那种脚本双击就报错。
+   * 跳过规则与超时纪律见 `parseWithPowerShell` 的注释（那里记了 CI 踩过的坑）。
    */
-  it('PowerShell 语法解析通过（若有 pwsh 可用）', () => {
-    const script = join(serverDir, 'install-autostart.ps1');
-    const probe = `
-      $errors = $null
-      $null = [System.Management.Automation.Language.Parser]::ParseFile('${script.replace(/'/g, "''")}', [ref]$null, [ref]$errors)
-      if ($errors.Count -eq 0) { 'PARSE_OK' } else { $errors | ForEach-Object { $_.Message } }
-    `;
-    let output: string;
-    try {
-      output = execFileSync('pwsh', ['-NoProfile', '-Command', probe], {
-        encoding: 'utf8',
-        timeout: 30000,
-      });
-    } catch {
-      // 这台机器上没有 pwsh（或不允许起进程）：跳过这条，不让环境差异变成假红灯
-      return;
-    }
-    expect(output).toContain('PARSE_OK');
-  });
+  it('PowerShell 语法解析通过（若本机有 PowerShell）', () => {
+    const result = parseWithPowerShell(join(serverDir, 'install-autostart.ps1'));
+    if (result === null) return;
+    expect(result).toContain('PARSE_OK');
+  }, 20_000);
 });
 
 describe('scripts/sync-e2e.ps1（服务端集成验收脚本）', () => {
